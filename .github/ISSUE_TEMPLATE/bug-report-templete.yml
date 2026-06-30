@@ -1,0 +1,40 @@
+name: 🐞 버그 리포트
+description: 버그를 신고할 때 사용하는 템플릿입니다.
+title: "[bug] "
+labels: ["bug"]
+assignees: []
+
+body:
+- type: input
+  id: related-issue-number
+  attributes:
+    label: 🎯 관련 이슈 번호
+    description: 해당 버그와 관련된 기능 이슈 번호를 작성해주세요.
+    placeholder: '- #21'
+  validations:
+    required: true
+
+- type: textarea
+  id: bug-description
+  attributes:
+    label: 📝 버그 설명
+    description: 어떤 버그가 발생하는지 설명해주세요.
+    placeholder: 버그에 대해 설명해주세요...
+  validations:
+    required: true
+
+- type: textarea
+  id: to-do
+  attributes:
+    label: ✅ 할 일
+    description: 할 일을 체크박스 형태로 작성해주세요.
+    placeholder: '- [ ] 할 일 1'
+  validations:
+      required: true
+
+- type: textarea
+  id: etc
+  attributes:
+    label: 📜 로그
+    description: 콘솔 에러나 서버 로그가 있다면 붙여 넣어 주세요.
+    placeholder: 콘솔 에러나 서버 로그를 붙여 넣어 주세요.
