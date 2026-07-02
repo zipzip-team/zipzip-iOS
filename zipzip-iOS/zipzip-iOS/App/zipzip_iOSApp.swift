@@ -24,17 +24,15 @@ struct zipzip_iOSApp: App {
     }()
 
     @State private var router = Router()
+    @State private var container = DIContainer()
 
     var body: some Scene {
         WindowGroup {
             ContentView(
-                viewModel: ContentViewModel(
-                    service: DefaultItemService(
-                        repository: SwiftDataItemRepository(context: sharedModelContainer.mainContext)
-                    )
-                )
+                viewModel: container.makeContentViewModel(context: sharedModelContainer.mainContext)
             )
             .environment(router)
+            .environment(container)
         }
         .modelContainer(sharedModelContainer)
     }
