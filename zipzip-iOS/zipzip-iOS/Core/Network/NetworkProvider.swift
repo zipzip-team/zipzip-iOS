@@ -14,16 +14,21 @@ protocol NetworkProvider {
 
 final class DefaultNetworkProvider: NetworkProvider {
     private let interceptor: RequestInterceptor?
-    
-    init(interceptor: RequestInterceptor? = nil) {
+    private let session: Session
+
+    init(
+        interceptor: RequestInterceptor? = nil,
+        eventMonitors: [EventMonitor] = [NetworkLogger()]
+    ) {
         self.interceptor = interceptor
+        self.session = Session(eventMonitors: eventMonitors)
     }
-    
+
     func request<T: Decodable>(_ endpoint: APIEndpoint) async throws -> T {
         let urlRequest = try endpoint.asURLRequest()
-        
+
         do {
-            return try await AF.request(urlRequest, interceptor: interceptor)
+            return try await session.request(urlRequest, interceptor: interceptor)
                 .serializingDecodable(T.self)
                 .value
         } catch let afError as AFError {
