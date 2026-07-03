@@ -32,9 +32,9 @@ final class NetworkLogger: EventMonitor {
         )
     }
 
-    func request(
+    func request<Value>(
         _ request: DataRequest,
-        didParseResponse response: DataResponse<Data?, AFError>
+        didParseResponse response: DataResponse<Value, AFError>
     ) {
         let method = request.request?.httpMethod ?? "UNKNOWN"
         let url = request.request?.url?.absoluteString ?? "(no url)"
