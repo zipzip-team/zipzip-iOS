@@ -17,12 +17,7 @@ final class NetworkLogger: EventMonitor {
         category: "Network"
     )
 
-    func requestDidResume(_ request: Request) {
-        guard let urlRequest = request.request else {
-            logger.debug("🛰️ [Request] (no URLRequest)")
-            return
-        }
-
+    func request(_ request: Request, didCreateURLRequest urlRequest: URLRequest) {
         let method = urlRequest.httpMethod ?? "UNKNOWN"
         let url = urlRequest.url?.absoluteString ?? "(no url)"
         let headers = prettyHeaders(urlRequest.headers)
