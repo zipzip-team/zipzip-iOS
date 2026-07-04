@@ -26,8 +26,8 @@ final class NetworkLogger: EventMonitor {
         logger.debug(
             """
             🛰️ [Request] \(method, privacy: .public) \(url, privacy: .public)
-            Headers: \(headers, privacy: .public)
-            Body: \(body, privacy: .public)
+            Headers: \(headers)
+            Body: \(body)
             """
         )
     }
@@ -49,21 +49,29 @@ final class NetworkLogger: EventMonitor {
                 """
                 ❌ [Response] \(statusText, privacy: .public) \(method, privacy: .public) \(url, privacy: .public) (\(durationText, privacy: .public))
                 Error: \(error.localizedDescription, privacy: .public)
-                Body: \(body, privacy: .public)
+                Body: \(body)
                 """
             )
         } else {
             logger.debug(
                 """
                 ✅ [Response] \(statusText, privacy: .public) \(method, privacy: .public) \(url, privacy: .public) (\(durationText, privacy: .public))
-                Body: \(body, privacy: .public)
+                Body: \(body)
                 """
             )
         }
     }
 
+    /// 인증 토큰 등 민감 헤더는 값을 가려 로그에 남기지 않는다.
+    private static let sensitiveHeaders: Set<String> = [
+        "authorization", "cookie", "set-cookie", "proxy-authorization"
+    ]
+
     private func prettyHeaders(_ headers: HTTPHeaders) -> String {
         guard !headers.isEmpty else { return "(none)" }
-        return headers.map { "\($0.name): \($0.value)" }.joined(separator: ", ")
+        return headers.map { header in
+            let value = Self.sensitiveHeaders.contains(header.name.lowercased()) ? "***" : header.value
+            return "\(header.name): \(value)"
+        }.joined(separator: ", ")
     }
 }
