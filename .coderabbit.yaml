@@ -1,0 +1,145 @@
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
+
+language: "ko-KR"
+early_access: true
+reviews:
+  profile: "chill"
+  request_changes_workflow: false
+  changed_files_summary: false
+  sequence_diagrams: false
+  suggested_reviewers: false
+  auto_assign_reviewers: false
+  high_level_summary: true
+  poem: false
+  review_status: true
+  collapse_walkthrough: false
+  auto_review:
+    enabled: true
+    ignore_title_keywords:
+      - "WIP"
+      - "DO NOT MERGE"
+      - "SWEEP"
+    drafts: false
+    base_branches:
+      - main
+      - release/.*
+      - dev
+  path_instructions:
+    - path: "**/*"
+      instructions:
+        "All character sets need to be in UTF-8.\n
+        Lines need to end with LF (line feed).\n
+        A newline must be inserted at the end of the file.\n
+        Trim all trailing whitespaces.\n
+        Indents on empty lines should not be maintained.\n
+        Maximum line length must be 130 characters.\n
+        Spaces after commas are required.\n
+        Ensure spaces are present around all operators.\n
+        Avoid space before comma.\n
+        Leftover TODOs in the code should be handled.\n
+        Ensure Self-Documenting Code: Aim to make your code self-explanatory through clear naming and
+          structure. The less time a developer has to spend understanding the code, the better.\n
+        Follow the YAGNI Principle: 'You aren't gonna need it' prevents adding functionality until it is
+          necessary, keeping the codebase lean and simple.\n
+        Enforce the Single Responsibility Principle: each type and function should have one clear responsibility."
+
+    - path: "**/*.swift"
+      instructions:
+        "Use 4 spaces for indentation, not tabs.\n
+        Follow Swift API Design Guidelines: PascalCase for types (struct, class, enum, protocol), camelCase for
+          properties, methods, and cases. Names must be clear and descriptive of their purpose.\n
+        Follow the project's protocol-first DI convention: define a protocol, then a 'final class' implementation.
+          Concrete implementations are prefixed 'Default' (e.g. DefaultItemService); persistence implementations
+          are named by backing technology (e.g. SwiftDataItemRepository).\n
+        Inject dependencies via init and store them as 'private let'. Dependency composition happens only in
+          zipzip_iOSApp.swift.\n
+        Respect the layering: View -> ViewModel -> Service -> Repository. A layer must not reach past its
+          immediate collaborator.\n
+        Prefer value types (struct/enum) and immutability ('let' over 'var') wherever possible.\n
+        Avoid force-unwrapping ('!'), force-try ('try!'), and force-cast ('as!') outside of tests and #Preview
+          blocks. Use optional binding, 'guard', or 'if let' instead.\n
+        Apply early exits with 'guard' when preconditions are not met.\n
+        Use Swift concurrency ('async'/'await' with 'throws') for asynchronous work; avoid completion-handler
+          callbacks for new code.\n
+        Keep functions small and focused; decompose complex functions into smaller ones.\n
+        Prefer composition over inheritance; avoid deep class hierarchies.\n
+        User-facing strings and error messages must be written in Korean, consistent with the existing codebase.\n
+        Remove leftover debugging output such as print(), debugPrint(), and dump() before merging.\n
+        Mark types and members with the most restrictive access level that works (prefer 'private'/'fileprivate'
+          over leaving members internal by default)."
+
+    - path: "**/Features/**/View/**/*.swift"
+      instructions:
+        "This file belongs to the View layer in MVVM (SwiftUI).\n
+        Views must be purely presentational; no direct networking (NetworkProvider/Alamofire) or persistence
+          (SwiftData ModelContext/@Query for writes) logic here.\n
+        Business logic and state must live in the ViewModel. Views receive data and call intents through a
+          ViewModel exposed as '@State private var viewModel'.\n
+        ViewModels are injected into a View's init and assigned via '_viewModel = State(initialValue:)'.\n
+        Do not compute derived state with extra stored @State when it can be derived from the ViewModel or inputs.\n
+        Every View should provide a '#Preview', using an in-memory ModelContainer (isStoredInMemoryOnly: true)
+          when SwiftData is involved.\n
+        Navigation must go through the shared Router (push/pop/popToRoot) and Route enum, not ad-hoc
+          NavigationLink state."
+
+    - path: "**/Shared/Component/**/*.swift"
+      instructions:
+        "This file belongs to the View layer (reusable UI components) in MVVM (SwiftUI).\n
+        Components must be purely presentational and reusable; no networking, persistence, or business logic.\n
+        Components receive all data and callbacks via parameters (or bindings); they must not own domain state or
+          create Services/Repositories."
+
+    - path: "**/Features/**/ViewModel/**/*.swift"
+      instructions:
+        "This file belongs to the ViewModel layer in MVVM.\n
+        ViewModels must be declared as '@Observable final class'.\n
+        A ViewModel holds its Service via init injection ('private let') and exposes only the data and intents the
+          View needs — not raw Service/Repository objects.\n
+        Do not import SwiftUI View types or render any UI inside a ViewModel.\n
+        Encapsulate all state management, side effects, and Model-to-View data transformation here.\n
+        Each ViewModel should have a single, clear responsibility (SRP)."
+
+    - path: "**/Features/**/Model/**/*.swift"
+      instructions:
+        "This file belongs to the Model layer (domain models) in MVVM.\n
+        Contains data type definitions only. SwiftData persistence models use the '@Model' macro.\n
+        No UI concerns, no SwiftUI imports, and no networking logic."
+
+    - path: "**/Shared/Model/**/*.swift"
+      instructions:
+        "This file belongs to the Model layer (shared domain models) in MVVM.\n
+        Contains data type definitions only. No UI concerns, no SwiftUI imports, and no networking logic."
+
+    - path: "**/Core/Service/**/*.swift"
+      instructions:
+        "This file belongs to the Service layer.\n
+        Services hold business logic and orchestrate Repositories and/or the NetworkProvider.\n
+        Define a protocol and a 'final class' implementation prefixed 'Default'; inject dependencies via init as
+          'private let'.\n
+        Expose async throwing APIs ('async'/'await'/'throws'); network errors surface as NetworkError.\n
+        No UI concerns and no SwiftUI imports."
+
+    - path: "**/Core/Repository/**/*.swift"
+      instructions:
+        "This file belongs to the Repository layer (persistence / data access).\n
+        Contains only data access logic (e.g. SwiftData ModelContext operations); no business rules and no UI.\n
+        Define a protocol and an implementation named by its backing technology (e.g. SwiftDataItemRepository).\n
+        No SwiftUI imports."
+
+    - path: "**/Core/Network/**/*.swift"
+      instructions:
+        "This file belongs to the Networking layer.\n
+        Contains APIEndpoint definitions, the NetworkProvider, and NetworkError only.\n
+        APIEndpoint conformers rely on the protocol's default 'baseURL' (from APIConfig) and do not hardcode a
+          base URL.\n
+        All communication errors must be normalized to NetworkError (LocalizedError with Korean messages).\n
+        No UI concerns and no SwiftUI imports."
+
+    - path: "**/Core/Extensions/**/*.swift"
+      instructions:
+        "This file contains utility extensions.\n
+        Prefer pure functions free of side effects; behavior should depend only on inputs and the extended value.\n
+        No networking, no persistence, and no SwiftUI View logic."
+
+chat:
+  auto_reply: true
