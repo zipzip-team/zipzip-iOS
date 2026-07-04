@@ -5,8 +5,8 @@
 //  Created by 성환 on 6/29/26.
 //
 
-import Foundation
 import Alamofire
+import Foundation
 
 protocol NetworkProvider {
     func request<T: Decodable>(_ endpoint: APIEndpoint) async throws -> T
@@ -37,21 +37,21 @@ final class DefaultNetworkProvider: NetworkProvider {
             throw NetworkError.unknown(statusCode: nil)
         }
     }
-    
+
     private func mapError(_ afError: AFError) -> NetworkError {
         if case .responseSerializationFailed = afError {
             return .decodingError
         }
-        
-        if case .sessionTaskFailed(let error as URLError) = afError,
+
+        if case let .sessionTaskFailed(error as URLError) = afError,
            error.code == .notConnectedToInternet || error.code == .networkConnectionLost {
             return .noResponse
         }
-        
+
         guard let statusCode = afError.responseCode else {
             return .unknown(statusCode: nil)
         }
-        
+
         switch statusCode {
         case 400:
             return .badRequest
@@ -61,7 +61,7 @@ final class DefaultNetworkProvider: NetworkProvider {
             return .forbidden
         case 404:
             return .notFound
-        case 500...599:
+        case 500 ... 599:
             return .serverError
         default:
             return .unknown(statusCode: statusCode)

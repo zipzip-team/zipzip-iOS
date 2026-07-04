@@ -38,7 +38,7 @@ extension NetworkError: LocalizedError {
             return "서버 응답이 없습니다."
         case .decodingError:
             return "데이터 파싱에 실패했습니다."
-        case .unknown(let code):
+        case let .unknown(code):
             return "알 수 없는 오류가 발생했습니다. (\(code.map(String.init) ?? "no code"))"
         }
     }
