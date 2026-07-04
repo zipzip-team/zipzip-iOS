@@ -1,0 +1,44 @@
+--minversion 0.61.1
+--swiftversion 5.0
+--language-mode 5
+
+--symlinks ignore
+--exclude .build,.swiftpm,BuildTools,DerivedData,build,Pods,Carthage,**/Generated,**/*.generated.swift
+
+--allman false
+--closingparen balanced
+--commas inline
+--comments indent
+--elseposition same-line
+--empty void
+--extensionacl on-declarations
+--ifdef indent
+--importgrouping testable-bottom
+--indent 4
+--indentcase false
+--linebreaks lf
+--maxwidth 120
+--operatorfunc spaced
+--ranges spaced
+--self init-only
+--semicolons inline
+--stripunusedargs closure-only
+--trimwhitespace always
+--wraparguments before-first
+--wrapcollections before-first
+--wrapconditions after-first
+--wrapparameters before-first
+--wrapstringinterpolation preserve
+
+--enable isEmpty
+--enable privateStateVariables
+--enable redundantEmptyView
+--enable redundantViewBuilder
+
+--disable enumNamespaces
+--disable headerFileName
+--disable hoistAwait
+--disable hoistTry
+--disable opaqueGenericParameters
+--disable redundantType
+--disable wrapMultilineStatementBraces

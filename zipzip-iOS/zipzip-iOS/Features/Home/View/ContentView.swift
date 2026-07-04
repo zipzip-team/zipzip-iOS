@@ -5,8 +5,8 @@
 //  Created by 성환 on 6/29/26.
 //
 
-import SwiftUI
 import SwiftData
+import SwiftUI
 
 struct ContentView: View {
     @Environment(Router.self) private var router
@@ -34,7 +34,7 @@ struct ContentView: View {
             .navigationTitle("Items")
             .navigationDestination(for: Route.self) { route in
                 switch route {
-                case .itemDetail(let item):
+                case let .itemDetail(item):
                     ItemDetailView(item: item)
                 }
             }

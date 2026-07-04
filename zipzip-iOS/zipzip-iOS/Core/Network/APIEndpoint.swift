@@ -5,8 +5,8 @@
 //  Created by 성환 on 6/29/26.
 //
 
-import Foundation
 import Alamofire
+import Foundation
 
 protocol APIEndpoint {
     var baseURL: String { get }

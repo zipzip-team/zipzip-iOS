@@ -5,14 +5,15 @@
 //  Created by 성환 on 6/29/26.
 //
 
-import SwiftUI
 import SwiftData
+import SwiftUI
 
 @main
 struct zipzip_iOSApp: App {
     var sharedModelContainer: ModelContainer = {
         let schema = Schema([
-            Item.self,
+            Item.self
+
         ])
         let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
 

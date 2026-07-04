@@ -5,9 +5,9 @@
 //  Created by 성환 on 6/29/26.
 //
 
+import Alamofire
 import Foundation
 import OSLog
-import Alamofire
 
 final class NetworkLogger: EventMonitor {
     let queue = DispatchQueue(label: "com.zipzip.network.logger", qos: .utility)

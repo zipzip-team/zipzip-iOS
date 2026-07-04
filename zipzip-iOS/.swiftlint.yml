@@ -1,0 +1,103 @@
+excluded:
+  - .build
+  - .swiftpm
+  - BuildTools
+  - Carthage
+  - DerivedData
+  - Pods
+  - build
+  - "**/Generated"
+  - "**/*.generated.swift"
+
+opt_in_rules:
+  - accessibility_label_for_image
+  - accessibility_trait_for_button
+  - contains_over_filter_count
+  - contains_over_filter_is_empty
+  - contains_over_first_not_nil
+  - contains_over_range_nil_comparison
+  - empty_collection_literal
+  - empty_count
+  - empty_string
+  - fatal_error_message
+  - first_where
+  - force_unwrapping
+  - identical_operands
+  - implicitly_unwrapped_optional
+  - last_where
+  - private_subject
+  - private_swiftui_state
+  - redundant_nil_coalescing
+  - unavailable_function
+  - unowned_variable_capture
+  - unused_capture_list
+  - weak_delegate
+
+analyzer_rules:
+  - capture_variable
+  - unused_declaration
+  - unused_import
+
+disabled_rules:
+  - closing_brace
+  - closure_spacing
+  - colon
+  - comma
+  - line_length
+  - modifier_order
+  - opening_brace
+  - operator_usage_whitespace
+  - sorted_imports
+  - trailing_comma
+  - trailing_whitespace
+  - vertical_whitespace
+
+identifier_name:
+  min_length:
+    warning: 2
+    error: 1
+  max_length:
+    warning: 60
+    error: 80
+  excluded:
+    - id
+    - x
+    - y
+    - URL
+
+type_name:
+  min_length:
+    warning: 2
+    error: 1
+  max_length:
+    warning: 60
+    error: 80
+  allowed_symbols:
+    - "_"
+  excluded:
+    - zipzip_iOSApp
+
+function_body_length:
+  warning: 80
+  error: 160
+
+type_body_length:
+  warning: 400
+  error: 800
+
+file_length:
+  warning: 600
+  error: 1200
+  ignore_comment_only_lines: true
+
+large_tuple:
+  warning: 4
+  error: 5
+
+nesting:
+  type_level:
+    warning: 2
+  function_level:
+    warning: 3
+
+reporter: "xcode"
