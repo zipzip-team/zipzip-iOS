@@ -6,13 +6,33 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		CA881BC72FF418B200AA3125 /* Alamofire in Frameworks */ = {isa = PBXBuildFile; productRef = CA881BC62FF418B200AA3125 /* Alamofire */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXFileReference section */
 		CA881AA02FF3FF9800AA3125 /* zipzip-iOS.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "zipzip-iOS.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		CA881B242FF415EC00AA3125 /* Exceptions for "zipzip-iOS" folder in "zipzip-iOS" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				App/Info.plist,
+				Core/Extensions/.gitkeep,
+				Shared/Component/.gitkeep,
+				Shared/Model/.gitkeep,
+			);
+			target = CA881A9F2FF3FF9800AA3125 /* zipzip-iOS */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		CA881AA22FF3FF9800AA3125 /* zipzip-iOS */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				CA881B242FF415EC00AA3125 /* Exceptions for "zipzip-iOS" folder in "zipzip-iOS" target */,
+			);
 			path = "zipzip-iOS";
 			sourceTree = "<group>";
 		};
@@ -23,6 +43,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				CA881BC72FF418B200AA3125 /* Alamofire in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -65,6 +86,7 @@
 			);
 			name = "zipzip-iOS";
 			packageProductDependencies = (
+				CA881BC62FF418B200AA3125 /* Alamofire */,
 			);
 			productName = "zipzip-iOS";
 			productReference = CA881AA02FF3FF9800AA3125 /* zipzip-iOS.app */;
@@ -95,6 +117,9 @@
 			);
 			mainGroup = CA881A972FF3FF9800AA3125;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				CA881BC52FF418B200AA3125 /* XCRemoteSwiftPackageReference "Alamofire" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = CA881AA12FF3FF9800AA3125 /* Products */;
 			projectDirPath = "";
@@ -260,6 +285,7 @@
 				CURRENT_PROJECT_VERSION = 1;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "zipzip-iOS/App/Info.plist";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
@@ -295,6 +321,7 @@
 				CURRENT_PROJECT_VERSION = 1;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "zipzip-iOS/App/Info.plist";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
@@ -341,6 +368,25 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		CA881BC52FF418B200AA3125 /* XCRemoteSwiftPackageReference "Alamofire" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/Alamofire/Alamofire";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 5.12.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		CA881BC62FF418B200AA3125 /* Alamofire */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = CA881BC52FF418B200AA3125 /* XCRemoteSwiftPackageReference "Alamofire" */;
+			productName = Alamofire;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = CA881A982FF3FF9800AA3125 /* Project object */;
 }
