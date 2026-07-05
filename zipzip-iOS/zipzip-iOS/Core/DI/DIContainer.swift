@@ -5,7 +5,7 @@
 //  Created by 성환 on 6/29/26.
 //
 
-import SwiftData
+import Observation
 
 @MainActor
 @Observable
@@ -14,13 +14,5 @@ final class DIContainer {
 
     init(networkProvider: NetworkProvider? = nil) {
         self.networkProvider = networkProvider ?? DefaultNetworkProvider()
-    }
-
-    func makeContentViewModel(context: ModelContext) -> ContentViewModel {
-        ContentViewModel(
-            service: DefaultItemService(
-                repository: SwiftDataItemRepository(context: context)
-            )
-        )
     }
 }
