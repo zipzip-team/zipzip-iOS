@@ -10,13 +10,6 @@
 		CA881BC72FF418B200AA3125 /* Alamofire in Frameworks */ = {isa = PBXBuildFile; productRef = CA881BC62FF418B200AA3125 /* Alamofire */; };
 /* End PBXBuildFile section */
 
-/* Begin PBXBuildToolPlugin section */
-		CA881D032FF5000000AA3125 /* SwiftLintBuildToolPlugin */ = {
-			isa = PBXBuildToolPlugin;
-			productRef = CA881D022FF5000000AA3125 /* SwiftLintBuildToolPlugin */;
-		};
-/* End PBXBuildToolPlugin section */
-
 /* Begin PBXFileReference section */
 		CA881AA02FF3FF9800AA3125 /* zipzip-iOS.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "zipzip-iOS.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
@@ -86,9 +79,6 @@
 				CA881A9E2FF3FF9800AA3125 /* Resources */,
 			);
 			buildRules = (
-			);
-			buildToolPlugins = (
-				CA881D032FF5000000AA3125 /* SwiftLintBuildToolPlugin */,
 			);
 			dependencies = (
 			);
@@ -427,11 +417,6 @@
 			isa = XCSwiftPackageProductDependency;
 			package = CA881BC52FF418B200AA3125 /* XCRemoteSwiftPackageReference "Alamofire" */;
 			productName = Alamofire;
-		};
-		CA881D022FF5000000AA3125 /* SwiftLintBuildToolPlugin */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = CA881D012FF5000000AA3125 /* XCRemoteSwiftPackageReference "SwiftLintPlugins" */;
-			productName = "plugin:SwiftLintBuildToolPlugin";
 		};
 /* End XCSwiftPackageProductDependency section */
 	};
