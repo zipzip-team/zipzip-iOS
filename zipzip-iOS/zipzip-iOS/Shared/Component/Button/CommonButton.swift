@@ -83,7 +83,7 @@ private struct CommonButtonStyle: ButtonStyle {
 #Preview("Common Button") {
     VStack(spacing: 12) {
         CommonButton(title: "시작하기") {}
-        HStack(spacing: 16){
+        HStack(spacing: 16) {
             CommonButton(title: "삭제", property1: .secondary) {}
             CommonButton(title: "앨범에서 제거", property1: .cta) {}
         }
