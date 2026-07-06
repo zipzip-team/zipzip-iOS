@@ -108,11 +108,6 @@ struct TextInput: View {
                 .scaledToFit()
                 .foregroundStyle(.grey600)
                 .frame(width: 20, height: 20)
-                .frame(
-                    width: 44,
-                    height: 44,
-                    alignment: .trailing
-                )
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
