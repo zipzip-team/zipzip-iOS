@@ -47,7 +47,7 @@ private struct NavbarItemButtonStyle: ButtonStyle {
                 .renderingMode(showsPressed ? .template : .original)
                 .resizable()
                 .frame(width: 32, height: 32)
-                .foregroundStyle(.grey200)
+                .foregroundStyle(showsPressed ? .grey200 : .clear)
             Text(tab.title)
                 .font(.b3_md)
                 .foregroundStyle(showsPressed ? .grey200 : (isSelected ? .orange500 : .grey100))
@@ -65,4 +65,10 @@ private struct NavbarItemButtonStyle: ButtonStyle {
             }
         }
     }
+}
+
+#Preview {
+    @Previewable @State var selection: NavbarTab = .main
+    Navbar(selection: $selection)
+        .padding()
 }
