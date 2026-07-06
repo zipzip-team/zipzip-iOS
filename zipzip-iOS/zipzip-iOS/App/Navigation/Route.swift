@@ -7,6 +7,4 @@
 
 import Foundation
 
-enum Route: Hashable {
-    case itemDetail(Item)
-}
+enum Route: Hashable {}
