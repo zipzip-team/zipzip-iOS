@@ -10,7 +10,9 @@ import SwiftUI
 struct CommonButton: View {
     enum Property1 {
         case `default`
+        case secondary
         case cta
+        case disabled
     }
 
     enum Property2 {
@@ -27,8 +29,7 @@ struct CommonButton: View {
         Button(action: action) {
             Text(title)
                 .font(.t3_sb)
-                .foregroundStyle(.white00)
-                .padding(.horizontal, 40)
+                .padding(.horizontal, 32)
                 .frame(maxWidth: .infinity)
                 .frame(height: 55)
                 .contentShape(.rect)
@@ -39,6 +40,7 @@ struct CommonButton: View {
                 property2: property2
             )
         )
+        .disabled(property1 == .disabled)
     }
 }
 
@@ -48,8 +50,15 @@ private struct CommonButtonStyle: ButtonStyle {
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
+            .foregroundStyle(foregroundColor)
             .background(backgroundColor(isPressed: configuration.isPressed))
             .clipShape(.rect(cornerRadius: 12))
+            .overlay {
+                if property1 == .disabled {
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(Color.grey700, lineWidth: 1)
+                }
+            }
     }
 
     private func backgroundColor(isPressed: Bool) -> Color {
@@ -58,15 +67,27 @@ private struct CommonButtonStyle: ButtonStyle {
         return switch (property1, isPressed) {
         case (.default, false): Color.grey950
         case (.default, true): Color.grey900
+        case (.secondary, false): Color.grey300
+        case (.secondary, true): Color.grey500
         case (.cta, false): Color.orange500
         case (.cta, true): Color.orange700
+        case (.disabled, _): Color.clear
         }
+    }
+
+    private var foregroundColor: Color {
+        property1 == .disabled ? .grey800 : .white00
     }
 }
 
 #Preview("Common Button") {
-    CommonButton(title: "시작하기") {}
-        .padding(12)
-    CommonButton(title: "시작하기", property1: .cta) {}
-        .padding(12)
+    VStack(spacing: 12) {
+        CommonButton(title: "시작하기") {}
+        HStack(spacing: 16){
+            CommonButton(title: "삭제", property1: .secondary) {}
+            CommonButton(title: "앨범에서 제거", property1: .cta) {}
+        }
+        CommonButton(title: "확인", property1: .disabled) {}
+    }
+    .padding(16)
 }
