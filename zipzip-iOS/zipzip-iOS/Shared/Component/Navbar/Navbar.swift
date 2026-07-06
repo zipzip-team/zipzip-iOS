@@ -38,7 +38,7 @@ struct Navbar: View {
 private struct NavbarItemButtonStyle: ButtonStyle {
     let tab: NavbarTab
     let isSelected: Bool
-    var namespace: Namespace.ID
+    let namespace: Namespace.ID
 
     func makeBody(configuration: Configuration) -> some View {
         let showsPressed = configuration.isPressed && !isSelected
