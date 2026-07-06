@@ -12,7 +12,3 @@ struct PictureView: View {
         Text("Picture View")
     }
 }
-
-#Preview {
-    PictureView()
-}

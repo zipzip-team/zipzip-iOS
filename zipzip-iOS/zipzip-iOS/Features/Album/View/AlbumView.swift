@@ -12,7 +12,3 @@ struct AlbumView: View {
         Text("Album View")
     }
 }
-
-#Preview {
-    AlbumView()
-}

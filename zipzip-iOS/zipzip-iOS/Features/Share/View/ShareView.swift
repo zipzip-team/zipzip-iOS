@@ -12,7 +12,3 @@ struct ShareView: View {
         Text("Share View")
     }
 }
-
-#Preview {
-    ShareView()
-}
