@@ -7,4 +7,6 @@
 
 import Foundation
 
-enum Route: Hashable {}
+enum Route: Hashable {
+    case filter
+}

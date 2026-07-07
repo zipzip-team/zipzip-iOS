@@ -8,6 +8,8 @@
 import SwiftUI
 
 struct PictureView: View {
+    @Environment(Router.self) private var router
+
     private let sections: [PhotoSection] = PhotoSection.sample
 
     private let columns = Array(
@@ -41,7 +43,7 @@ struct PictureView: View {
 
     private var floatingButton: some View {
         RoundedIconButton(items: [
-            .init(id: "filter", icon: .iconFilter) { /* TODO: 필터 */ },
+            .init(id: "filter", icon: .iconFilter) { router.push(.filter) },
             .init(id: "selection", icon: .iconSelection) { /* TODO: 선택 모드 */ }
         ])
         .padding(.horizontal, 16)
@@ -64,19 +66,7 @@ struct PictureView: View {
     }
 }
 
-private struct PhotoSection: Identifiable {
-    let id = UUID()
-    let title: String
-    let count: Int
-
-    static let sample: [PhotoSection] = [
-        PhotoSection(title: "오늘", count: 8),
-        PhotoSection(title: "어제", count: 8),
-        PhotoSection(title: "7월 1일", count: 8),
-        PhotoSection(title: "6월 30일", count: 8)
-    ]
-}
-
 #Preview {
     PictureView()
+        .environment(Router())
 }
