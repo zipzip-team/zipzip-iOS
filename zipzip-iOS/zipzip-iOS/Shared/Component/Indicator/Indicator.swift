@@ -24,14 +24,6 @@ struct Indicator: View {
         self.status = status
     }
 
-    init(
-        title: String,
-        isSelected: Bool
-    ) {
-        self.title = title
-        self.status = isSelected ? .selected : .default
-    }
-
     var body: some View {
         Text(displayTitle)
             .font(.b3_sb)
