@@ -27,6 +27,7 @@ extension View {
     func font(_ style: Typography) -> some View {
         font(style.font)
             .lineSpacing(style.lineSpacing)
+            .padding(.vertical, style.lineSpacing / 2)
     }
 }
 
