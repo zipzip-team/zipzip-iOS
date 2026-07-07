@@ -12,22 +12,52 @@ struct PhotoDetailView: View {
 
     let photo: Photo
 
+    @State private var isEditingInfo = false
+
+    private let photoPeekHeight: CGFloat = 160
+
     var body: some View {
-        Color.grey200
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(Color.orange30.ignoresSafeArea())
-            .navigationBarBackButtonHidden(true)
-            .overlay(alignment: .topLeading) {
-                backButton
+        GeometryReader { geo in
+            let reveal = max(geo.size.height - photoPeekHeight, 0)
+
+            VStack(spacing: 0) {
+                Color.grey200
+                    .frame(width: geo.size.width, height: geo.size.height)
+
+                ScrollView {
+                    PhotoInfoEditContent(metadata: photo.metadata)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 32)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .frame(width: geo.size.width, height: reveal)
             }
-            .overlay(alignment: .bottom) {
-                actionBar
+            .offset(y: isEditingInfo ? -reveal : 0)
+            .frame(width: geo.size.width, height: geo.size.height, alignment: .top)
+            .clipped()
+            .animation(.easeInOut(duration: 0.3), value: isEditingInfo)
+        }
+        .background(Color.orange30.ignoresSafeArea())
+        .navigationBarBackButtonHidden(true)
+        .overlay(alignment: .topLeading) {
+            backButton
+        }
+        .overlay(alignment: .bottom) {
+            if !isEditingInfo {
+                actionBar.transition(.opacity)
             }
+        }
     }
 
     private var backButton: some View {
         RoundedIconButton(items: [
-            .init(id: "back", icon: .iconChevronLeft) { router.pop() }
+            .init(id: "back", icon: .iconChevronLeft) {
+                if isEditingInfo {
+                    withAnimation { isEditingInfo = false }
+                } else {
+                    router.pop()
+                }
+            }
         ])
         .opacity(0.9)
         .padding(.horizontal, 16)
@@ -39,7 +69,7 @@ struct PhotoDetailView: View {
             .init(icon: .starStroke, title: "즐겨찾기") { /* TODO: 즐겨찾기 */ },
             .init(icon: .moveToAlbum, title: "집으로") { /* TODO: 집으로 */ },
             .init(icon: .metadata, title: "정보 수정") {
-                router.push(.photoInfoEdit(photo.metadata))
+                withAnimation { isEditingInfo = true }
             },
             .init(icon: .delete, title: "삭제") { /* TODO: 삭제 */ }
         ])
