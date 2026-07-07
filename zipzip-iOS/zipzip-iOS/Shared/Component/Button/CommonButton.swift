@@ -29,7 +29,7 @@ struct CommonButton: View {
         Button(action: action) {
             Text(title)
                 .font(.t3_sb)
-                .padding(.horizontal, 32)
+                .padding(.horizontal, 24)
                 .frame(maxWidth: .infinity)
                 .frame(height: 55)
                 .contentShape(.rect)
