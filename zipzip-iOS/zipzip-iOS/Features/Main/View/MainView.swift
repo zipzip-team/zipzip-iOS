@@ -12,7 +12,3 @@ struct MainView: View {
         Text("Main View")
     }
 }
-
-#Preview {
-    MainView()
-}
