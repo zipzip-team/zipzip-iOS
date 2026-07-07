@@ -14,8 +14,8 @@ enum NavbarTab: CaseIterable {
         switch self {
         case .main: "메인"
         case .picture: "사진"
-        case .album: "앨범"
-        case .share: "공유"
+        case .album: "사진집"
+        case .share: "공유집"
         }
     }
 
