@@ -28,7 +28,7 @@ struct UnderlinedTextButton: View {
         .buttonStyle(.plain)
     }
 
-    private var font: Font {
+    private var font: Typography {
         switch style {
         case .medium: .b1_md
         case .small: .b3_sb
