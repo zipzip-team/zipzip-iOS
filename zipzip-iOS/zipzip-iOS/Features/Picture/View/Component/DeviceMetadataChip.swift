@@ -17,8 +17,14 @@ struct DeviceMetadataChip: View {
         Button(action: action) {
             VStack(alignment: .leading, spacing: 0) {
                 Text(name)
-                    .font(isSelected ? .b2_sb : .b2_md)
-                    .foregroundStyle(.grey950)
+                    .font(.b2_sb)
+                    .hidden()
+                    .overlay(alignment: .leading) {
+                        Text(name)
+                            .font(isSelected ? .b2_sb : .b2_md)
+                            .foregroundStyle(.grey950)
+                            .contentTransition(.identity)
+                    }
                 Text(type)
                     .font(.b3_md)
                     .foregroundStyle(.grey400)

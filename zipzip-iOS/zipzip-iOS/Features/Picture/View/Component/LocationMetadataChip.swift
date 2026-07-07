@@ -15,8 +15,14 @@ struct LocationMetadataChip: View {
     var body: some View {
         Button(action: action) {
             Text(title)
-                .font(isSelected ? .b2_sb : .b2_md)
-                .foregroundStyle(.grey950)
+                .font(.b2_sb)
+                .hidden()
+                .overlay {
+                    Text(title)
+                        .font(isSelected ? .b2_sb : .b2_md)
+                        .foregroundStyle(.grey950)
+                        .contentTransition(.identity)
+                }
                 .padding(.horizontal, 16)
                 .padding(.vertical, 8)
                 .background(isSelected ? .orange50 : .grey70, in: .rect(cornerRadius: 8))
