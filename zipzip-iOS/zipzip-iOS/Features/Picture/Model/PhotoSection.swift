@@ -9,11 +9,14 @@ import Foundation
 
 struct Photo: Identifiable, Hashable {
     let id = UUID()
+    let metadata: PhotoMetadata
 }
 
 extension Photo {
     static func make(_ count: Int) -> [Photo] {
-        (0 ..< count).map { _ in Photo() }
+        (0 ..< count).map { index in
+            Photo(metadata: PhotoMetadata.samples[index % PhotoMetadata.samples.count])
+        }
     }
 }
 
