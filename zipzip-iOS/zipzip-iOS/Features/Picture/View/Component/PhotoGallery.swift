@@ -9,6 +9,10 @@ import SwiftUI
 
 struct PhotoGallery: View {
     let sections: [PhotoSection]
+    var isSelectionMode: Bool = false
+    var selectedPhotoIDs: [UUID] = []
+    var onTapPhoto: ((UUID) -> Void)? = nil
+    var onLongPressPhoto: ((UUID) -> Void)? = nil
 
     private let columns = Array(
         repeating: GridItem(.flexible(), spacing: 2),
@@ -24,14 +28,35 @@ struct PhotoGallery: View {
                         .foregroundStyle(.grey1000)
 
                     LazyVGrid(columns: columns, spacing: 2) {
-                        ForEach(0 ..< section.count, id: \.self) { _ in
-                            Color.grey200
-                                .aspectRatio(1, contentMode: .fit)
+                        ForEach(section.photos) { photo in
+                            photoCell(photo)
                         }
                     }
                 }
             }
         }
+    }
+
+    private func photoCell(_ photo: Photo) -> some View {
+        Color.grey200
+            .aspectRatio(1, contentMode: .fit)
+            .overlay(alignment: .bottomTrailing) {
+                if isSelectionMode {
+                    Indicator(title: badgeTitle(photo.id), status: badgeStatus(photo.id))
+                        .padding(6)
+                }
+            }
+            .contentShape(.rect)
+            .onTapGesture { onTapPhoto?(photo.id) }
+            .onLongPressGesture { onLongPressPhoto?(photo.id) }
+    }
+
+    private func badgeStatus(_ id: UUID) -> Indicator.Status {
+        selectedPhotoIDs.contains(id) ? .selected : .default
+    }
+
+    private func badgeTitle(_ id: UUID) -> String? {
+        selectedPhotoIDs.firstIndex(of: id).map { "\($0 + 1)" }
     }
 }
 

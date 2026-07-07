@@ -9,12 +9,7 @@ import SwiftUI
 
 struct FilterView: View {
     @Environment(Router.self) private var router
-
-    @State private var selectedDevice: String?
-    @State private var selectedLocation: String?
-    @State private var selectedEtc: String?
-
-    private let options: PhotoFilterOptions = .sample
+    @State private var viewModel = FilterViewModel()
 
     var body: some View {
         ScrollView {
@@ -38,10 +33,9 @@ struct FilterView: View {
         .navigationBarBackButtonHidden(true)
         .safeAreaInset(edge: .bottom) {
             HStack(spacing: 16) {
-                CommonButton(title: "초기화", property1: .secondary) { reset() }
+                CommonButton(title: "초기화", property1: .secondary) { viewModel.reset() }
                 CommonButton(title: "다음", property1: .cta) {
-                    let labels = [selectedDevice, selectedLocation, selectedEtc].compactMap { $0 }
-                    router.push(.filterResult(labels))
+                    router.push(.filterResult(viewModel.appliedFilters))
                 }
             }
             .padding(.horizontal, 16)
@@ -52,13 +46,13 @@ struct FilterView: View {
     private var deviceSection: some View {
         section(title: "기기", subtitle: "불러온 기기 중 많이 쓴 기기를 기준으로 추천해요.") {
             chipRow {
-                ForEach(options.devices, id: \.name) { device in
+                ForEach(viewModel.options.devices, id: \.name) { device in
                     DeviceMetadataChip(
                         name: device.name,
                         type: device.type,
-                        isSelected: selectedDevice == device.name
+                        isSelected: viewModel.selectedDevice == device.name
                     ) {
-                        selectedDevice = device.name
+                        viewModel.selectDevice(device.name)
                     }
                 }
             }
@@ -68,12 +62,12 @@ struct FilterView: View {
     private var locationSection: some View {
         section(title: "장소", subtitle: "사진을 많이 찍은 장소를 기준으로 추천해요.") {
             chipRow {
-                ForEach(options.locations, id: \.self) { location in
+                ForEach(viewModel.options.locations, id: \.self) { location in
                     LocationMetadataChip(
                         title: location,
-                        isSelected: selectedLocation == location
+                        isSelected: viewModel.selectedLocation == location
                     ) {
-                        selectedLocation = location
+                        viewModel.selectLocation(location)
                     }
                 }
             }
@@ -89,12 +83,12 @@ struct FilterView: View {
     private var etcSection: some View {
         section(title: "기타", subtitle: nil) {
             chipRow {
-                ForEach(options.etcItems, id: \.self) { item in
+                ForEach(viewModel.options.etcItems, id: \.self) { item in
                     LocationMetadataChip(
                         title: item,
-                        isSelected: selectedEtc == item
+                        isSelected: viewModel.selectedEtc == item
                     ) {
-                        selectedEtc = item
+                        viewModel.selectEtc(item)
                     }
                 }
             }
@@ -114,7 +108,7 @@ struct FilterView: View {
                     .frame(width: 14, height: 14)
                     .foregroundStyle(.grey950)
             }
-            Text(options.dateText)
+            Text(viewModel.options.dateText)
                 .font(.b2_md)
                 .foregroundStyle(.grey950)
         }
@@ -149,12 +143,6 @@ struct FilterView: View {
                 content()
             }
         }
-    }
-
-    private func reset() {
-        selectedDevice = nil
-        selectedLocation = nil
-        selectedEtc = nil
     }
 }
 
