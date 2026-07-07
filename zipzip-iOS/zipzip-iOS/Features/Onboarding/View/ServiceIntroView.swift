@@ -8,24 +8,43 @@
 import SwiftUI
 
 struct ServiceIntroView: View {
+    @State private var currentPage = 0
+    @State private var showsCompletion = false
+
+    private let pages = ServiceIntroPage.pages
+
     var body: some View {
-        VStack(spacing: 60) {
+        if showsCompletion {
+            OnboardingCompleteView()
+        } else {
+            content
+        }
+    }
+
+    private var content: some View {
+        VStack(spacing: 30) {
             VStack(spacing: 8) {
-                Image(.serviceIntroText1)
-                
-                Text("여러 기기에 흩어진 사진들을 모아\n나만의 사진집으로 정리해요.")
+                Image(currentPageContent.titleImage)
+
+                Text(currentPageContent.description)
                     .font(.b1_md)
                     .foregroundStyle(Color(.grey400))
-                    .frame(alignment: .init(horizontal: .leading, vertical: .top))
+                    .multilineTextAlignment(.center)
             }
-            
-            Rectangle()
-                .fill(.grey100)
-                .frame(maxWidth: .infinity, maxHeight: 420)
-            
+
+            VStack(spacing: 16) {
+                Rectangle()
+                    .fill(.grey100)
+                    .frame(maxWidth: .infinity, maxHeight: 420)
+
+                ServiceIntroPageIndicator(currentPage: currentPage, pageCount: pages.count)
+            }
+
             Spacer()
-            
-            CommonButton(title: "확인", property1: .default) {}
+
+            CommonButton(title: "다음", property1: .default) {
+                handleNextButtonTap()
+            }
         }
         .padding(.top, 38)
         .padding(.bottom, 15)
@@ -33,8 +52,39 @@ struct ServiceIntroView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .background(.orange30)
     }
+
+    private var currentPageContent: ServiceIntroPage {
+        pages[currentPage]
+    }
+
+    private func handleNextButtonTap() {
+        if currentPage < pages.count - 1 {
+            currentPage += 1
+        } else {
+            showsCompletion = true
+        }
+    }
 }
 
 #Preview {
     ServiceIntroView()
+}
+
+private struct ServiceIntroPageIndicator: View {
+    let currentPage: Int
+    let pageCount: Int
+
+    var body: some View {
+        HStack(spacing: 12) {
+            ForEach(0 ..< pageCount, id: \.self) { index in
+                Rectangle()
+                    .fill(index == currentPage ? .orange500 : .grey300)
+                    .frame(
+                        width: index == currentPage ? 60 : 16,
+                        height: index == currentPage ? 10 : 6
+                    )
+            }
+        }
+        .frame(width: 144, height: 10)
+    }
 }
