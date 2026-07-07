@@ -13,11 +13,11 @@ struct Indicator: View {
         case `default`
     }
 
-    let title: String
+    let title: String?
     let status: Status
 
     init(
-        title: String,
+        title: String? = nil,
         status: Status = .default
     ) {
         self.title = title
@@ -41,15 +41,19 @@ struct Indicator: View {
     }
 
     private var displayTitle: String {
-        status == .selected ? title : ""
+        status == .selected ? title ?? "" : ""
     }
 
     private var horizontalPadding: CGFloat {
-        title.count >= 3 ? 4 : 1
+        titleCount >= 3 ? 4 : 1
     }
 
     private var minimumWidth: CGFloat {
-        title.count >= 3 ? 28 : 20
+        titleCount >= 3 ? 28 : 20
+    }
+
+    private var titleCount: Int {
+        title?.count ?? 0
     }
 
     private var borderColor: Color {
@@ -64,7 +68,7 @@ struct Indicator: View {
     VStack(spacing: 18) {
         Indicator(title: "22", status: .selected)
         Indicator(title: "222", status: .selected)
-        Indicator(title: "22", status: .default)
+        Indicator(status: .default)
     }
     .padding()
     .background(.white00)
