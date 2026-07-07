@@ -14,7 +14,7 @@ struct ExtraSmallButton: View {
     }
 
     private let content: Content
-    let action: () -> Void
+    private let action: () -> Void
 
     init(
         icon: ImageResource,
