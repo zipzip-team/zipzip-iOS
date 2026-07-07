@@ -12,11 +12,6 @@ struct PictureView: View {
 
     private let sections: [PhotoSection] = PhotoSection.sample
 
-    private let columns = Array(
-        repeating: GridItem(.flexible(), spacing: 2),
-        count: 4
-    )
-
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 8) {
@@ -26,11 +21,7 @@ struct PictureView: View {
                     .frame(height: 44)
                     .padding(.vertical, 4)
 
-                LazyVStack(alignment: .leading, spacing: 20) {
-                    ForEach(sections) { section in
-                        photoSection(section)
-                    }
-                }
+                PhotoGallery(sections: sections)
             }
             .padding(.horizontal, 16)
         }
@@ -48,21 +39,6 @@ struct PictureView: View {
         ])
         .padding(.horizontal, 16)
         .padding(.vertical, 4)
-    }
-
-    private func photoSection(_ section: PhotoSection) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(section.title)
-                .font(.b2_sb)
-                .foregroundStyle(.grey1000)
-
-            LazyVGrid(columns: columns, spacing: 2) {
-                ForEach(0 ..< section.count, id: \.self) { _ in
-                    Color.grey200
-                        .aspectRatio(1, contentMode: .fit)
-                }
-            }
-        }
     }
 }
 
