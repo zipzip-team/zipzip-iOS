@@ -20,6 +20,8 @@ struct RootView: View {
                         FilterView()
                     case let .filterResult(labels):
                         FilteredPictureView(appliedFilters: labels)
+                    case let .photoInfoEdit(metadata):
+                        PhotoInfoEditView(metadata: metadata)
                     }
                 }
         }

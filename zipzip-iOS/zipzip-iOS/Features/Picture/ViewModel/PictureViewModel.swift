@@ -14,6 +14,14 @@ final class PictureViewModel {
 
     let sections: [PhotoSection] = PhotoSection.sample
 
+    var firstSelectedMetadata: PhotoMetadata? {
+        guard let firstID = selectedPhotoIDs.first else { return nil }
+        return sections
+            .flatMap(\.photos)
+            .first { $0.id == firstID }?
+            .metadata
+    }
+
     func enterSelectionMode() {
         isSelectionMode = true
     }

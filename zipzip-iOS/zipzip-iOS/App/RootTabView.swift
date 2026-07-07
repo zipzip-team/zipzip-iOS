@@ -8,6 +8,7 @@
 import SwiftUI
 
 struct RootTabView: View {
+    @Environment(Router.self) private var router
     @State private var selection: NavbarTab = .main
     @State private var loaded: Set<NavbarTab> = [.main]
     @State private var pictureViewModel = PictureViewModel()
@@ -29,7 +30,11 @@ struct RootTabView: View {
         if pictureViewModel.isSelectionMode {
             ActionBar(items: [
                 .init(icon: .moveToAlbum, title: "집으로") { /* TODO: */ },
-                .init(icon: .metadata, title: "정보 수정") { /* TODO: */ },
+                .init(icon: .metadata, title: "정보 수정") {
+                    if let metadata = pictureViewModel.firstSelectedMetadata {
+                        router.push(.photoInfoEdit(metadata))
+                    }
+                },
                 .init(icon: .delete, title: "삭제") { /* TODO: */ }
             ])
         } else {
