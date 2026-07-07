@@ -60,8 +60,16 @@ extension View {
                     message: message,
                     secondaryTitle: secondaryTitle,
                     primaryTitle: primaryTitle,
-                    onSecondaryTap: onSecondaryTap,
-                    onPrimaryTap: onPrimaryTap
+                    onSecondaryTap: {
+                        withAnimation(.easeOut(duration: 0.2)) {
+                            onSecondaryTap()
+                        }
+                    },
+                    onPrimaryTap: {
+                        withAnimation(.easeOut(duration: 0.2)) {
+                            onPrimaryTap()
+                        }
+                    }
                 )
             }
         )
