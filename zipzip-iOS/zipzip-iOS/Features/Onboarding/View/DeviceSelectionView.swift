@@ -10,10 +10,17 @@ import SwiftUI
 struct DeviceSelectionView: View {
     var body: some View {
         VStack(spacing: 60) {
-            Text("내가 주로 사용하는 기기를\n선택해 주세요.")
-                .font(.h1_sb)
-                .foregroundStyle(Color(.grey900))
-                .frame(maxWidth: .infinity, alignment: .leading)
+            VStack(spacing: 4) {
+                Text("사진을 모아보고 싶은 기기를 선택해주세요.")
+                    .font(.h1_sb)
+                    .foregroundStyle(Color(.grey900))
+                    .frame(maxWidth: .infinity, alignment: .leading)
+
+                Text("선택한 기기로 찍은 사진들을 정리할 수 있어요.")
+                    .font(.b1_md)
+                    .foregroundStyle(Color(.grey400))
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
 
             Rectangle()
                 .fill(.grey100)
@@ -21,14 +28,7 @@ struct DeviceSelectionView: View {
 
             Spacer()
 
-            VStack(spacing: 18) {
-                UnderlinedTextButton(
-                    title: "목록에 내 기기가 없어요",
-                    style: .medium
-                ) {}
-
-                CommonButton(title: "확인", property1: .default) {}
-            }
+            CommonButton(title: "확인", property1: .default) {}
         }
         .padding(.top, 40)
         .padding(.bottom, 15)
