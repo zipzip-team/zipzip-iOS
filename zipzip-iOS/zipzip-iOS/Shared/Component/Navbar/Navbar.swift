@@ -43,11 +43,11 @@ private struct NavbarItemButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         let showsPressed = configuration.isPressed && !isSelected
         return VStack(spacing: 0) {
-            Image(isSelected ? tab.selectedIcon : tab.unselectedIcon)
-                .renderingMode(showsPressed ? .template : .original)
+            Image(tab.icon)
+                .renderingMode(.template)
                 .resizable()
                 .frame(width: 32, height: 32)
-                .foregroundStyle(showsPressed ? .grey200 : .clear)
+                .foregroundStyle(showsPressed ? .grey200 : (isSelected ? .orange500 : .grey100))
             Text(tab.title)
                 .font(.b3_md)
                 .foregroundStyle(showsPressed ? .grey200 : (isSelected ? .orange500 : .grey100))

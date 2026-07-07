@@ -19,21 +19,12 @@ enum NavbarTab: CaseIterable {
         }
     }
 
-    var selectedIcon: ImageResource {
+    var icon: ImageResource {
         switch self {
-        case .main: .navMainSelected
-        case .picture: .navPictureSelected
-        case .album: .navAlbumSelected
-        case .share: .navShareSelected
-        }
-    }
-
-    var unselectedIcon: ImageResource {
-        switch self {
-        case .main: .navMainUnselected
-        case .picture: .navPictureUnselected
-        case .album: .navAlbumUnselected
-        case .share: .navShareUnselected
+        case .main: .main
+        case .picture: .photo
+        case .album: .album
+        case .share: .share
         }
     }
 }
