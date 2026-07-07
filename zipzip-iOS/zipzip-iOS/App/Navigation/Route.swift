@@ -11,4 +11,5 @@ enum Route: Hashable {
     case filter
     case filterResult([String])
     case photoInfoEdit(PhotoMetadata)
+    case photoDetail(Photo)
 }

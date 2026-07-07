@@ -13,6 +13,7 @@ struct PhotoGallery: View {
     var selectedPhotoIDs: [UUID] = []
     var onTapPhoto: ((UUID) -> Void)? = nil
     var onLongPressPhoto: ((UUID) -> Void)? = nil
+    var onOpenPhoto: ((Photo) -> Void)? = nil
 
     private let columns = Array(
         repeating: GridItem(.flexible(), spacing: 2),
@@ -47,7 +48,13 @@ struct PhotoGallery: View {
                 }
             }
             .contentShape(.rect)
-            .onTapGesture { onTapPhoto?(photo.id) }
+            .onTapGesture {
+                if isSelectionMode {
+                    onTapPhoto?(photo.id)
+                } else {
+                    onOpenPhoto?(photo)
+                }
+            }
             .onLongPressGesture { onLongPressPhoto?(photo.id) }
     }
 

@@ -26,7 +26,8 @@ struct PictureView: View {
                     isSelectionMode: viewModel.isSelectionMode,
                     selectedPhotoIDs: viewModel.selectedPhotoIDs,
                     onTapPhoto: viewModel.toggleSelection,
-                    onLongPressPhoto: viewModel.handleLongPress
+                    onLongPressPhoto: viewModel.handleLongPress,
+                    onOpenPhoto: { router.push(.photoDetail($0)) }
                 )
             }
             .padding(.horizontal, 16)
