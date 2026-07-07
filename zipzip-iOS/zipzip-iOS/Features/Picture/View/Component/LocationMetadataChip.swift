@@ -22,7 +22,7 @@ struct LocationMetadataChip: View {
                 .background(isSelected ? .orange50 : .grey70, in: .rect(cornerRadius: 8))
                 .overlay {
                     RoundedRectangle(cornerRadius: 8)
-                        .stroke(isSelected ? Color.orange400 : .clear, lineWidth: 2)
+                        .strokeBorder(isSelected ? Color.orange400 : .clear, lineWidth: 2)
                 }
                 .contentShape(.rect(cornerRadius: 8))
         }
