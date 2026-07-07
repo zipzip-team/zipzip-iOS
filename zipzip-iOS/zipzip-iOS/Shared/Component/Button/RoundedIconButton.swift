@@ -8,29 +8,42 @@
 import SwiftUI
 
 struct RoundedIconButton: View {
-    let items: [RoundedIconButtonItem]
+    private let items: [RoundedIconButtonItem]
 
     init(items: [RoundedIconButtonItem]) {
-        precondition((1 ... 3).contains(items.count), "RoundedIconButton supports 1 to 3 items.")
-        self.items = items
+        if items.isEmpty {
+            assertionFailure("RoundedIconButton requires at least 1 item.")
+            self.items = []
+        } else if items.count > 3 {
+            assertionFailure("RoundedIconButton supports up to 3 items.")
+            self.items = Array(items.prefix(3))
+        } else {
+            self.items = items
+        }
     }
 
     var body: some View {
-        HStack(spacing: 0) {
-            ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
-                button(for: item)
+        Group {
+            if items.isEmpty {
+                EmptyView()
+            } else {
+                HStack(spacing: 0) {
+                    ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
+                        button(for: item)
 
-                if index < items.count - 1 {
-                    Rectangle()
-                        .fill(.grey50)
-                        .frame(width: 1, height: 36)
+                        if index < items.count - 1 {
+                            Rectangle()
+                                .fill(.grey50)
+                                .frame(width: 1, height: 36)
+                        }
+                    }
                 }
+                .padding(.horizontal, items.count == 1 ? 8 : 4)
+                .frame(height: 44)
+                .background(.white00, in: .capsule)
+                .shadow(color: .black.opacity(0.05), radius: 6, y: 4)
             }
         }
-        .padding(.horizontal, items.count == 1 ? 8 : 4)
-        .frame(height: 44)
-        .background(.white00, in: .capsule)
-        .shadow(color: .black.opacity(0.05), radius: 6, y: 4)
     }
 
     private func button(for item: RoundedIconButtonItem) -> some View {
@@ -50,20 +63,20 @@ struct RoundedIconButton: View {
 #Preview("Rounded Icon Button") {
     VStack(spacing: 16) {
         RoundedIconButton(items: [
-            .init(icon: .iconChevronLeft) {
+            .init(id: "back", icon: .iconChevronLeft) {
                 print("뒤로가기 버튼 선택")
             }
         ])
 
         RoundedIconButton(items: [
-            .init(icon: .iconFilter) {},
-            .init(icon: .iconSelection) {}
+            .init(id: "filter", icon: .iconFilter) {},
+            .init(id: "selection", icon: .iconSelection) {}
         ])
 
         RoundedIconButton(items: [
-            .init(icon: .iconFilter) {},
-            .init(icon: .iconSelection) {},
-            .init(icon: .iconFilter) {}
+            .init(id: "filter", icon: .iconFilter) {},
+            .init(id: "selection", icon: .iconSelection) {},
+            .init(id: "filter-secondary", icon: .iconFilter) {}
         ])
     }
     .padding()
