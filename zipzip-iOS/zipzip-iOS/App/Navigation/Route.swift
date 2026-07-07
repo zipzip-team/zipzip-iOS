@@ -9,4 +9,5 @@ import Foundation
 
 enum Route: Hashable {
     case filter
+    case filterResult([String])
 }

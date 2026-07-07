@@ -39,7 +39,10 @@ struct FilterView: View {
         .safeAreaInset(edge: .bottom) {
             HStack(spacing: 16) {
                 CommonButton(title: "초기화", property1: .secondary) { reset() }
-                CommonButton(title: "다음", property1: .cta) { /* TODO: 다음 */ }
+                CommonButton(title: "다음", property1: .cta) {
+                    let labels = [selectedDevice, selectedLocation, selectedEtc].compactMap { $0 }
+                    router.push(.filterResult(labels))
+                }
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 12)
