@@ -8,7 +8,7 @@
 import SwiftUI
 
 struct RoundedIconButtonItem: Identifiable {
-    let id = UUID()
+    let id: String
     let icon: ImageResource
     let action: () -> Void
 }
