@@ -33,7 +33,7 @@ struct RoundedTextButton: View {
         .shadow(color: shadowColor, radius: 6, y: 4)
     }
 
-    private var font: Font {
+    private var font: Typography {
         switch style {
         case .large, .medium: .b1_md
         case .cancel: .b1_sb

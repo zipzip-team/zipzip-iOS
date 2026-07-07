@@ -88,7 +88,7 @@ struct TextInput: View {
             "",
             text: $text,
             prompt: Text(placeholder)
-                .font(.b1_md)
+                .font(Typography.b1_md.font)
                 .foregroundStyle(.grey600)
         )
         .font(.b1_md)
