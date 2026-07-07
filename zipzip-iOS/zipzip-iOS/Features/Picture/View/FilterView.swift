@@ -76,7 +76,7 @@ struct FilterView: View {
 
     private var dateSection: some View {
         section(title: "날짜", subtitle: "사진을 찍은 날짜를 선택해 주세요.") {
-            dateChip
+            DateMetadataChip(dateText: viewModel.options.dateText)
         }
     }
 
@@ -93,28 +93,6 @@ struct FilterView: View {
                 }
             }
         }
-    }
-
-    private var dateChip: some View {
-        HStack(spacing: 6) {
-            ZStack {
-                Circle()
-                    .fill(.white00)
-                    .frame(width: 20, height: 20)
-                Image(.calendar)
-                    .resizable()
-                    .renderingMode(.template)
-                    .scaledToFit()
-                    .frame(width: 14, height: 14)
-                    .foregroundStyle(.grey950)
-            }
-            Text(viewModel.options.dateText)
-                .font(.b2_md)
-                .foregroundStyle(.grey950)
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 8)
-        .background(.grey70, in: .rect(cornerRadius: 8))
     }
 
     private func section<Content: View>(
