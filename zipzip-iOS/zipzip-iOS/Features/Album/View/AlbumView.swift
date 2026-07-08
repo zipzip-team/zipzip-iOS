@@ -90,8 +90,8 @@ struct AlbumView: View {
 
     private var selectionActionItems: [ActionBarItem] {
         [
-            .init(id: "move-to-share", icon: .moveToShare, title: "공유집으로", action: moveSelectedAlbumsToShare),
-            .init(id: "delete", icon: .delete, title: "삭제", action: deleteSelectedAlbums)
+            .init(icon: .moveToShare, title: "공유집으로", action: moveSelectedAlbumsToShare),
+            .init(icon: .delete, title: "삭제", action: deleteSelectedAlbums)
         ]
     }
 
