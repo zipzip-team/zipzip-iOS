@@ -45,7 +45,7 @@ struct MainView: View {
                     .font(.t2_sb)
                     .foregroundStyle(.grey1000)
 
-                Text("아직 머물 곳을 찾는 사진들")
+                Text("지금 정리하면 좋을 사진을 모았어요")
                     .font(.b2_md)
                     .foregroundStyle(.grey500)
             }
