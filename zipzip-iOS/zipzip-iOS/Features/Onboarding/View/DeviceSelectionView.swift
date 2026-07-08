@@ -8,8 +8,12 @@
 import SwiftUI
 
 struct DeviceSelectionView: View {
+    @Environment(Router.self) private var router
+    @State private var devices = DetectedDevice.samples
+    @State private var selectedDeviceIDs = Set<DetectedDevice.ID>()
+
     var body: some View {
-        VStack(spacing: 60) {
+        VStack(spacing: 64) {
             VStack(spacing: 4) {
                 Text("사진을 모아보고 싶은 기기를 선택해주세요.")
                     .font(.h1_sb)
@@ -22,22 +26,43 @@ struct DeviceSelectionView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
 
-            Rectangle()
-                .fill(.grey100)
-                .frame(maxWidth: .infinity, maxHeight: 420)
+            VStack(spacing: 16) {
+                ForEach(devices) { device in
+                    DeviceSelectionButton(
+                        title: device.name,
+                        subtitle: device.modelName,
+                        icon: device.type.icon,
+                        iconSize: device.type.iconSize,
+                        isSelected: selectedDeviceIDs.contains(device.id)
+                    ) {
+                        toggleSelection(for: device)
+                    }
+                }
+            }
 
             Spacer()
 
-            CommonButton(title: "확인", property1: .default) {}
+            CommonButton(title: "확인", property1: .default) {
+                router.push(.serviceIntro)
+            }
         }
-        .padding(.top, 40)
+        .padding(.top, 38)
         .padding(.bottom, 15)
         .padding(.horizontal, 16)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .background(.orange30)
     }
+
+    private func toggleSelection(for device: DetectedDevice) {
+        if selectedDeviceIDs.contains(device.id) {
+            selectedDeviceIDs.remove(device.id)
+        } else {
+            selectedDeviceIDs.insert(device.id)
+        }
+    }
 }
 
 #Preview {
     DeviceSelectionView()
+        .environment(Router())
 }
