@@ -8,6 +8,12 @@
 import Foundation
 
 enum Route: Hashable {
+    case splash
+    case serviceIntro
+    case onboardingComplete
+    case photoPermission
+    case deviceLoading
+    case deviceSelection
     case filter
     case filterResult([AppliedFilter])
     case photoInfoEdit(PhotoMetadata)
