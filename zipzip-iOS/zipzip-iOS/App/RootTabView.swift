@@ -12,6 +12,7 @@ struct RootTabView: View {
     @State private var selection: NavbarTab = .main
     @State private var loaded: Set<NavbarTab> = [.main]
     @State private var pictureViewModel = PictureViewModel()
+    @State private var showShareSheet = false
 
     var body: some View {
         content
@@ -24,12 +25,20 @@ struct RootTabView: View {
             .onChange(of: selection) { _, newValue in
                 loaded.insert(newValue)
             }
+            .bottomSheet(isPresented: $showShareSheet, detents: [.full]) { dismiss in
+                ShareSheet(
+                    albums: Album.samples,
+                    sharedAlbums: Album.sharedSamples,
+                    shareAlbums: ShareAlbum.samples,
+                    onDismiss: { dismiss() }
+                )
+            }
     }
 
     @ViewBuilder private var bottomBar: some View {
         if pictureViewModel.isSelectionMode {
             ActionBar(items: [
-                .init(icon: .moveToAlbum, title: "집으로") { /* TODO: */ },
+                .init(icon: .moveToAlbum, title: "집으로") { showShareSheet = true },
                 .init(icon: .metadata, title: "정보 수정") {
                     if let metadata = pictureViewModel.firstSelectedMetadata {
                         router.push(.photoInfoEdit(metadata))
