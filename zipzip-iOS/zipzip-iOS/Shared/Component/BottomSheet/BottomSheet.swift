@@ -109,7 +109,8 @@ struct BottomSheet<Content: View>: View {
         .padding(.horizontal, 16)
         .frame(maxWidth: .infinity)
         .frame(minHeight: 48)
-        .padding(.vertical, 12)
+        .padding(.top, 24)
+        .padding(.bottom, 12)
     }
 
     @ViewBuilder

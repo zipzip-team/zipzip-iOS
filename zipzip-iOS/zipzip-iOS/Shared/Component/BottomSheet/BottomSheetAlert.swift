@@ -38,7 +38,7 @@ struct BottomSheetAlert: View {
                 .foregroundStyle(.white00)
                 .multilineTextAlignment(.center)
                 .lineLimit(nil)
-                .frame(height: 60, alignment: .center)
+                .frame(alignment: .center)
                 .frame(maxWidth: .infinity)
                 .padding(.top, 49)
 
@@ -47,7 +47,7 @@ struct BottomSheetAlert: View {
                 .foregroundStyle(.grey400)
                 .multilineTextAlignment(.center)
                 .lineLimit(nil)
-                .frame(height: 21, alignment: .center)
+                .frame(alignment: .center)
                 .frame(maxWidth: .infinity)
                 .padding(.top, 12)
 
