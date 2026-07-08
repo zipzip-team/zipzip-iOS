@@ -47,6 +47,9 @@ struct AlbumView: View {
                 }
                 .padding(.horizontal, 16)
                 .padding(.top, 17)
+                .transaction { transaction in
+                    transaction.animation = nil
+                }
             }
         }
         .overlay(alignment: .topTrailing) {
@@ -69,19 +72,20 @@ struct AlbumView: View {
                 .accessibilityHidden(!isSelectionMode)
         }
         .overlay(alignment: .bottom) {
-            if isSelectionMode, !selectedAlbumIDs.isEmpty {
-                ActionBar(items: selectionActionItems)
-                    .padding(.bottom, 49)
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            ZStack {
+                if isSelectionMode, !selectedAlbumIDs.isEmpty {
+                    ActionBar(items: selectionActionItems)
+                        .padding(.bottom, 49)
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                }
             }
+            .animation(.easeInOut(duration: 0.2), value: isSelectionMode && !selectedAlbumIDs.isEmpty)
         }
         .onChange(of: isSelectionMode) { _, newValue in
             if !newValue {
                 selectedAlbumIDs.removeAll()
             }
         }
-        .animation(.easeInOut(duration: 0.2), value: isSelectionMode)
-        .animation(.easeInOut(duration: 0.2), value: selectedAlbumIDs)
     }
 
     private var selectionActionItems: [ActionBarItem] {
@@ -124,20 +128,26 @@ private struct AlbumGridCard: View {
     let onTap: () -> Void
 
     var body: some View {
-        Button {
-            if isSelectionMode {
-                onTap()
+        card
+            .transaction { transaction in
+                transaction.animation = nil
             }
-        } label: {
-            card
-        }
-        .buttonStyle(.plain)
-        .allowsHitTesting(isSelectionMode)
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(album.name), \(album.count)장")
-        .accessibilityValue(isSelectionMode ? accessibilityValue : "")
-        .accessibilityAddTraits(selectionNumber == nil ? [] : .isSelected)
-        .accessibilityRemoveTraits(isSelectionMode ? [] : .isButton)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("\(album.name), \(album.count)장")
+            .accessibilityHidden(isSelectionMode)
+            .overlay {
+                if isSelectionMode {
+                    Button(action: onTap) {
+                        Color.clear
+                            .contentShape(.rect)
+                    }
+                    .buttonStyle(StaticButtonStyle())
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel("\(album.name), \(album.count)장")
+                    .accessibilityValue(accessibilityValue)
+                    .accessibilityAddTraits(selectionNumber == nil ? [] : .isSelected)
+                }
+            }
     }
 
     private var card: some View {
@@ -162,6 +172,12 @@ private struct AlbumGridCard: View {
         } else {
             "선택 안 됨"
         }
+    }
+}
+
+private struct StaticButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
     }
 }
 

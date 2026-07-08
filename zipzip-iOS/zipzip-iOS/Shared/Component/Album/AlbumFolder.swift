@@ -34,6 +34,10 @@ struct AlbumFolder<Slot: View>: View {
             slot()
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
                 .padding(.top, 32)
+                .transaction { transaction in
+                    transaction.disablesAnimations = true
+                    transaction.animation = nil
+                }
         }
         .frame(width: 170, height: 152)
         .overlay(alignment: .bottomTrailing) {
