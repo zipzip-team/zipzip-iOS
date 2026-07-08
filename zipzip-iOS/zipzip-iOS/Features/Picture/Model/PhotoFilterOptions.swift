@@ -12,6 +12,18 @@ struct FilterDevice: Hashable {
     let type: String
 }
 
+enum FilterKind: Hashable {
+    case device
+    case location
+    case date
+    case etc
+}
+
+struct AppliedFilter: Hashable {
+    let kind: FilterKind
+    let value: String
+}
+
 struct PhotoFilterOptions {
     let devices: [FilterDevice]
     let locations: [String]

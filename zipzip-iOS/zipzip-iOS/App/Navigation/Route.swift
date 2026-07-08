@@ -9,7 +9,7 @@ import Foundation
 
 enum Route: Hashable {
     case filter
-    case filterResult([String])
+    case filterResult([AppliedFilter])
     case photoInfoEdit(PhotoMetadata)
     case photoDetail(Photo)
 }

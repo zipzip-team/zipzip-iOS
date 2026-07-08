@@ -18,8 +18,8 @@ struct RootView: View {
                     switch route {
                     case .filter:
                         FilterView()
-                    case let .filterResult(labels):
-                        FilteredPictureView(appliedFilters: labels)
+                    case let .filterResult(filters):
+                        FilteredPictureView(appliedFilters: filters)
                     case let .photoInfoEdit(metadata):
                         PhotoInfoEditView(metadata: metadata)
                     case let .photoDetail(photo):

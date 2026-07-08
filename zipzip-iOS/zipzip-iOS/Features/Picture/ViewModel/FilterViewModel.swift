@@ -15,8 +15,12 @@ final class FilterViewModel {
     var selectedLocation: String?
     var selectedEtc: String?
 
-    var appliedFilters: [String] {
-        [selectedDevice, selectedLocation, selectedEtc].compactMap { $0 }
+    var appliedFilters: [AppliedFilter] {
+        [
+            selectedDevice.map { AppliedFilter(kind: .device, value: $0) },
+            selectedLocation.map { AppliedFilter(kind: .location, value: $0) },
+            selectedEtc.map { AppliedFilter(kind: .etc, value: $0) }
+        ].compactMap { $0 }
     }
 
     func selectDevice(_ name: String) {
