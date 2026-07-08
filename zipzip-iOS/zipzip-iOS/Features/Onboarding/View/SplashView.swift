@@ -8,6 +8,8 @@
 import SwiftUI
 
 struct SplashView: View {
+    @Environment(Router.self) private var router
+
     var body: some View {
         VStack {
             Rectangle()
@@ -19,9 +21,14 @@ struct SplashView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(.orange30)
+        .task {
+            try? await Task.sleep(for: .seconds(3))
+            router.push(.photoPermission)
+        }
     }
 }
 
 #Preview {
     SplashView()
+        .environment(Router())
 }
