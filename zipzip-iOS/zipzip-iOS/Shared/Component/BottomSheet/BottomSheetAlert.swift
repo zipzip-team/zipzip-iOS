@@ -57,16 +57,14 @@ struct BottomSheetAlert: View {
                     property1: .secondary,
                     action: onSecondaryTap
                 )
-                .frame(width: 171)
 
-                Spacer(minLength: 0)
+                Spacer(minLength: 16)
 
                 CommonButton(
                     title: primaryTitle,
                     property1: .cta,
                     action: onPrimaryTap
                 )
-                .frame(width: 171)
             }
             .padding(.top, 44)
             .padding(.horizontal, 16)

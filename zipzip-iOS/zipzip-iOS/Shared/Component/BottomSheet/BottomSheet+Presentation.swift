@@ -36,6 +36,45 @@ enum BottomSheetSize: Hashable {
 }
 
 extension View {
+    func bottomSheet<SheetContent: View>(
+        isPresented: Binding<Bool>,
+        detents: [BottomSheetSize] = [.content],
+        initialDetent: BottomSheetSize? = nil,
+        showsDragIndicator: Visibility = .visible,
+        expandsToLargestDetentOnScroll: Bool = true,
+        @ViewBuilder content: @escaping () -> SheetContent
+    ) -> some View {
+        bottomSheet(
+            isPresented: isPresented,
+            detents: detents,
+            initialDetent: initialDetent,
+            showsDragIndicator: showsDragIndicator,
+            expandsToLargestDetentOnScroll: expandsToLargestDetentOnScroll
+        ) { _ in
+            content()
+        }
+    }
+
+    func bottomSheet<SheetContent: View>(
+        isPresented: Binding<Bool>,
+        detents: [BottomSheetSize] = [.content],
+        initialDetent: BottomSheetSize? = nil,
+        showsDragIndicator: Visibility = .visible,
+        expandsToLargestDetentOnScroll: Bool = true,
+        @ViewBuilder content: @escaping (@escaping () -> Void) -> SheetContent
+    ) -> some View {
+        modifier(
+            BottomSheetPresentationModifier(
+                isPresented: isPresented,
+                detents: detents,
+                initialDetent: initialDetent,
+                showsDragIndicator: showsDragIndicator,
+                expandsToLargestDetentOnScroll: expandsToLargestDetentOnScroll,
+                sheetContent: content
+            )
+        )
+    }
+
     func bottomSheetAlert(
         isPresented: Binding<Bool>,
         detents: [BottomSheetSize] = [.content],
@@ -53,15 +92,24 @@ extension View {
                 isPresented: isPresented,
                 detents: detents,
                 initialDetent: initialDetent,
-                showsDragIndicator: .hidden
-            ) {
+                showsDragIndicator: .hidden,
+                expandsToLargestDetentOnScroll: false
+            ) { _ in
                 BottomSheetAlert(
                     title: title,
                     message: message,
                     secondaryTitle: secondaryTitle,
                     primaryTitle: primaryTitle,
-                    onSecondaryTap: onSecondaryTap,
-                    onPrimaryTap: onPrimaryTap
+                    onSecondaryTap: {
+                        withAnimation(.easeOut(duration: 0.2)) {
+                            onSecondaryTap()
+                        }
+                    },
+                    onPrimaryTap: {
+                        withAnimation(.easeOut(duration: 0.2)) {
+                            onPrimaryTap()
+                        }
+                    }
                 )
             }
         )
@@ -70,57 +118,101 @@ extension View {
 
 private struct BottomSheetPresentationModifier<SheetContent: View>: ViewModifier {
     @Binding private var isPresented: Bool
-    @State private var contentHeight: CGFloat = 320
-    @State private var dragOffset: CGFloat = 0
-    @State private var selectedSize: BottomSheetSize
 
     private let detents: [BottomSheetSize]
     private let initialDetent: BottomSheetSize?
     private let showsDragIndicator: Visibility
-    private let sheetContent: () -> SheetContent
+    private let expandsToLargestDetentOnScroll: Bool
+    private let sheetContent: (@escaping () -> Void) -> SheetContent
 
     init(
         isPresented: Binding<Bool>,
         detents: [BottomSheetSize],
         initialDetent: BottomSheetSize?,
         showsDragIndicator: Visibility,
-        @ViewBuilder sheetContent: @escaping () -> SheetContent
+        expandsToLargestDetentOnScroll: Bool,
+        @ViewBuilder sheetContent: @escaping (@escaping () -> Void) -> SheetContent
     ) {
         _isPresented = isPresented
         self.detents = detents
         self.initialDetent = initialDetent
         self.showsDragIndicator = showsDragIndicator
+        self.expandsToLargestDetentOnScroll = expandsToLargestDetentOnScroll
         self.sheetContent = sheetContent
-        _selectedSize = State(initialValue: initialDetent ?? (detents.first ?? .content))
     }
 
     func body(content: Content) -> some View {
         content
             .overlay {
-                GeometryReader { proxy in
-                    ZStack(alignment: .bottom) {
-                        if isPresented {
-                            Color.black00
-                                .opacity(0.45)
-                                .ignoresSafeArea()
-                                .onTapGesture(perform: dismiss)
-                                .transition(.opacity)
+                BottomSheetPresentationOverlay(
+                    isPresented: $isPresented,
+                    detents: detents,
+                    initialDetent: initialDetent,
+                    showsDragIndicator: showsDragIndicator,
+                    expandsToLargestDetentOnScroll: expandsToLargestDetentOnScroll,
+                    sheetContent: sheetContent
+                )
+            }
+    }
+}
 
-                            sheetView(in: proxy)
-                                .transition(.move(edge: .bottom))
-                        }
-                    }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+private struct BottomSheetPresentationOverlay<SheetContent: View>: View {
+    @Binding private var isPresented: Bool
+    @State private var contentHeight: CGFloat = 320
+    @State private var dragOffset: CGFloat = 0
+    @State private var selectedSize: BottomSheetSize
+    @GestureState private var isScrollExpansionGestureActive = false
+
+    private let detents: [BottomSheetSize]
+    private let initialDetent: BottomSheetSize?
+    private let showsDragIndicator: Visibility
+    private let expandsToLargestDetentOnScroll: Bool
+    private let sheetContent: (@escaping () -> Void) -> SheetContent
+
+    init(
+        isPresented: Binding<Bool>,
+        detents: [BottomSheetSize],
+        initialDetent: BottomSheetSize?,
+        showsDragIndicator: Visibility,
+        expandsToLargestDetentOnScroll: Bool,
+        @ViewBuilder sheetContent: @escaping (@escaping () -> Void) -> SheetContent
+    ) {
+        _isPresented = isPresented
+        self.detents = detents
+        self.initialDetent = initialDetent
+        self.showsDragIndicator = showsDragIndicator
+        self.expandsToLargestDetentOnScroll = expandsToLargestDetentOnScroll
+        self.sheetContent = sheetContent
+        _selectedSize = State(initialValue: initialDetent ?? (detents.first ?? .content))
+    }
+
+    var body: some View {
+        GeometryReader { proxy in
+            ZStack(alignment: .bottom) {
+                if isPresented {
+                    Color.black00
+                        .opacity(0.45)
+                        .ignoresSafeArea()
+                        .onTapGesture(perform: dismiss)
+                        .transition(.opacity)
+
+                    sheetView(in: proxy)
+                        .transition(.move(edge: .bottom))
                 }
-                .allowsHitTesting(isPresented)
             }
-            .onChange(of: isPresented) { _, newValue in
-                guard newValue else { return }
-                dragOffset = 0
-                selectedSize = preferredSize
-            }
-            .animation(.easeOut(duration: 0.2), value: isPresented)
-            .animation(.interactiveSpring(response: 0.28, dampingFraction: 0.9), value: selectedSize)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+        }
+        .allowsHitTesting(isPresented)
+        .onChange(of: isPresented) { _, newValue in
+            guard newValue else { return }
+            dragOffset = 0
+            selectedSize = preferredSize
+        }
+        .onChange(of: resolvedSizes) { _, _ in
+            clampSelectedSizeToCurrentDetents()
+        }
+        .animation(.easeOut(duration: 0.2), value: isPresented)
+        .animation(.interactiveSpring(response: 0.28, dampingFraction: 0.9), value: selectedSize)
     }
 
     private var resolvedSizes: [BottomSheetSize] {
@@ -150,7 +242,7 @@ private struct BottomSheetPresentationModifier<SheetContent: View>: ViewModifier
     }
 
     private func sheetView(in proxy: GeometryProxy) -> some View {
-        let bottomFillerHeight = max(proxy.safeAreaInsets.bottom, 34)
+        let bottomSafeAreaInset = proxy.safeAreaInsets.bottom
         let availableHeight = proxy.size.height
         let selectedHeight = selectedSize.height(
             availableHeight: availableHeight,
@@ -165,50 +257,101 @@ private struct BottomSheetPresentationModifier<SheetContent: View>: ViewModifier
         let maximumOffset = maximumHeight - minimumHeight + 160
         let stableDragOffset = abs(dragOffset) < 2 ? 0 : dragOffset
         let currentOffset = min(max(baseOffset + stableDragOffset, 0), maximumOffset)
+        let sheetHeight = maximumHeight + bottomSafeAreaInset
+        let visibleHeight = max(maximumHeight - currentOffset + bottomSafeAreaInset, 1)
 
-        return measuredSheetSurface(availableHeight: availableHeight)
-            .frame(maxWidth: .infinity)
-            .frame(height: maximumHeight, alignment: .top)
-            .background(.grey950, in: bottomSheetPresentationShape)
-            .clipShape(bottomSheetPresentationShape)
-            .background(alignment: .bottom) {
-                Color.grey950
-                    .frame(height: bottomFillerHeight)
-                    .offset(y: bottomFillerHeight)
-                    .ignoresSafeArea(edges: .bottom)
-            }
-            .offset(y: currentOffset)
-            .transaction { transaction in
-                guard dragOffset != 0 else { return }
-                transaction.animation = nil
-            }
+        return measuredSheetSurface(
+            availableHeight: availableHeight,
+            visibleHeight: visibleHeight,
+            bottomSafeAreaInset: bottomSafeAreaInset
+        )
+        .frame(maxWidth: .infinity)
+        .frame(height: sheetHeight, alignment: .top)
+        .background(.grey950, in: bottomSheetPresentationShape)
+        .clipShape(bottomSheetPresentationShape)
+        .offset(y: currentOffset + bottomSafeAreaInset)
+        .transaction { transaction in
+            guard dragOffset != 0 else { return }
+            transaction.animation = nil
+        }
     }
 
     @ViewBuilder
-    private func measuredSheetSurface(availableHeight: CGFloat) -> some View {
+    private func measuredSheetSurface(
+        availableHeight: CGFloat,
+        visibleHeight: CGFloat,
+        bottomSafeAreaInset: CGFloat
+    ) -> some View {
         if usesContentHeight {
-            sheetSurface(availableHeight: availableHeight)
-                .fixedSize(horizontal: false, vertical: true)
-                .readBottomSheetHeight { height in
-                    guard abs(contentHeight - height) > 0.5 else { return }
-                    contentHeight = height
-                }
+            sheetSurface(
+                availableHeight: availableHeight,
+                visibleHeight: nil,
+                bottomSafeAreaInset: bottomSafeAreaInset
+            )
+            .fixedSize(horizontal: false, vertical: true)
+            .readBottomSheetHeight { height in
+                guard abs(contentHeight - height) > 0.5 else { return }
+                contentHeight = height
+            }
         } else {
-            sheetSurface(availableHeight: availableHeight)
+            sheetSurface(
+                availableHeight: availableHeight,
+                visibleHeight: visibleHeight,
+                bottomSafeAreaInset: bottomSafeAreaInset
+            )
         }
     }
 
-    private func sheetSurface(availableHeight: CGFloat) -> some View {
-        VStack(spacing: 0) {
+    @ViewBuilder
+    private func sheetSurface(
+        availableHeight: CGFloat,
+        visibleHeight: CGFloat?,
+        bottomSafeAreaInset: CGFloat
+    ) -> some View {
+        let shouldExpandBeforeScrolling = shouldExpandBeforeScrolling(
+            availableHeight: availableHeight
+        )
+        let shouldLockScrolling = shouldExpandBeforeScrolling || isScrollExpansionGestureActive
+        let surface = VStack(spacing: 0) {
             if isDragIndicatorVisible {
                 BottomSheetDragIndicator()
-                    .gesture(dragGesture(availableHeight: availableHeight))
+                    .highPriorityGesture(dragGesture(availableHeight: availableHeight))
             }
 
-            sheetContent()
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            lockedScrollContent(
+                availableHeight: availableHeight,
+                bottomSafeAreaInset: bottomSafeAreaInset,
+                shouldLockScrolling: shouldLockScrolling
+            )
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .contentShape(Rectangle())
+
+        if let visibleHeight {
+            surface.frame(height: visibleHeight, alignment: .top)
+        } else {
+            surface
+        }
+    }
+
+    @ViewBuilder
+    private func lockedScrollContent(
+        availableHeight: CGFloat,
+        bottomSafeAreaInset: CGFloat,
+        shouldLockScrolling: Bool
+    ) -> some View {
+        let content = sheetContent(dismiss)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            .bottomSheetSafeAreaInset(bottomSafeAreaInset)
+            .scrollDisabled(shouldLockScrolling)
+
+        if shouldLockScrolling {
+            content.highPriorityGesture(
+                scrollExpansionGesture(availableHeight: availableHeight)
+            )
+        } else {
+            content
+        }
     }
 
     private func dragGesture(availableHeight: CGFloat) -> some Gesture {
@@ -244,8 +387,17 @@ private struct BottomSheetPresentationModifier<SheetContent: View>: ViewModifier
             $0.height(availableHeight: availableHeight, contentHeight: contentHeight)
         }
         let minimumHeight = allowedHeights.min() ?? selectedHeight
+        let isAtMinimumHeight = selectedHeight <= minimumHeight + 0.5
+        let distanceToMinimumHeight = max(selectedHeight - minimumHeight, 0)
+        let shouldDismissFromMinimumHeight = isAtMinimumHeight
+            && translation > 120
+            && proposedHeight < minimumHeight + 48
+        let shouldDismissFromHigherHeight = !isAtMinimumHeight && (
+            translation > 220 && proposedHeight < minimumHeight - 48 ||
+                translation > 40 && predictedTranslation > distanceToMinimumHeight + 320
+        )
 
-        if translation > 120, proposedHeight < minimumHeight + 48 {
+        if shouldDismissFromMinimumHeight || shouldDismissFromHigherHeight {
             dismiss()
             return
         }
@@ -276,6 +428,75 @@ private struct BottomSheetPresentationModifier<SheetContent: View>: ViewModifier
             )
             return abs(lhsHeight - height) < abs(rhsHeight - height)
         } ?? preferredSize
+    }
+
+    private func clampSelectedSizeToCurrentDetents() {
+        guard isPresented, !resolvedSizes.contains(selectedSize) else {
+            return
+        }
+
+        dragOffset = 0
+        selectedSize = preferredSize
+    }
+
+    private func shouldExpandBeforeScrolling(availableHeight: CGFloat) -> Bool {
+        guard expandsToLargestDetentOnScroll, resolvedSizes.count > 1 else {
+            return false
+        }
+
+        let selectedHeight = selectedSize.height(
+            availableHeight: availableHeight,
+            contentHeight: contentHeight
+        )
+        let largestHeight = largestSize(
+            availableHeight: availableHeight,
+            contentHeight: contentHeight
+        )
+        .height(availableHeight: availableHeight, contentHeight: contentHeight)
+
+        return selectedHeight < largestHeight - 0.5
+    }
+
+    private func largestSize(
+        availableHeight: CGFloat,
+        contentHeight: CGFloat
+    ) -> BottomSheetSize {
+        resolvedSizes.max { lhs, rhs in
+            lhs.height(
+                availableHeight: availableHeight,
+                contentHeight: contentHeight
+            ) < rhs.height(
+                availableHeight: availableHeight,
+                contentHeight: contentHeight
+            )
+        } ?? preferredSize
+    }
+
+    private func scrollExpansionGesture(availableHeight: CGFloat) -> some Gesture {
+        DragGesture(minimumDistance: 8, coordinateSpace: .global)
+            .updating($isScrollExpansionGestureActive) { value, state, _ in
+                guard value.translation.height < -8 || value.predictedEndTranslation.height < -20 else {
+                    return
+                }
+
+                state = true
+            }
+            .onChanged { value in
+                guard value.translation.height < -8 || value.predictedEndTranslation.height < -20 else {
+                    return
+                }
+                guard shouldExpandBeforeScrolling(availableHeight: availableHeight) else {
+                    return
+                }
+
+                withAnimation(.interactiveSpring(response: 0.28, dampingFraction: 0.9)) {
+                    selectedSize = largestSize(
+                        availableHeight: availableHeight,
+                        contentHeight: contentHeight
+                    )
+                    dragOffset = 0
+                }
+            }
     }
 
     private func dismiss() {
@@ -311,6 +532,18 @@ private var bottomSheetPresentationShape: some Shape {
 }
 
 extension View {
+    @ViewBuilder
+    fileprivate func bottomSheetSafeAreaInset(_ height: CGFloat) -> some View {
+        if height > 0.5 {
+            safeAreaInset(edge: .bottom, spacing: 0) {
+                Color.clear
+                    .frame(height: height)
+            }
+        } else {
+            self
+        }
+    }
+
     fileprivate func readBottomSheetHeight(_ onChange: @escaping (CGFloat) -> Void) -> some View {
         background {
             GeometryReader { proxy in
