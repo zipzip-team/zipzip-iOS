@@ -35,6 +35,14 @@ struct RootView: View {
                     DeviceLoadingView()
                 case .deviceSelection:
                     DeviceSelectionView()
+                case .filter:
+                    FilterView()
+                case let .filterResult(filters):
+                    FilteredPictureView(appliedFilters: filters)
+                case let .photoInfoEdit(metadata):
+                    PhotoInfoEditView(metadata: metadata)
+                case let .photoDetail(photo):
+                    PhotoDetailView(photo: photo)
                 }
             }
         }

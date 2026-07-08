@@ -9,6 +9,7 @@ import SwiftUI
 
 enum AlbumFolderState: Equatable {
     case plain
+    case highlighted
     case selected(count: Int)
     case deselected
 }
@@ -19,7 +20,7 @@ struct AlbumFolder<Slot: View>: View {
 
     private var folderImage: ImageResource {
         switch state {
-        case .selected: .albumFolderSelected
+        case .highlighted, .selected: .albumFolderSelected
         default: .albumFolder
         }
     }
@@ -43,7 +44,7 @@ struct AlbumFolder<Slot: View>: View {
 
     @ViewBuilder private var badge: some View {
         switch state {
-        case .plain:
+        case .plain, .highlighted:
             EmptyView()
         case .deselected:
             Indicator(status: .default)

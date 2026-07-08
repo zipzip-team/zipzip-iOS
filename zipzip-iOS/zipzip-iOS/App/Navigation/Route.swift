@@ -14,4 +14,8 @@ enum Route: Hashable {
     case photoPermission
     case deviceLoading
     case deviceSelection
+    case filter
+    case filterResult([AppliedFilter])
+    case photoInfoEdit(PhotoMetadata)
+    case photoDetail(Photo)
 }

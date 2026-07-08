@@ -21,7 +21,7 @@ struct AlbumCard: View {
             VStack(spacing: 0) {
                 Text(name)
                     .font(.b2_sb)
-                    .foregroundStyle(.grey950)
+                    .foregroundStyle(.white00)
                     .lineLimit(1)
                     .truncationMode(.tail)
                 Text("\(count)")
