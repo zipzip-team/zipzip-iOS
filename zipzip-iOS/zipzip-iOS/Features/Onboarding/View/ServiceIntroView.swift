@@ -8,20 +8,13 @@
 import SwiftUI
 
 struct ServiceIntroView: View {
+    @Environment(Router.self) private var router
+
     @State private var currentPage = 0
-    @State private var showsCompletion = false
 
     private let pages = ServiceIntroPage.pages
 
     var body: some View {
-        if showsCompletion {
-            OnboardingCompleteView()
-        } else {
-            content
-        }
-    }
-
-    private var content: some View {
         VStack(spacing: 30) {
             VStack(spacing: 8) {
                 Image(currentPageContent.titleImage)
@@ -61,13 +54,14 @@ struct ServiceIntroView: View {
         if currentPage < pages.count - 1 {
             currentPage += 1
         } else {
-            showsCompletion = true
+            router.push(.onboardingComplete)
         }
     }
 }
 
 #Preview {
     ServiceIntroView()
+        .environment(Router())
 }
 
 private struct ServiceIntroPageIndicator: View {

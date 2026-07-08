@@ -8,6 +8,8 @@
 import SwiftUI
 
 struct DeviceLoadingView: View {
+    @Environment(Router.self) private var router
+
     var body: some View {
         VStack(spacing: 38) {
             VStack(spacing: 4) {
@@ -27,10 +29,12 @@ struct DeviceLoadingView: View {
 
             Spacer()
 
-            CommonButton(title: "확인", property1: .default) {}
-                .frame(alignment: .bottom)
+            CommonButton(title: "확인", property1: .default) {
+                router.push(.deviceSelection)
+            }
+            .frame(alignment: .bottom)
         }
-        .padding(.top, 30)
+        .padding(.top, 38)
         .padding(.bottom, 15)
         .padding(.horizontal, 16)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
@@ -40,4 +44,5 @@ struct DeviceLoadingView: View {
 
 #Preview {
     DeviceLoadingView()
+        .environment(Router())
 }

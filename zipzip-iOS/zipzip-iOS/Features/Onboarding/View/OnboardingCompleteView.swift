@@ -8,6 +8,8 @@
 import SwiftUI
 
 struct OnboardingCompleteView: View {
+    @Environment(Router.self) private var router
+
     var body: some View {
         VStack(spacing: 18) {
             Rectangle()
@@ -36,4 +38,5 @@ struct OnboardingCompleteView: View {
 
 #Preview {
     OnboardingCompleteView()
+        .environment(Router())
 }
