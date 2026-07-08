@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import UIKit
 
 enum BottomSheetSize: Hashable {
     case content
@@ -14,25 +15,6 @@ enum BottomSheetSize: Hashable {
     case full
     case fraction(CGFloat)
     case height(CGFloat)
-
-    func height(availableHeight: CGFloat, contentHeight: CGFloat) -> CGFloat {
-        let availableHeight = max(availableHeight, 1)
-
-        switch self {
-        case .content:
-            return min(max(contentHeight, 1), availableHeight)
-        case .quarter:
-            return availableHeight * 0.25
-        case .threeQuarters:
-            return availableHeight * 0.75
-        case .full:
-            return availableHeight
-        case let .fraction(value):
-            return availableHeight * min(max(value, 0), 1)
-        case let .height(value):
-            return min(max(value, 1), availableHeight)
-        }
-    }
 }
 
 extension View {
@@ -118,50 +100,8 @@ extension View {
 
 private struct BottomSheetPresentationModifier<SheetContent: View>: ViewModifier {
     @Binding private var isPresented: Bool
-
-    private let detents: [BottomSheetSize]
-    private let initialDetent: BottomSheetSize?
-    private let showsDragIndicator: Visibility
-    private let expandsToLargestDetentOnScroll: Bool
-    private let sheetContent: (@escaping () -> Void) -> SheetContent
-
-    init(
-        isPresented: Binding<Bool>,
-        detents: [BottomSheetSize],
-        initialDetent: BottomSheetSize?,
-        showsDragIndicator: Visibility,
-        expandsToLargestDetentOnScroll: Bool,
-        @ViewBuilder sheetContent: @escaping (@escaping () -> Void) -> SheetContent
-    ) {
-        _isPresented = isPresented
-        self.detents = detents
-        self.initialDetent = initialDetent
-        self.showsDragIndicator = showsDragIndicator
-        self.expandsToLargestDetentOnScroll = expandsToLargestDetentOnScroll
-        self.sheetContent = sheetContent
-    }
-
-    func body(content: Content) -> some View {
-        content
-            .overlay {
-                BottomSheetPresentationOverlay(
-                    isPresented: $isPresented,
-                    detents: detents,
-                    initialDetent: initialDetent,
-                    showsDragIndicator: showsDragIndicator,
-                    expandsToLargestDetentOnScroll: expandsToLargestDetentOnScroll,
-                    sheetContent: sheetContent
-                )
-            }
-    }
-}
-
-private struct BottomSheetPresentationOverlay<SheetContent: View>: View {
-    @Binding private var isPresented: Bool
     @State private var contentHeight: CGFloat = 320
-    @State private var dragOffset: CGFloat = 0
     @State private var selectedSize: BottomSheetSize
-    @GestureState private var isScrollExpansionGestureActive = false
 
     private let detents: [BottomSheetSize]
     private let initialDetent: BottomSheetSize?
@@ -186,33 +126,58 @@ private struct BottomSheetPresentationOverlay<SheetContent: View>: View {
         _selectedSize = State(initialValue: initialDetent ?? (detents.first ?? .content))
     }
 
-    var body: some View {
-        GeometryReader { proxy in
-            ZStack(alignment: .bottom) {
-                if isPresented {
-                    Color.black00
-                        .opacity(0.45)
-                        .ignoresSafeArea()
-                        .onTapGesture(perform: dismiss)
-                        .transition(.opacity)
-
-                    sheetView(in: proxy)
-                        .transition(.move(edge: .bottom))
-                }
+    func body(content: Content) -> some View {
+        content
+            .sheet(isPresented: $isPresented) {
+                sheetView
+                    .presentationDetents(presentationDetents, selection: selectedDetent)
+                    .presentationContentInteraction(
+                        expandsToLargestDetentOnScroll ? .resizes : .scrolls
+                    )
+                    .presentationDragIndicator(showsDragIndicator)
+                    .presentationCornerRadius(32)
+                    .presentationBackground(.grey950)
+                    .onAppear {
+                        selectedSize = preferredSize
+                    }
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+            .onChange(of: isPresented) { _, newValue in
+                guard newValue else {
+                    return
+                }
+
+                selectedSize = preferredSize
+            }
+            .onChange(of: resolvedSizes) { _, _ in
+                clampSelectedSizeToCurrentDetents()
+            }
+            .onReceive(NotificationCenter.default
+                .publisher(for: UIResponder.keyboardWillChangeFrameNotification)) { notification in
+                    guard keyboardOverlapsScreen(notification) else {
+                        return
+                    }
+
+                    expandToLargestDetentForKeyboard()
+            }
+    }
+
+    @ViewBuilder
+    private var sheetView: some View {
+        let content = sheetContent(dismiss)
+            .frame(maxWidth: .infinity, alignment: .top)
+
+        if usesContentHeight {
+            content
+                .fixedSize(horizontal: false, vertical: true)
+                .onGeometryChange(for: CGFloat.self) { proxy in
+                    proxy.size.height
+                } action: { height in
+                    guard abs(contentHeight - height) > 0.5 else { return }
+                    contentHeight = max(height, 1)
+                }
+        } else {
+            content
         }
-        .allowsHitTesting(isPresented)
-        .onChange(of: isPresented) { _, newValue in
-            guard newValue else { return }
-            dragOffset = 0
-            selectedSize = preferredSize
-        }
-        .onChange(of: resolvedSizes) { _, _ in
-            clampSelectedSizeToCurrentDetents()
-        }
-        .animation(.easeOut(duration: 0.2), value: isPresented)
-        .animation(.interactiveSpring(response: 0.28, dampingFraction: 0.9), value: selectedSize)
     }
 
     private var resolvedSizes: [BottomSheetSize] {
@@ -229,205 +194,38 @@ private struct BottomSheetPresentationOverlay<SheetContent: View>: View {
         initialDetent ?? resolvedSizes.first ?? .content
     }
 
+    private var largestSize: BottomSheetSize {
+        resolvedSizes.max { lhs, rhs in
+            lhs.estimatedHeight(
+                availableHeight: estimatedAvailableHeight,
+                contentHeight: contentHeight
+            ) < rhs.estimatedHeight(
+                availableHeight: estimatedAvailableHeight,
+                contentHeight: contentHeight
+            )
+        } ?? preferredSize
+    }
+
     private var usesContentHeight: Bool {
         resolvedSizes.contains(.content)
     }
 
-    private var isDragIndicatorVisible: Bool {
-        if case .visible = showsDragIndicator {
-            return true
-        }
-
-        return false
-    }
-
-    private func sheetView(in proxy: GeometryProxy) -> some View {
-        let bottomSafeAreaInset = proxy.safeAreaInsets.bottom
-        let availableHeight = proxy.size.height
-        let selectedHeight = selectedSize.height(
-            availableHeight: availableHeight,
-            contentHeight: contentHeight
-        )
-        let allowedHeights = resolvedSizes.map {
-            $0.height(availableHeight: availableHeight, contentHeight: contentHeight)
-        }
-        let minimumHeight = allowedHeights.min() ?? selectedHeight
-        let maximumHeight = allowedHeights.max() ?? selectedHeight
-        let baseOffset = maximumHeight - selectedHeight
-        let maximumOffset = maximumHeight - minimumHeight + 160
-        let stableDragOffset = abs(dragOffset) < 2 ? 0 : dragOffset
-        let currentOffset = min(max(baseOffset + stableDragOffset, 0), maximumOffset)
-        let sheetHeight = maximumHeight + bottomSafeAreaInset
-        let visibleHeight = max(maximumHeight - currentOffset + bottomSafeAreaInset, 1)
-
-        return measuredSheetSurface(
-            availableHeight: availableHeight,
-            visibleHeight: visibleHeight,
-            bottomSafeAreaInset: bottomSafeAreaInset
-        )
-        .frame(maxWidth: .infinity)
-        .frame(height: sheetHeight, alignment: .top)
-        .background(.grey950, in: bottomSheetPresentationShape)
-        .clipShape(bottomSheetPresentationShape)
-        .offset(y: currentOffset + bottomSafeAreaInset)
-        .transaction { transaction in
-            guard dragOffset != 0 else { return }
-            transaction.animation = nil
-        }
-    }
-
-    @ViewBuilder
-    private func measuredSheetSurface(
-        availableHeight: CGFloat,
-        visibleHeight: CGFloat,
-        bottomSafeAreaInset: CGFloat
-    ) -> some View {
-        if usesContentHeight {
-            sheetSurface(
-                availableHeight: availableHeight,
-                visibleHeight: nil,
-                bottomSafeAreaInset: bottomSafeAreaInset
-            )
-            .fixedSize(horizontal: false, vertical: true)
-            .readBottomSheetHeight { height in
-                guard abs(contentHeight - height) > 0.5 else { return }
-                contentHeight = height
+    private var presentationDetents: Set<PresentationDetent> {
+        Set(
+            resolvedSizes.map {
+                $0.presentationDetent(contentHeight: contentHeight)
             }
-        } else {
-            sheetSurface(
-                availableHeight: availableHeight,
-                visibleHeight: visibleHeight,
-                bottomSafeAreaInset: bottomSafeAreaInset
-            )
-        }
-    }
-
-    @ViewBuilder
-    private func sheetSurface(
-        availableHeight: CGFloat,
-        visibleHeight: CGFloat?,
-        bottomSafeAreaInset: CGFloat
-    ) -> some View {
-        let shouldExpandBeforeScrolling = shouldExpandBeforeScrolling(
-            availableHeight: availableHeight
         )
-        let shouldLockScrolling = shouldExpandBeforeScrolling || isScrollExpansionGestureActive
-        let surface = VStack(spacing: 0) {
-            if isDragIndicatorVisible {
-                BottomSheetDragIndicator()
-                    .highPriorityGesture(dragGesture(availableHeight: availableHeight))
-            }
-
-            lockedScrollContent(
-                availableHeight: availableHeight,
-                bottomSafeAreaInset: bottomSafeAreaInset,
-                shouldLockScrolling: shouldLockScrolling
-            )
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        .contentShape(Rectangle())
-
-        if let visibleHeight {
-            surface.frame(height: visibleHeight, alignment: .top)
-        } else {
-            surface
-        }
     }
 
-    @ViewBuilder
-    private func lockedScrollContent(
-        availableHeight: CGFloat,
-        bottomSafeAreaInset: CGFloat,
-        shouldLockScrolling: Bool
-    ) -> some View {
-        let content = sheetContent(dismiss)
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-            .bottomSheetSafeAreaInset(bottomSafeAreaInset)
-            .scrollDisabled(shouldLockScrolling)
-
-        if shouldLockScrolling {
-            content.highPriorityGesture(
-                scrollExpansionGesture(availableHeight: availableHeight)
-            )
-        } else {
-            content
+    private var selectedDetent: Binding<PresentationDetent> {
+        Binding {
+            selectedSize.presentationDetent(contentHeight: contentHeight)
+        } set: { newDetent in
+            selectedSize = resolvedSizes.first {
+                $0.presentationDetent(contentHeight: contentHeight) == newDetent
+            } ?? selectedSize
         }
-    }
-
-    private func dragGesture(availableHeight: CGFloat) -> some Gesture {
-        DragGesture(coordinateSpace: .global)
-            .onChanged { value in
-                var transaction = Transaction()
-                transaction.disablesAnimations = true
-
-                withTransaction(transaction) {
-                    dragOffset = value.translation.height
-                }
-            }
-            .onEnded { value in
-                snapSheet(
-                    translation: value.translation.height,
-                    predictedTranslation: value.predictedEndTranslation.height,
-                    availableHeight: availableHeight
-                )
-            }
-    }
-
-    private func snapSheet(
-        translation: CGFloat,
-        predictedTranslation: CGFloat,
-        availableHeight: CGFloat
-    ) {
-        let selectedHeight = selectedSize.height(
-            availableHeight: availableHeight,
-            contentHeight: contentHeight
-        )
-        let proposedHeight = selectedHeight - predictedTranslation
-        let allowedHeights = resolvedSizes.map {
-            $0.height(availableHeight: availableHeight, contentHeight: contentHeight)
-        }
-        let minimumHeight = allowedHeights.min() ?? selectedHeight
-        let isAtMinimumHeight = selectedHeight <= minimumHeight + 0.5
-        let distanceToMinimumHeight = max(selectedHeight - minimumHeight, 0)
-        let shouldDismissFromMinimumHeight = isAtMinimumHeight
-            && translation > 120
-            && proposedHeight < minimumHeight + 48
-        let shouldDismissFromHigherHeight = !isAtMinimumHeight && (
-            translation > 220 && proposedHeight < minimumHeight - 48 ||
-                translation > 40 && predictedTranslation > distanceToMinimumHeight + 320
-        )
-
-        if shouldDismissFromMinimumHeight || shouldDismissFromHigherHeight {
-            dismiss()
-            return
-        }
-
-        withAnimation(.interactiveSpring(response: 0.28, dampingFraction: 0.9)) {
-            selectedSize = nearestSize(
-                to: proposedHeight,
-                availableHeight: availableHeight,
-                contentHeight: contentHeight
-            )
-            dragOffset = 0
-        }
-    }
-
-    private func nearestSize(
-        to height: CGFloat,
-        availableHeight: CGFloat,
-        contentHeight: CGFloat
-    ) -> BottomSheetSize {
-        resolvedSizes.min { lhs, rhs in
-            let lhsHeight = lhs.height(
-                availableHeight: availableHeight,
-                contentHeight: contentHeight
-            )
-            let rhsHeight = rhs.height(
-                availableHeight: availableHeight,
-                contentHeight: contentHeight
-            )
-            return abs(lhsHeight - height) < abs(rhsHeight - height)
-        } ?? preferredSize
     }
 
     private func clampSelectedSizeToCurrentDetents() {
@@ -435,132 +233,82 @@ private struct BottomSheetPresentationOverlay<SheetContent: View>: View {
             return
         }
 
-        dragOffset = 0
         selectedSize = preferredSize
     }
 
-    private func shouldExpandBeforeScrolling(availableHeight: CGFloat) -> Bool {
-        guard expandsToLargestDetentOnScroll, resolvedSizes.count > 1 else {
-            return false
+    private func expandToLargestDetentForKeyboard() {
+        guard isPresented, resolvedSizes.count > 1, selectedSize != largestSize else {
+            return
         }
 
-        let selectedHeight = selectedSize.height(
-            availableHeight: availableHeight,
-            contentHeight: contentHeight
-        )
-        let largestHeight = largestSize(
-            availableHeight: availableHeight,
-            contentHeight: contentHeight
-        )
-        .height(availableHeight: availableHeight, contentHeight: contentHeight)
-
-        return selectedHeight < largestHeight - 0.5
-    }
-
-    private func largestSize(
-        availableHeight: CGFloat,
-        contentHeight: CGFloat
-    ) -> BottomSheetSize {
-        resolvedSizes.max { lhs, rhs in
-            lhs.height(
-                availableHeight: availableHeight,
-                contentHeight: contentHeight
-            ) < rhs.height(
-                availableHeight: availableHeight,
-                contentHeight: contentHeight
-            )
-        } ?? preferredSize
-    }
-
-    private func scrollExpansionGesture(availableHeight: CGFloat) -> some Gesture {
-        DragGesture(minimumDistance: 8, coordinateSpace: .global)
-            .updating($isScrollExpansionGestureActive) { value, state, _ in
-                guard value.translation.height < -8 || value.predictedEndTranslation.height < -20 else {
-                    return
-                }
-
-                state = true
-            }
-            .onChanged { value in
-                guard value.translation.height < -8 || value.predictedEndTranslation.height < -20 else {
-                    return
-                }
-                guard shouldExpandBeforeScrolling(availableHeight: availableHeight) else {
-                    return
-                }
-
-                withAnimation(.interactiveSpring(response: 0.28, dampingFraction: 0.9)) {
-                    selectedSize = largestSize(
-                        availableHeight: availableHeight,
-                        contentHeight: contentHeight
-                    )
-                    dragOffset = 0
-                }
-            }
+        withAnimation(.easeOut(duration: 0.25)) {
+            selectedSize = largestSize
+        }
     }
 
     private func dismiss() {
-        withAnimation(.easeOut(duration: 0.2)) {
-            dragOffset = 0
-            isPresented = false
+        isPresented = false
+    }
+
+    private func keyboardOverlapsScreen(_ notification: Notification) -> Bool {
+        guard let endFrame = notification.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect else {
+            return false
+        }
+
+        let screenHeight = keyWindow?.windowScene?.screen.bounds.maxY ?? endFrame.maxY
+
+        return endFrame.minY < screenHeight
+    }
+
+    private var keyWindow: UIWindow? {
+        UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .flatMap(\.windows)
+            .first { $0.isKeyWindow }
+    }
+
+    private var estimatedAvailableHeight: CGFloat {
+        max(
+            keyWindow?.bounds.height ?? keyWindow?.windowScene?.screen.bounds.height ?? contentHeight,
+            1
+        )
+    }
+}
+
+extension BottomSheetSize {
+    fileprivate func estimatedHeight(availableHeight: CGFloat, contentHeight: CGFloat) -> CGFloat {
+        let availableHeight = max(availableHeight, 1)
+
+        switch self {
+        case .content:
+            return min(max(contentHeight, 1), availableHeight)
+        case .quarter:
+            return availableHeight * 0.25
+        case .threeQuarters:
+            return availableHeight * 0.75
+        case .full:
+            return availableHeight
+        case let .fraction(value):
+            return availableHeight * min(max(value, 0.01), 1)
+        case let .height(value):
+            return min(max(value, 1), availableHeight)
         }
     }
-}
 
-private struct BottomSheetDragIndicator: View {
-    var body: some View {
-        Capsule()
-            .fill(.grey600)
-            .frame(width: 68, height: 6)
-            .frame(maxWidth: .infinity)
-            .padding(.top, 10)
-            .padding(.bottom, 8)
-            .contentShape(Rectangle())
-    }
-}
-
-private var bottomSheetPresentationShape: some Shape {
-    UnevenRoundedRectangle(
-        cornerRadii: .init(
-            topLeading: 32,
-            bottomLeading: 0,
-            bottomTrailing: 0,
-            topTrailing: 32
-        ),
-        style: .continuous
-    )
-}
-
-extension View {
-    @ViewBuilder
-    fileprivate func bottomSheetSafeAreaInset(_ height: CGFloat) -> some View {
-        if height > 0.5 {
-            safeAreaInset(edge: .bottom, spacing: 0) {
-                Color.clear
-                    .frame(height: height)
-            }
-        } else {
-            self
+    fileprivate func presentationDetent(contentHeight: CGFloat) -> PresentationDetent {
+        switch self {
+        case .content:
+            return .height(max(contentHeight, 1))
+        case .quarter:
+            return .fraction(0.25)
+        case .threeQuarters:
+            return .fraction(0.75)
+        case .full:
+            return .large
+        case let .fraction(value):
+            return .fraction(min(max(value, 0.01), 1))
+        case let .height(value):
+            return .height(max(value, 1))
         }
-    }
-
-    fileprivate func readBottomSheetHeight(_ onChange: @escaping (CGFloat) -> Void) -> some View {
-        background {
-            GeometryReader { proxy in
-                Color.clear.preference(
-                    key: BottomSheetHeightPreferenceKey.self,
-                    value: proxy.size.height
-                )
-            }
-        }
-        .onPreferenceChange(BottomSheetHeightPreferenceKey.self, perform: onChange)
-    }
-}
-
-private struct BottomSheetHeightPreferenceKey: PreferenceKey {
-    static let defaultValue: CGFloat = 1
-
-    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
-        value = max(value, nextValue())
     }
 }
