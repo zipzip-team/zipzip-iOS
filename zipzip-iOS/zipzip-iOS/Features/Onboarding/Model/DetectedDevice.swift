@@ -39,8 +39,8 @@ enum DeviceType: Hashable {
 
     var iconSize: CGSize {
         switch self {
-        case .camera: CGSize(width: 33, height: 24)
-        case .phone: CGSize(width: 20, height: 32)
+        case .camera: CGSize(width: 34, height: 34)
+        case .phone: CGSize(width: 36, height: 36)
         }
     }
 }

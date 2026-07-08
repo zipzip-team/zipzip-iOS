@@ -10,8 +10,7 @@ import SwiftUI
 struct DeviceSelectionButton: View {
     let title: String
     let subtitle: String
-    let icon: ImageResource
-    var iconSize: CGSize = CGSize(width: 24, height: 24)
+    let deviceType: DeviceType
     let isSelected: Bool
     let action: () -> Void
 
@@ -55,12 +54,15 @@ struct DeviceSelectionButton: View {
             .fill(isSelected ? .orange30 : .white00)
             .frame(width: 50, height: 50)
             .overlay {
-                Image(icon)
+                Image(deviceType.icon)
                     .renderingMode(.template)
                     .resizable()
                     .scaledToFit()
-                    .foregroundStyle(isSelected ? .orange500 : .grey900)
-                    .frame(width: iconSize.width, height: iconSize.height)
+                    .foregroundStyle(isSelected ? .orange500 : .grey800)
+                    .frame(
+                        width: deviceType.iconSize.width,
+                        height: deviceType.iconSize.height
+                    )
             }
     }
 
@@ -74,16 +76,14 @@ struct DeviceSelectionButton: View {
         DeviceSelectionButton(
             title: "캐논 디지털 카메라",
             subtitle: "Canon IXUS 860",
-            icon: .camera,
-            iconSize: CGSize(width: 33, height: 24),
+            deviceType: .camera,
             isSelected: true
         ) {}
 
         DeviceSelectionButton(
             title: "아이폰",
             subtitle: "iphone 6s",
-            icon: .iphone,
-            iconSize: CGSize(width: 20, height: 32),
+            deviceType: .phone,
             isSelected: false
         ) {}
     }

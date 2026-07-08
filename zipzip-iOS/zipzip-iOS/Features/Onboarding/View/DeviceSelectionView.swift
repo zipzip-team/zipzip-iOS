@@ -32,8 +32,7 @@ struct DeviceSelectionView: View {
                         DeviceSelectionButton(
                             title: device.name,
                             subtitle: device.modelName,
-                            icon: device.type.icon,
-                            iconSize: device.type.iconSize,
+                            deviceType: device.type,
                             isSelected: selectedDeviceIDs.contains(device.id)
                         ) {
                             toggleSelection(for: device)
