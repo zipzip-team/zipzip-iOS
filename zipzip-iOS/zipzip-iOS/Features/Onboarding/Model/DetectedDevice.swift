@@ -5,8 +5,6 @@
 //  Created by Codex on 7/8/26.
 //
 
-import SwiftUI
-
 struct DetectedDevice: Identifiable, Hashable {
     let id: String
     let name: String
@@ -29,20 +27,6 @@ struct DetectedDevice: Identifiable, Hashable {
 enum DeviceType: Hashable {
     case camera
     case phone
-
-    var icon: ImageResource {
-        switch self {
-        case .camera: .camera
-        case .phone: .iphone
-        }
-    }
-
-    var iconSize: CGSize {
-        switch self {
-        case .camera: CGSize(width: 34, height: 34)
-        case .phone: CGSize(width: 36, height: 36)
-        }
-    }
 }
 
 extension DetectedDevice {

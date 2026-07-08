@@ -90,3 +90,19 @@ struct DeviceSelectionButton: View {
     .padding(16)
     .background(.orange30)
 }
+
+extension DeviceType {
+    fileprivate var icon: ImageResource {
+        switch self {
+        case .camera: .camera
+        case .phone: .iphone
+        }
+    }
+
+    fileprivate var iconSize: CGSize {
+        switch self {
+        case .camera: CGSize(width: 34, height: 34)
+        case .phone: CGSize(width: 36, height: 36)
+        }
+    }
+}
