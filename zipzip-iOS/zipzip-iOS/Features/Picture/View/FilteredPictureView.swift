@@ -13,9 +13,12 @@ struct FilteredPictureView: View {
     @State private var appliedFilters: [AppliedFilter]
     @State private var showDeviceSheet = false
     @State private var pickerDevice = ""
+    @State private var showLocationSheet = false
+    @State private var pickerLocation = ""
 
     private let sections: [PhotoSection] = PhotoSection.sample
     private let devices: [FilterDevice] = PhotoFilterOptions.sample.devices
+    private let locations: [String] = PhotoFilterOptions.sample.locations
 
     init(appliedFilters: [AppliedFilter]) {
         _appliedFilters = State(initialValue: appliedFilters)
@@ -35,6 +38,12 @@ struct FilteredPictureView: View {
         .bottomSheet(isPresented: $showDeviceSheet, detents: [.content]) { dismiss in
             DeviceFilterSheet(devices: devices, selected: $pickerDevice) {
                 applyDevice(pickerDevice)
+                dismiss()
+            }
+        }
+        .bottomSheet(isPresented: $showLocationSheet, detents: [.content]) { dismiss in
+            LocationFilterSheet(locations: locations, selected: $pickerLocation) {
+                applyLocation(pickerLocation)
                 dismiss()
             }
         }
@@ -74,7 +83,8 @@ struct FilteredPictureView: View {
             pickerDevice = filter.value
             showDeviceSheet = true
         case .location:
-            break // TODO: 바텀시트로 장소 필터 편집
+            pickerLocation = filter.value
+            showLocationSheet = true
         case .date:
             break // TODO: 바텀시트로 날짜 필터 편집
         case .etc:
@@ -85,6 +95,11 @@ struct FilteredPictureView: View {
     private func applyDevice(_ name: String) {
         guard let index = appliedFilters.firstIndex(where: { $0.kind == .device }) else { return }
         appliedFilters[index] = AppliedFilter(kind: .device, value: name)
+    }
+
+    private func applyLocation(_ name: String) {
+        guard let index = appliedFilters.firstIndex(where: { $0.kind == .location }) else { return }
+        appliedFilters[index] = AppliedFilter(kind: .location, value: name)
     }
 }
 
