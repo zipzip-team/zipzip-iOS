@@ -24,6 +24,23 @@ struct AppliedFilter: Hashable {
     let value: String
 }
 
+extension AppliedFilter {
+    private nonisolated static let dateFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "ko_KR")
+        formatter.dateFormat = "yyyy년 M월 d일"
+        return formatter
+    }()
+
+    nonisolated static func dateText(_ date: Date) -> String {
+        dateFormatter.string(from: date)
+    }
+
+    nonisolated static func date(from text: String) -> Date? {
+        dateFormatter.date(from: text)
+    }
+}
+
 struct PhotoFilterOptions {
     let devices: [FilterDevice]
     let locations: [String]

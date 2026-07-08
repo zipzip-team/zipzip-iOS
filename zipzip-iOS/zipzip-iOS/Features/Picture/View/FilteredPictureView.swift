@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import UIKit
 
 struct FilteredPictureView: View {
     @Environment(Router.self) private var router
@@ -15,6 +16,8 @@ struct FilteredPictureView: View {
     @State private var pickerDevice = ""
     @State private var showLocationSheet = false
     @State private var pickerLocation = ""
+    @State private var showDateSheet = false
+    @State private var pickerDate = Date()
 
     private let sections: [PhotoSection] = PhotoSection.sample
     private let devices: [FilterDevice] = PhotoFilterOptions.sample.devices
@@ -44,6 +47,12 @@ struct FilteredPictureView: View {
         .bottomSheet(isPresented: $showLocationSheet, detents: [.content]) { dismiss in
             LocationFilterSheet(locations: locations, selected: $pickerLocation) {
                 applyLocation(pickerLocation)
+                dismiss()
+            }
+        }
+        .bottomSheet(isPresented: $showDateSheet, detents: [.height(dateSheetHeight)]) { dismiss in
+            DateFilterSheet(date: $pickerDate) {
+                applyDate(pickerDate)
                 dismiss()
             }
         }
@@ -86,7 +95,8 @@ struct FilteredPictureView: View {
             pickerLocation = filter.value
             showLocationSheet = true
         case .date:
-            break // TODO: 바텀시트로 날짜 필터 편집
+            pickerDate = AppliedFilter.date(from: filter.value) ?? Date()
+            showDateSheet = true
         case .etc:
             break // TODO: 바텀시트로 기타 필터 편집
         }
@@ -100,6 +110,23 @@ struct FilteredPictureView: View {
     private func applyLocation(_ name: String) {
         guard let index = appliedFilters.firstIndex(where: { $0.kind == .location }) else { return }
         appliedFilters[index] = AppliedFilter(kind: .location, value: name)
+    }
+
+    private func applyDate(_ date: Date) {
+        guard let index = appliedFilters.firstIndex(where: { $0.kind == .date }) else { return }
+        appliedFilters[index] = AppliedFilter(kind: .date, value: AppliedFilter.dateText(date))
+    }
+
+    private var dateSheetHeight: CGFloat {
+        let window = UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .flatMap(\.windows)
+            .first { $0.isKeyWindow }
+        let screenHeight = window?.bounds.height ?? 0
+        let topInset = window?.safeAreaInsets.top ?? 0
+        let backButtonArea: CGFloat = 48
+        let gap: CGFloat = 34
+        return max(screenHeight - topInset - backButtonArea - gap, 1)
     }
 }
 
