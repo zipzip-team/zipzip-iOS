@@ -6,10 +6,13 @@
 //
 
 import SwiftUI
+import UIKit
 
 struct FilterView: View {
     @Environment(Router.self) private var router
     @State private var viewModel = FilterViewModel()
+    @State private var showDateSheet = false
+    @State private var pickerDate = Date()
 
     var body: some View {
         ScrollView {
@@ -31,6 +34,12 @@ struct FilterView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .background(Color.orange30.ignoresSafeArea())
         .navigationBarBackButtonHidden(true)
+        .bottomSheet(isPresented: $showDateSheet, detents: [.height(dateSheetHeight)]) { dismiss in
+            DateFilterSheet(date: $pickerDate) {
+                viewModel.selectDate(pickerDate)
+                dismiss()
+            }
+        }
         .safeAreaInset(edge: .bottom) {
             HStack(spacing: 16) {
                 CommonButton(title: "초기화", property1: .secondary) { viewModel.reset() }
@@ -41,6 +50,18 @@ struct FilterView: View {
             .padding(.horizontal, 16)
             .padding(.vertical, 12)
         }
+    }
+
+    private var dateSheetHeight: CGFloat {
+        let window = UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .flatMap(\.windows)
+            .first { $0.isKeyWindow }
+        let screenHeight = window?.bounds.height ?? 0
+        let topInset = window?.safeAreaInsets.top ?? 0
+        let backButtonArea: CGFloat = 50
+        let gap: CGFloat = 46
+        return max(screenHeight - topInset - backButtonArea - gap, 1)
     }
 
     private var deviceSection: some View {
@@ -76,7 +97,13 @@ struct FilterView: View {
 
     private var dateSection: some View {
         section(title: "날짜", subtitle: "사진을 찍은 날짜를 선택해 주세요.") {
-            DateMetadataChip(dateText: viewModel.options.dateText)
+            Button {
+                pickerDate = viewModel.selectedDate ?? Date()
+                showDateSheet = true
+            } label: {
+                DateMetadataChip(dateText: viewModel.displayDateText)
+            }
+            .buttonStyle(.plain)
         }
     }
 
