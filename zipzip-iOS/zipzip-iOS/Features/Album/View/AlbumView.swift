@@ -10,6 +10,7 @@ import SwiftUI
 struct AlbumView: View {
     @Binding private var isSelectionMode: Bool
     @State private var selectedAlbumIDs: [AlbumViewItem.ID] = []
+    @State private var isDeleteAlertPresented = false
 
     private let albums = AlbumViewItem.samples
     private let columns = [
@@ -84,8 +85,18 @@ struct AlbumView: View {
         .onChange(of: isSelectionMode) { _, newValue in
             if !newValue {
                 selectedAlbumIDs.removeAll()
+                isDeleteAlertPresented = false
             }
         }
+        .bottomSheetAlert(
+            isPresented: $isDeleteAlertPresented,
+            title: "\(selectedAlbumIDs.count)개의 사진집을 삭제하시겠어요?",
+            message: "사진집에 담긴 사진들은 삭제되지 않아요.",
+            secondaryTitle: "삭제",
+            primaryTitle: "앨범에서 제거",
+            onSecondaryTap: dismissDeleteAlert,
+            onPrimaryTap: dismissDeleteAlert
+        )
     }
 
     private var selectionActionItems: [ActionBarItem] {
@@ -118,7 +129,17 @@ struct AlbumView: View {
 
     private func moveSelectedAlbumsToShare() {}
 
-    private func deleteSelectedAlbums() {}
+    private func deleteSelectedAlbums() {
+        guard !selectedAlbumIDs.isEmpty else {
+            return
+        }
+
+        isDeleteAlertPresented = true
+    }
+
+    private func dismissDeleteAlert() {
+        isDeleteAlertPresented = false
+    }
 }
 
 private struct AlbumGridCard: View {
