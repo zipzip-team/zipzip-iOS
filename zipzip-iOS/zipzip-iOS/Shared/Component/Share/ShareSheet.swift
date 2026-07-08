@@ -76,7 +76,8 @@ struct ShareSheet: View {
                         AlbumCard(
                             name: album.name,
                             count: album.count,
-                            state: selectedAlbumID == album.id ? .highlighted : .plain
+                            state: selectedAlbumID == album.id ? .highlighted : .plain,
+                            nameColorOverride: .white00
                         )
                     }
                     .buttonStyle(.plain)

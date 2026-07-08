@@ -8,19 +8,26 @@
 import SwiftUI
 
 struct AlbumView: View {
+    @Binding private var isSelectionMode: Bool
+    @State private var selectedAlbumIDs: [AlbumViewItem.ID] = []
+
     private let albums = AlbumViewItem.samples
     private let columns = [
         GridItem(.fixed(170), spacing: 17),
         GridItem(.fixed(170), spacing: 17)
     ]
 
+    init(isSelectionMode: Binding<Bool>) {
+        _isSelectionMode = isSelectionMode
+    }
+
     var body: some View {
-        ZStack(alignment: .topTrailing) {
+        ZStack {
             Color.orange30
                 .ignoresSafeArea()
 
             ScrollView(showsIndicators: false) {
-                AlbumTitleHeader()
+                AlbumTitleHeader(isVisible: !isSelectionMode)
                     .padding(.top, 15)
                     .frame(height: 67, alignment: .bottom)
 
@@ -30,35 +37,145 @@ struct AlbumView: View {
                     spacing: 20
                 ) {
                     ForEach(albums) { album in
-                        AlbumCard(
-                            name: album.name,
-                            count: album.count
+                        AlbumGridCard(
+                            album: album,
+                            selectionNumber: selectionNumber(for: album),
+                            isSelectionMode: isSelectionMode,
+                            onTap: { toggleSelection(for: album) }
                         )
-                        .accessibilityElement(children: .ignore)
-                        .accessibilityLabel("\(album.name), \(album.count)장")
                     }
                 }
                 .padding(.horizontal, 16)
                 .padding(.top, 17)
             }
-
+        }
+        .overlay(alignment: .topTrailing) {
             AlbumHeaderActionButton(
-                onSelectionTap: {},
+                onSelectionTap: enterSelectionMode,
                 onAddTap: {}
             )
             .padding(.top, 19)
             .padding(.trailing, 16)
+            .opacity(isSelectionMode ? 0 : 1)
+            .allowsHitTesting(!isSelectionMode)
+            .accessibilityHidden(isSelectionMode)
+        }
+        .overlay(alignment: .topLeading) {
+            RoundedTextButton(title: "취소", style: .cancel, action: exitSelectionMode)
+                .padding(.top, 19)
+                .padding(.leading, 16)
+                .opacity(isSelectionMode ? 1 : 0)
+                .allowsHitTesting(isSelectionMode)
+                .accessibilityHidden(!isSelectionMode)
+        }
+        .overlay(alignment: .bottom) {
+            if isSelectionMode, !selectedAlbumIDs.isEmpty {
+                ActionBar(items: selectionActionItems)
+                    .padding(.bottom, 49)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+        }
+        .onChange(of: isSelectionMode) { _, newValue in
+            if !newValue {
+                selectedAlbumIDs.removeAll()
+            }
+        }
+        .animation(.easeInOut(duration: 0.2), value: isSelectionMode)
+        .animation(.easeInOut(duration: 0.2), value: selectedAlbumIDs)
+    }
+
+    private var selectionActionItems: [ActionBarItem] {
+        [
+            .init(id: "move-to-share", icon: .moveToShare, title: "공유집으로", action: moveSelectedAlbumsToShare),
+            .init(id: "delete", icon: .delete, title: "삭제", action: deleteSelectedAlbums)
+        ]
+    }
+
+    private func enterSelectionMode() {
+        isSelectionMode = true
+    }
+
+    private func exitSelectionMode() {
+        selectedAlbumIDs.removeAll()
+        isSelectionMode = false
+    }
+
+    private func toggleSelection(for album: AlbumViewItem) {
+        if let index = selectedAlbumIDs.firstIndex(of: album.id) {
+            selectedAlbumIDs.remove(at: index)
+        } else {
+            selectedAlbumIDs.append(album.id)
+        }
+    }
+
+    private func selectionNumber(for album: AlbumViewItem) -> Int? {
+        selectedAlbumIDs.firstIndex(of: album.id).map { $0 + 1 }
+    }
+
+    private func moveSelectedAlbumsToShare() {}
+
+    private func deleteSelectedAlbums() {}
+}
+
+private struct AlbumGridCard: View {
+    let album: AlbumViewItem
+    let selectionNumber: Int?
+    let isSelectionMode: Bool
+    let onTap: () -> Void
+
+    var body: some View {
+        Button {
+            if isSelectionMode {
+                onTap()
+            }
+        } label: {
+            card
+        }
+        .buttonStyle(.plain)
+        .allowsHitTesting(isSelectionMode)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(album.name), \(album.count)장")
+        .accessibilityValue(isSelectionMode ? accessibilityValue : "")
+        .accessibilityAddTraits(selectionNumber == nil ? [] : .isSelected)
+        .accessibilityRemoveTraits(isSelectionMode ? [] : .isButton)
+    }
+
+    private var card: some View {
+        AlbumCard(
+            name: album.name,
+            count: album.count,
+            state: state
+        )
+    }
+
+    private var state: AlbumFolderState {
+        if let selectionNumber {
+            .selected(count: selectionNumber)
+        } else {
+            .plain
+        }
+    }
+
+    private var accessibilityValue: String {
+        if let selectionNumber {
+            "\(selectionNumber)번째 선택됨"
+        } else {
+            "선택 안 됨"
         }
     }
 }
 
 private struct AlbumTitleHeader: View {
+    let isVisible: Bool
+
     var body: some View {
         Text("사진집")
             .font(.t1_sb)
             .foregroundStyle(.grey900)
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 16)
+            .opacity(isVisible ? 1 : 0)
+            .accessibilityHidden(!isVisible)
     }
 }
 
@@ -120,11 +237,16 @@ private struct AlbumViewItem: Identifiable, Equatable {
 
 extension AlbumViewItem {
     fileprivate static let samples: [AlbumViewItem] = [
-        .init(id: "family", name: "우리 가족", count: 678),
-        .init(id: "zipzip", name: "집집 🏠", count: 234),
-        .init(id: "tokyo", name: "도쿄 여행 🍥", count: 456),
-        .init(id: "sopt", name: "솝트", count: 1234),
-        .init(id: "homi", name: "호미🐶", count: 45)
+        .init(id: "1", name: "우리 가족", count: 678),
+        .init(id: "2", name: "집집 🏠", count: 234),
+        .init(id: "3", name: "도쿄 여행 🍥", count: 456),
+        .init(id: "4", name: "솝트", count: 1234),
+        .init(id: "5", name: "호미c🐶", count: 45),
+        .init(id: "6", name: "도쿄 여행b 🍥", count: 456),
+        .init(id: "7", name: "솝트a", count: 1234),
+        .init(id: "8", name: "호미c🐶", count: 45),
+        .init(id: "9", name: "솝트b", count: 1234),
+        .init(id: "10", name: "호미a🐶", count: 45)
     ]
 }
 
@@ -134,13 +256,16 @@ extension AlbumViewItem {
 
 private struct AlbumViewPreview: View {
     @State private var selection: NavbarTab = .album
+    @State private var isSelectionMode = false
 
     var body: some View {
-        AlbumView()
+        AlbumView(isSelectionMode: $isSelectionMode)
             .safeAreaInset(edge: .bottom, spacing: 0) {
-                Navbar(selection: $selection)
-                    .padding(.bottom, 28)
-                    .ignoresSafeArea(.container, edges: .bottom)
+                if !isSelectionMode {
+                    Navbar(selection: $selection)
+                        .padding(.bottom, 28)
+                        .ignoresSafeArea(.container, edges: .bottom)
+                }
             }
     }
 }

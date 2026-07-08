@@ -13,6 +13,7 @@ struct RootTabView: View {
     @State private var loaded: Set<NavbarTab> = [.main]
     @State private var pictureViewModel = PictureViewModel()
     @State private var showShareSheet = false
+    @State private var isAlbumSelectionMode = false
 
     var body: some View {
         content
@@ -24,6 +25,9 @@ struct RootTabView: View {
             }
             .onChange(of: selection) { _, newValue in
                 loaded.insert(newValue)
+                if newValue != .album {
+                    isAlbumSelectionMode = false
+                }
             }
             .bottomSheet(isPresented: $showShareSheet, detents: [.full]) { dismiss in
                 ShareSheet(
@@ -36,7 +40,7 @@ struct RootTabView: View {
     }
 
     @ViewBuilder private var bottomBar: some View {
-        if pictureViewModel.isSelectionMode {
+        if selection == .picture, pictureViewModel.isSelectionMode {
             ActionBar(items: [
                 .init(icon: .moveToAlbum, title: "집으로") { showShareSheet = true },
                 .init(icon: .metadata, title: "정보 수정") {
@@ -46,6 +50,8 @@ struct RootTabView: View {
                 },
                 .init(icon: .delete, title: "삭제") { pictureViewModel.requestDelete() }
             ])
+        } else if selection == .album, isAlbumSelectionMode {
+            EmptyView()
         } else {
             Navbar(selection: $selection)
         }
@@ -68,7 +74,7 @@ struct RootTabView: View {
         switch tab {
         case .main: MainView()
         case .picture: PictureView(viewModel: pictureViewModel)
-        case .album: AlbumView()
+        case .album: AlbumView(isSelectionMode: $isAlbumSelectionMode)
         case .share: ShareView()
         }
     }
