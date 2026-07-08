@@ -11,28 +11,25 @@ struct OnboardingCompleteView: View {
     @Environment(Router.self) private var router
 
     var body: some View {
-        VStack(spacing: 18) {
-            Rectangle()
-                .fill(.grey100)
-                .frame(maxWidth: .infinity)
-                .frame(height: 320)
+        OnboardingContainerView(topPadding: 72) {
+            VStack(spacing: 18) {
+                Rectangle()
+                    .fill(.grey100)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 320)
 
-            Image(.onboardingCompletionText)
+                Image(.onboardingCompletionText)
 
-            Text("zipzip에서 다양한 기기의 사진들을\n더 쉽고 편리하게 정리해보세요")
-                .font(.b2_md)
-                .foregroundStyle(.grey400)
-                .multilineTextAlignment(.center)
+                Text("zipzip에서 다양한 기기의 사진들을\n더 쉽고 편리하게 정리해보세요")
+                    .font(.b2_md)
+                    .foregroundStyle(.grey400)
+                    .multilineTextAlignment(.center)
 
-            Spacer()
+                Spacer()
 
-            CommonButton(title: "입주하기", property1: .default) {}
+                CommonButton(title: "입주하기", property1: .default) {}
+            }
         }
-        .padding(.top, 72)
-        .padding(.bottom, 15)
-        .padding(.horizontal, 16)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        .background(.orange30)
     }
 }
 

@@ -15,35 +15,32 @@ struct ServiceIntroView: View {
     private let pages = ServiceIntroPage.pages
 
     var body: some View {
-        VStack(spacing: 30) {
-            VStack(spacing: 8) {
-                Image(currentPageContent.titleImage)
+        OnboardingContainerView {
+            VStack(spacing: 30) {
+                VStack(spacing: 8) {
+                    Image(currentPageContent.titleImage)
 
-                Text(currentPageContent.description)
-                    .font(.b1_md)
-                    .foregroundStyle(Color(.grey400))
-                    .multilineTextAlignment(.center)
-            }
+                    Text(currentPageContent.description)
+                        .font(.b1_md)
+                        .foregroundStyle(Color(.grey400))
+                        .multilineTextAlignment(.center)
+                }
 
-            VStack(spacing: 16) {
-                Rectangle()
-                    .fill(.grey100)
-                    .frame(maxWidth: .infinity, maxHeight: 420)
+                VStack(spacing: 16) {
+                    Rectangle()
+                        .fill(.grey100)
+                        .frame(maxWidth: .infinity, maxHeight: 420)
 
-                ServiceIntroPageIndicator(currentPage: currentPage, pageCount: pages.count)
-            }
+                    ServiceIntroPageIndicator(currentPage: currentPage, pageCount: pages.count)
+                }
 
-            Spacer()
+                Spacer()
 
-            CommonButton(title: "다음", property1: .default) {
-                handleNextButtonTap()
+                CommonButton(title: "다음", property1: .default) {
+                    handleNextButtonTap()
+                }
             }
         }
-        .padding(.top, 38)
-        .padding(.bottom, 15)
-        .padding(.horizontal, 16)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        .background(.orange30)
     }
 
     private var currentPageContent: ServiceIntroPage {

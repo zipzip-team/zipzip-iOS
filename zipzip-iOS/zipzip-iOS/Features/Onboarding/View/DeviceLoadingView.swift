@@ -11,34 +11,32 @@ struct DeviceLoadingView: View {
     @Environment(Router.self) private var router
 
     var body: some View {
-        VStack(spacing: 38) {
-            VStack(spacing: 4) {
-                Text("기기 목록을 불러오고 있어요.")
-                    .font(.h1_sb)
-                    .foregroundStyle(Color(.grey900))
-                    .frame(maxWidth: .infinity, alignment: .leading)
+        OnboardingContainerView {
+            VStack(spacing: 38) {
+                VStack(spacing: 4) {
+                    Text("기기 목록을 불러오고 있어요.")
+                        .font(.h1_sb)
+                        .foregroundStyle(Color(.grey900))
+                        .frame(maxWidth: .infinity, alignment: .leading)
 
-                Text("잠시만 기다려주세요.")
-                    .font(.b1_md)
-                    .foregroundStyle(Color(.grey400))
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                    Text("잠시만 기다려주세요.")
+                        .font(.b1_md)
+                        .foregroundStyle(Color(.grey400))
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+
+                Rectangle()
+                    .fill(.grey100)
+                    .frame(maxWidth: .infinity, maxHeight: 420)
+
+                Spacer()
+
+                CommonButton(title: "확인", property1: .default) {
+                    router.push(.deviceSelection)
+                }
+                .frame(alignment: .bottom)
             }
-            Rectangle()
-                .fill(.grey100)
-                .frame(maxWidth: .infinity, maxHeight: 420)
-
-            Spacer()
-
-            CommonButton(title: "확인", property1: .default) {
-                router.push(.deviceSelection)
-            }
-            .frame(alignment: .bottom)
         }
-        .padding(.top, 38)
-        .padding(.bottom, 15)
-        .padding(.horizontal, 16)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        .background(.orange30)
     }
 }
 

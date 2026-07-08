@@ -13,25 +13,22 @@ struct PhotoPermissionView: View {
     @State private var viewModel = PhotoPermissionViewModel()
 
     var body: some View {
-        VStack(spacing: 92) {
-            Text("편리한 집집 사용을 위해서는\n접근 권한 허용이 필요해요.")
-                .font(.h1_sb)
-                .foregroundStyle(Color(.grey900))
-                .frame(maxWidth: .infinity, alignment: .leading)
+        OnboardingContainerView {
+            VStack(spacing: 92) {
+                Text("편리한 집집 사용을 위해서는\n접근 권한 허용이 필요해요.")
+                    .font(.h1_sb)
+                    .foregroundStyle(Color(.grey900))
+                    .frame(maxWidth: .infinity, alignment: .leading)
 
-            PhotoPermissionCard()
+                PhotoPermissionCard()
 
-            Spacer()
+                Spacer()
 
-            CommonButton(title: "접근 권한 설정하기", property1: .default) {
-                viewModel.requestPhotoPermission()
+                CommonButton(title: "접근 권한 설정하기", property1: .default) {
+                    viewModel.requestPhotoPermission()
+                }
             }
         }
-        .padding(.top, 38)
-        .padding(.bottom, 15)
-        .padding(.horizontal, 16)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        .background(.orange30)
         .bottomSheetAlert(
             isPresented: Binding(
                 get: { viewModel.showsPermissionAlert },

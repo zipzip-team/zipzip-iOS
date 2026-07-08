@@ -11,16 +11,21 @@ struct SplashView: View {
     @Environment(Router.self) private var router
 
     var body: some View {
-        VStack {
-            Rectangle()
-                .foregroundColor(.grey100)
-                .frame(width: 200, height: 200)
-                .padding(.bottom, 24)
+        OnboardingContainerView(
+            topPadding: 0,
+            bottomPadding: 0,
+            horizontalPadding: 0,
+            alignment: .center
+        ) {
+            VStack {
+                Rectangle()
+                    .foregroundColor(.grey100)
+                    .frame(width: 200, height: 200)
+                    .padding(.bottom, 24)
 
-            Image(.splashText)
+                Image(.splashText)
+            }
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(.orange30)
         .task {
             try? await Task.sleep(for: .seconds(3))
             router.push(.photoPermission)
