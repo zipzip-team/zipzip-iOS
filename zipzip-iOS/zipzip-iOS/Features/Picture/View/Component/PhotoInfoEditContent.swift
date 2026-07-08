@@ -13,6 +13,8 @@ struct PhotoInfoEditContent: View {
     @State private var pickerDevice = ""
     @State private var showLocationSheet = false
     @State private var pickerLocation = ""
+    @State private var showDateSheet = false
+    @State private var pickerDate = Date()
 
     private let devices: [FilterDevice] = PhotoFilterOptions.sample.devices
     private let locations: [String] = PhotoFilterOptions.sample.locations
@@ -43,7 +45,10 @@ struct PhotoInfoEditContent: View {
                 LocationMetadataChip(title: metadata.location, isSelected: false) {}
             }
 
-            metadataSection(title: "날짜", onEdit: { /* TODO: 날짜 수정 시트 */ }) {
+            metadataSection(title: "날짜", onEdit: {
+                pickerDate = AppliedFilter.date(from: metadata.dateText) ?? Date()
+                showDateSheet = true
+            }) {
                 DateMetadataChip(dateText: metadata.dateText)
             }
         }
@@ -60,6 +65,16 @@ struct PhotoInfoEditContent: View {
                 onCancel: { dismiss() },
                 onDone: {
                     applyLocation(pickerLocation)
+                    dismiss()
+                }
+            )
+        }
+        .bottomSheet(isPresented: $showDateSheet, detents: [.full]) { dismiss in
+            DateTimeEditSheet(
+                date: $pickerDate,
+                onCancel: { dismiss() },
+                onDone: {
+                    applyDate(pickerDate)
                     dismiss()
                 }
             )
@@ -118,6 +133,15 @@ struct PhotoInfoEditContent: View {
             deviceType: metadata.deviceType,
             location: name,
             dateText: metadata.dateText
+        )
+    }
+
+    private func applyDate(_ date: Date) {
+        metadata = PhotoMetadata(
+            deviceName: metadata.deviceName,
+            deviceType: metadata.deviceType,
+            location: metadata.location,
+            dateText: AppliedFilter.dateText(date)
         )
     }
 }
