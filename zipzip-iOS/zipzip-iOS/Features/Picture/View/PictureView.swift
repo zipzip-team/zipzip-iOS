@@ -12,7 +12,8 @@ struct PictureView: View {
     let viewModel: PictureViewModel
 
     var body: some View {
-        ScrollView {
+        @Bindable var viewModel = viewModel
+        return ScrollView {
             VStack(alignment: .leading, spacing: 8) {
                 Text("사진")
                     .font(.t1_sb)
@@ -44,6 +45,15 @@ struct PictureView: View {
                 cancelButton
             }
         }
+        .bottomSheetAlert(
+            isPresented: $viewModel.showDeleteAlert,
+            title: "이 사진을 삭제하시겠어요?",
+            message: "삭제하면 집집과 사진 앱에서 모두 사라져요.",
+            secondaryTitle: "취소",
+            primaryTitle: "삭제",
+            onSecondaryTap: { viewModel.showDeleteAlert = false },
+            onPrimaryTap: { viewModel.showDeleteAlert = false } // TODO: 삭제 실행 연결
+        )
     }
 
     private var floatingButton: some View {

@@ -35,7 +35,7 @@ struct RootTabView: View {
                         router.push(.photoInfoEdit(metadata))
                     }
                 },
-                .init(icon: .delete, title: "삭제") { /* TODO: */ }
+                .init(icon: .delete, title: "삭제") { pictureViewModel.requestDelete() }
             ])
         } else {
             Navbar(selection: $selection)

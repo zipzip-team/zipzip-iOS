@@ -11,6 +11,7 @@ import SwiftUI
 final class PictureViewModel {
     var isSelectionMode = false
     private(set) var selectedPhotoIDs: [UUID] = []
+    var showDeleteAlert = false
 
     let sections: [PhotoSection] = PhotoSection.sample
 
@@ -24,6 +25,10 @@ final class PictureViewModel {
 
     func enterSelectionMode() {
         isSelectionMode = true
+    }
+
+    func requestDelete() {
+        showDeleteAlert = true
     }
 
     func cancelSelection() {
