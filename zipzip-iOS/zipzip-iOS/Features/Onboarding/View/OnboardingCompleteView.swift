@@ -29,8 +29,8 @@ struct OnboardingCompleteView: View {
                 Spacer()
 
                 CommonButton(title: "입주하기", property1: .default) {
-                    router.popToRoot()
                     hasCompletedOnboarding = true
+                    router.popToRoot()
                 }
             }
         }
