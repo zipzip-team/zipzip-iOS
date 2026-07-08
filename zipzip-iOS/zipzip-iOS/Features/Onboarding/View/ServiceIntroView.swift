@@ -10,17 +10,24 @@ import SwiftUI
 struct ServiceIntroView: View {
     @Environment(Router.self) private var router
 
-    @State private var currentPage = 0
+    @State private var viewModel: ServiceIntroViewModel
 
-    private let pages = ServiceIntroPage.pages
+    @MainActor
+    init() {
+        self.init(viewModel: ServiceIntroViewModel())
+    }
+
+    init(viewModel: ServiceIntroViewModel) {
+        _viewModel = State(initialValue: viewModel)
+    }
 
     var body: some View {
         OnboardingContainerView {
             VStack(spacing: 30) {
                 VStack(spacing: 8) {
-                    Image(currentPageContent.titleImage)
+                    Image(viewModel.currentPageContent.titleImage)
 
-                    Text(currentPageContent.description)
+                    Text(viewModel.currentPageContent.description)
                         .font(.b1_md)
                         .foregroundStyle(Color(.grey400))
                         .multilineTextAlignment(.center)
@@ -31,26 +38,21 @@ struct ServiceIntroView: View {
                         .fill(.grey100)
                         .frame(maxWidth: .infinity, maxHeight: 420)
 
-                    ServiceIntroPageIndicator(currentPage: currentPage, pageCount: pages.count)
+                    ServiceIntroPageIndicator(
+                        currentPage: viewModel.currentPage,
+                        pageCount: viewModel.pageCount
+                    )
                 }
 
                 Spacer()
 
                 CommonButton(title: "다음", property1: .default) {
-                    handleNextButtonTap()
+                    viewModel.handleNextButtonTap()
                 }
             }
         }
-    }
-
-    private var currentPageContent: ServiceIntroPage {
-        pages[currentPage]
-    }
-
-    private func handleNextButtonTap() {
-        if currentPage < pages.count - 1 {
-            currentPage += 1
-        } else {
+        .onChange(of: viewModel.showsOnboardingCompleteView) { _, showsOnboardingCompleteView in
+            guard showsOnboardingCompleteView else { return }
             router.push(.onboardingComplete)
         }
     }
