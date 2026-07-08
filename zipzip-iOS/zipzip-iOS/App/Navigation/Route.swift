@@ -7,4 +7,11 @@
 
 import Foundation
 
-enum Route: Hashable {}
+enum Route: Hashable {
+    case splash
+    case serviceIntro
+    case onboardingComplete
+    case photoPermission
+    case deviceLoading
+    case deviceSelection
+}

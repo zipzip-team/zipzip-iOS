@@ -14,7 +14,7 @@ struct zipzip_iOSApp: App {
 
     var body: some Scene {
         WindowGroup {
-            RootTabView()
+            RootView()
                 .environment(router)
                 .environment(container)
         }
