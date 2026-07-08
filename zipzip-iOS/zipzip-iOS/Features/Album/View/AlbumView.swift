@@ -11,6 +11,8 @@ struct AlbumView: View {
     @Binding private var isSelectionMode: Bool
     @State private var selectedAlbumIDs: [AlbumViewItem.ID] = []
     @State private var isDeleteAlertPresented = false
+    @State private var isCreateAlbumSheetPresented = false
+    @State private var createAlbumName = ""
 
     private let albums = AlbumViewItem.samples
     private let columns = [
@@ -56,7 +58,7 @@ struct AlbumView: View {
         .overlay(alignment: .topTrailing) {
             AlbumHeaderActionButton(
                 onSelectionTap: enterSelectionMode,
-                onAddTap: {}
+                onAddTap: presentCreateAlbumSheet
             )
             .padding(.top, 19)
             .padding(.trailing, 16)
@@ -88,6 +90,11 @@ struct AlbumView: View {
                 isDeleteAlertPresented = false
             }
         }
+        .onChange(of: isCreateAlbumSheetPresented) { _, newValue in
+            if !newValue {
+                createAlbumName = ""
+            }
+        }
         .bottomSheetAlert(
             isPresented: $isDeleteAlertPresented,
             title: "\(selectedAlbumIDs.count)개의 사진집을 삭제하시겠어요?",
@@ -97,6 +104,25 @@ struct AlbumView: View {
             onSecondaryTap: dismissDeleteAlert,
             onPrimaryTap: dismissDeleteAlert
         )
+        .bottomSheet(
+            isPresented: $isCreateAlbumSheetPresented,
+            detents: [.height(549)],
+            initialDetent: .height(549),
+            showsDragIndicator: .visible,
+            expandsToLargestDetentOnScroll: false
+        ) { _ in
+            BottomSheet(
+                leftItem: {
+                    AlbumCreateSheetCancelButton(action: dismissCreateAlbumSheet)
+                }
+            ) {
+                AlbumCreateSheetContent(
+                    albumName: $createAlbumName,
+                    onDeleteTap: resetCreateAlbumDraft,
+                    onCreateTap: createAlbum
+                )
+            }
+        }
     }
 
     private var selectionActionItems: [ActionBarItem] {
@@ -113,6 +139,22 @@ struct AlbumView: View {
     private func exitSelectionMode() {
         selectedAlbumIDs.removeAll()
         isSelectionMode = false
+    }
+
+    private func presentCreateAlbumSheet() {
+        isCreateAlbumSheetPresented = true
+    }
+
+    private func dismissCreateAlbumSheet() {
+        isCreateAlbumSheetPresented = false
+    }
+
+    private func resetCreateAlbumDraft() {
+        createAlbumName = ""
+    }
+
+    private func createAlbum() {
+        dismissCreateAlbumSheet()
     }
 
     private func toggleSelection(for album: AlbumViewItem) {
@@ -199,6 +241,65 @@ private struct AlbumGridCard: View {
 private struct StaticButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
+    }
+}
+
+private struct AlbumCreateSheetCancelButton: View {
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Text("취소")
+                .font(.b1_sb)
+                .foregroundStyle(.white00)
+                .frame(width: 72, height: 48)
+                .contentShape(.rect)
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+private struct AlbumCreateSheetContent: View {
+    @Binding var albumName: String
+
+    let onDeleteTap: () -> Void
+    let onCreateTap: () -> Void
+
+    var body: some View {
+        VStack(spacing: 34) {
+            AlbumFolder(state: .plain) {
+                EmptyView()
+            }
+            .accessibilityHidden(true)
+
+            VStack(spacing: 49) {
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("사진집 이름")
+                        .font(.t3_md)
+                        .foregroundStyle(.grey300)
+
+                    TextInput("이름 입력", text: $albumName)
+                }
+
+                HStack(spacing: 16) {
+                    CommonButton(
+                        title: "삭제",
+                        property1: .secondary,
+                        action: onDeleteTap
+                    )
+
+                    CommonButton(
+                        title: "생성",
+                        property1: .cta,
+                        action: onCreateTap
+                    )
+                }
+            }
+            .frame(width: 358)
+        }
+        .padding(.horizontal, 16)
+        .padding(.top, 12)
+        .frame(maxWidth: .infinity, alignment: .top)
     }
 }
 
