@@ -10,7 +10,16 @@ import SwiftUI
 struct PhotoPermissionView: View {
     @Environment(Router.self) private var router
 
-    @State private var viewModel = PhotoPermissionViewModel()
+    @State private var viewModel: PhotoPermissionViewModel
+
+    @MainActor
+    init() {
+        self.init(viewModel: PhotoPermissionViewModel())
+    }
+
+    init(viewModel: PhotoPermissionViewModel) {
+        _viewModel = State(initialValue: viewModel)
+    }
 
     var body: some View {
         OnboardingContainerView {
