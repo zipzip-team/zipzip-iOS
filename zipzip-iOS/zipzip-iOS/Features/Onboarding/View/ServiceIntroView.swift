@@ -77,6 +77,7 @@ private struct ServiceIntroPageIndicator: View {
                         width: index == currentPage ? 60 : 16,
                         height: index == currentPage ? 10 : 6
                     )
+                    .animation(.easeInOut(duration: 0.25), value: currentPage)
             }
         }
         .frame(width: 144, height: 10)
