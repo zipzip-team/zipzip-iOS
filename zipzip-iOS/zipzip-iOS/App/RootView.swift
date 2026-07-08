@@ -9,27 +9,34 @@ import SwiftUI
 
 struct RootView: View {
     @Environment(Router.self) private var router
+    @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
 
     var body: some View {
         @Bindable var router = router
         NavigationStack(path: $router.path) {
-            SplashView()
-                .navigationDestination(for: Route.self) { route in
-                    switch route {
-                    case .splash:
-                        SplashView()
-                    case .serviceIntro:
-                        ServiceIntroView()
-                    case .onboardingComplete:
-                        OnboardingCompleteView()
-                    case .photoPermission:
-                        PhotoPermissionView()
-                    case .deviceLoading:
-                        DeviceLoadingView()
-                    case .deviceSelection:
-                        DeviceSelectionView()
-                    }
+            Group {
+                if hasCompletedOnboarding {
+                    RootTabView()
+                } else {
+                    SplashView()
                 }
+            }
+            .navigationDestination(for: Route.self) { route in
+                switch route {
+                case .splash:
+                    SplashView()
+                case .serviceIntro:
+                    ServiceIntroView()
+                case .onboardingComplete:
+                    OnboardingCompleteView()
+                case .photoPermission:
+                    PhotoPermissionView()
+                case .deviceLoading:
+                    DeviceLoadingView()
+                case .deviceSelection:
+                    DeviceSelectionView()
+                }
+            }
         }
     }
 }

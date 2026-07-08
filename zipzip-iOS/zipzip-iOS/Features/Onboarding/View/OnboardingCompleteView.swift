@@ -9,6 +9,7 @@ import SwiftUI
 
 struct OnboardingCompleteView: View {
     @Environment(Router.self) private var router
+    @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
 
     var body: some View {
         OnboardingContainerView(topPadding: 72) {
@@ -27,7 +28,10 @@ struct OnboardingCompleteView: View {
 
                 Spacer()
 
-                CommonButton(title: "입주하기", property1: .default) {}
+                CommonButton(title: "입주하기", property1: .default) {
+                    router.popToRoot()
+                    hasCompletedOnboarding = true
+                }
             }
         }
     }
