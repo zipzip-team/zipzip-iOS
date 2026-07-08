@@ -14,6 +14,7 @@ struct RootTabView: View {
     @State private var pictureViewModel = PictureViewModel()
     @State private var showShareSheet = false
     @State private var isAlbumSelectionMode = false
+    @State private var isAlbumDetailPresented = false
 
     var body: some View {
         content
@@ -50,11 +51,13 @@ struct RootTabView: View {
                 },
                 .init(icon: .delete, title: "삭제") { pictureViewModel.requestDelete() }
             ])
-        } else if selection == .album, isAlbumSelectionMode {
-            EmptyView()
-        } else {
+        } else if showsNavbar {
             Navbar(selection: $selection)
         }
+    }
+
+    private var showsNavbar: Bool {
+        selection != .album || (!isAlbumSelectionMode && !isAlbumDetailPresented)
     }
 
     private var content: some View {
@@ -74,7 +77,11 @@ struct RootTabView: View {
         switch tab {
         case .main: MainView()
         case .picture: PictureView(viewModel: pictureViewModel)
-        case .album: AlbumView(isSelectionMode: $isAlbumSelectionMode)
+        case .album:
+            AlbumView(
+                isSelectionMode: $isAlbumSelectionMode,
+                isDetailPresented: $isAlbumDetailPresented
+            )
         case .share: ShareView()
         }
     }

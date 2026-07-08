@@ -11,7 +11,7 @@ struct AlbumCard: View {
     let name: String
     let count: Int
     var state: AlbumFolderState = .plain
-    var nameColorOverride: Color?
+    var nameColorOverride: Color? = nil
 
     var body: some View {
         VStack(spacing: 8) {
@@ -39,8 +39,10 @@ struct AlbumCard: View {
         }
 
         switch state {
-        case .selected: .orange500
-        default: .grey950
+        case .selected:
+            return Color.orange500
+        default:
+            return Color.grey950
         }
     }
 }

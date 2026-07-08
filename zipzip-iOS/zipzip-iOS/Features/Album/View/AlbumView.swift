@@ -9,6 +9,8 @@ import SwiftUI
 
 struct AlbumView: View {
     @Binding private var isSelectionMode: Bool
+    @Binding private var isDetailPresented: Bool
+    @State private var navigationPath: [AlbumRoute] = []
     @State private var selectedAlbumIDs: [AlbumViewItem.ID] = []
     @State private var isDeleteAlertPresented = false
     @State private var isCreateAlbumSheetPresented = false
@@ -20,11 +22,40 @@ struct AlbumView: View {
         GridItem(.fixed(170), spacing: 17)
     ]
 
-    init(isSelectionMode: Binding<Bool>) {
+    init(
+        isSelectionMode: Binding<Bool>,
+        isDetailPresented: Binding<Bool> = .constant(false)
+    ) {
         _isSelectionMode = isSelectionMode
+        _isDetailPresented = isDetailPresented
     }
 
     var body: some View {
+        NavigationStack(path: $navigationPath) {
+            albumList
+                .toolbarVisibility(.hidden, for: .navigationBar)
+                .navigationDestination(for: AlbumRoute.self) { route in
+                    switch route {
+                    case let .detail(album):
+                        if album.photoCount == 0 {
+                            AlbumDetailEmptyView(album: album)
+                        } else {
+                            AlbumDetailView(album: album) {
+                                AlbumDetailGalleryPlaceholderView(photoCount: album.photoCount)
+                            }
+                        }
+                    }
+                }
+        }
+        .onChange(of: navigationPath) { _, newValue in
+            isDetailPresented = !newValue.isEmpty
+        }
+        .onDisappear {
+            isDetailPresented = false
+        }
+    }
+
+    private var albumList: some View {
         ZStack {
             Color.orange30
                 .ignoresSafeArea()
@@ -44,7 +75,8 @@ struct AlbumView: View {
                             album: album,
                             selectionNumber: selectionNumber(for: album),
                             isSelectionMode: isSelectionMode,
-                            onTap: { toggleSelection(for: album) }
+                            onSelectionTap: { toggleSelection(for: album) },
+                            onOpenTap: { showDetail(for: album) }
                         )
                     }
                 }
@@ -154,7 +186,27 @@ struct AlbumView: View {
     }
 
     private func createAlbum() {
-        dismissCreateAlbumSheet()
+        let trimmedName = createAlbumName.trimmingCharacters(in: .whitespacesAndNewlines)
+        let album = AlbumDetailItem(
+            title: trimmedName.isEmpty ? "집집 🏠" : trimmedName,
+            createdAt: .now,
+            photoCount: 0
+        )
+
+        isCreateAlbumSheetPresented = false
+        navigationPath = [.detail(album)]
+    }
+
+    private func showDetail(for album: AlbumViewItem) {
+        navigationPath.append(
+            .detail(
+                .init(
+                    title: album.name,
+                    createdAt: .now,
+                    photoCount: album.count
+                )
+            )
+        )
     }
 
     private func toggleSelection(for album: AlbumViewItem) {
@@ -184,33 +236,29 @@ struct AlbumView: View {
     }
 }
 
+private enum AlbumRoute: Hashable {
+    case detail(AlbumDetailItem)
+}
+
 private struct AlbumGridCard: View {
     let album: AlbumViewItem
     let selectionNumber: Int?
     let isSelectionMode: Bool
-    let onTap: () -> Void
+    let onSelectionTap: () -> Void
+    let onOpenTap: () -> Void
 
     var body: some View {
-        card
-            .transaction { transaction in
-                transaction.animation = nil
-            }
-            .accessibilityElement(children: .ignore)
-            .accessibilityLabel("\(album.name), \(album.count)장")
-            .accessibilityHidden(isSelectionMode)
-            .overlay {
-                if isSelectionMode {
-                    Button(action: onTap) {
-                        Color.clear
-                            .contentShape(.rect)
-                    }
-                    .buttonStyle(StaticButtonStyle())
-                    .accessibilityElement(children: .ignore)
-                    .accessibilityLabel("\(album.name), \(album.count)장")
-                    .accessibilityValue(accessibilityValue)
-                    .accessibilityAddTraits(selectionNumber == nil ? [] : .isSelected)
-                }
-            }
+        Button(action: buttonAction) {
+            card
+        }
+        .buttonStyle(StaticButtonStyle())
+        .transaction { transaction in
+            transaction.animation = nil
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(album.name), \(album.count)장")
+        .accessibilityValue(isSelectionMode ? accessibilityValue : "")
+        .accessibilityAddTraits(isSelectionMode && selectionNumber != nil ? .isSelected : [])
     }
 
     private var card: some View {
@@ -219,6 +267,14 @@ private struct AlbumGridCard: View {
             count: album.count,
             state: state
         )
+    }
+
+    private func buttonAction() {
+        if isSelectionMode {
+            onSelectionTap()
+        } else {
+            onOpenTap()
+        }
     }
 
     private var state: AlbumFolderState {
@@ -317,7 +373,7 @@ private struct AlbumTitleHeader: View {
     }
 }
 
-private struct AlbumHeaderActionButton: View {
+struct AlbumHeaderActionButton: View {
     let onSelectionTap: () -> Void
     let onAddTap: () -> Void
 
