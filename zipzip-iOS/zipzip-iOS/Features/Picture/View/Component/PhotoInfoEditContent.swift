@@ -8,13 +8,27 @@
 import SwiftUI
 
 struct PhotoInfoEditContent: View {
-    let metadata: PhotoMetadata
+    @State private var metadata: PhotoMetadata
+    @State private var showDeviceSheet = false
+    @State private var pickerDevice = ""
+    @State private var showLocationSheet = false
+    @State private var pickerLocation = ""
+
+    private let devices: [FilterDevice] = PhotoFilterOptions.sample.devices
+    private let locations: [String] = PhotoFilterOptions.sample.locations
+
+    init(metadata: PhotoMetadata) {
+        _metadata = State(initialValue: metadata)
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 32) {
             header
 
-            metadataSection(title: "기기") {
+            metadataSection(title: "기기", onEdit: {
+                pickerDevice = metadata.deviceName
+                showDeviceSheet = true
+            }) {
                 DeviceMetadataChip(
                     name: metadata.deviceName,
                     type: metadata.deviceType,
@@ -22,13 +36,33 @@ struct PhotoInfoEditContent: View {
                 ) {}
             }
 
-            metadataSection(title: "장소") {
+            metadataSection(title: "장소", onEdit: {
+                pickerLocation = metadata.location
+                showLocationSheet = true
+            }) {
                 LocationMetadataChip(title: metadata.location, isSelected: false) {}
             }
 
-            metadataSection(title: "날짜") {
+            metadataSection(title: "날짜", onEdit: { /* TODO: 날짜 수정 시트 */ }) {
                 DateMetadataChip(dateText: metadata.dateText)
             }
+        }
+        .bottomSheet(isPresented: $showDeviceSheet, detents: [.content]) { dismiss in
+            DeviceFilterSheet(devices: devices, selected: $pickerDevice) {
+                applyDevice(pickerDevice)
+                dismiss()
+            }
+        }
+        .bottomSheet(isPresented: $showLocationSheet, detents: [.full]) { dismiss in
+            LocationSearchSheet(
+                locations: locations,
+                selected: $pickerLocation,
+                onCancel: { dismiss() },
+                onDone: {
+                    applyLocation(pickerLocation)
+                    dismiss()
+                }
+            )
         }
     }
 
@@ -47,6 +81,7 @@ struct PhotoInfoEditContent: View {
 
     private func metadataSection<Chip: View>(
         title: String,
+        onEdit: @escaping () -> Void,
         @ViewBuilder chip: () -> Chip
     ) -> some View {
         VStack(alignment: .leading, spacing: 20) {
@@ -55,7 +90,7 @@ struct PhotoInfoEditContent: View {
                     .font(.t3_sb)
                     .foregroundStyle(.grey1000)
                 Spacer()
-                Button { /* TODO: 수정 */ } label: {
+                Button(action: onEdit) {
                     Text("수정")
                         .font(.b3_sb)
                         .foregroundStyle(.grey500)
@@ -65,6 +100,25 @@ struct PhotoInfoEditContent: View {
             }
             chip()
         }
+    }
+
+    private func applyDevice(_ name: String) {
+        guard let device = devices.first(where: { $0.name == name }) else { return }
+        metadata = PhotoMetadata(
+            deviceName: device.name,
+            deviceType: device.type,
+            location: metadata.location,
+            dateText: metadata.dateText
+        )
+    }
+
+    private func applyLocation(_ name: String) {
+        metadata = PhotoMetadata(
+            deviceName: metadata.deviceName,
+            deviceType: metadata.deviceType,
+            location: name,
+            dateText: metadata.dateText
+        )
     }
 }
 
