@@ -18,9 +18,13 @@ struct AlbumDetailView<Content: View>: View {
     @Environment(\.dismiss) private var dismiss
     @State private var isSelectionMode: Bool
     @State private var isPhotoPickerPresented = false
+    @State private var isAlbumManagementPresented = false
+    @State private var isAlbumDeleteAlertPresented = false
     @State private var isMoveSheetPresented = false
     @State private var isDeleteAlertPresented = false
     @State private var selectedPhotoIDs: [UUID] = []
+    @State private var editedAlbumTitle: String?
+    @State private var albumTitleDraft = ""
 
     let album: AlbumDetailItem
     private let contentTopSpacing: CGFloat
@@ -133,6 +137,36 @@ struct AlbumDetailView<Content: View>: View {
         .navigationDestination(isPresented: $isPhotoPickerPresented) {
             AlbumPhotoPickerView()
         }
+        .bottomSheet(
+            isPresented: $isAlbumManagementPresented,
+            detents: [.height(549)],
+            initialDetent: .height(549),
+            showsDragIndicator: .visible,
+            expandsToLargestDetentOnScroll: false
+        ) { _ in
+            BottomSheet(
+                leftItem: {
+                    AlbumManagementSheetHeaderButton(title: "취소", action: dismissAlbumManagement)
+                },
+                rightItem: {
+                    AlbumManagementSheetHeaderButton(title: "삭제", action: deleteAlbum)
+                }
+            ) {
+                AlbumManagementSheetContent(
+                    albumName: $albumTitleDraft,
+                    onCompleteTap: completeAlbumManagement
+                )
+            }
+            .bottomSheetAlert(
+                isPresented: $isAlbumDeleteAlertPresented,
+                title: "이 사진집을 삭제하시겠어요?",
+                message: "사진집에 담긴 사진들은 삭제되지 않아요.",
+                secondaryTitle: "취소",
+                primaryTitle: "삭제",
+                onSecondaryTap: dismissAlbumDeleteAlert,
+                onPrimaryTap: confirmAlbumDeletion
+            )
+        }
         .bottomSheet(isPresented: $isMoveSheetPresented, detents: [.full]) { dismiss in
             ShareSheet(
                 albums: Album.samples,
@@ -172,7 +206,11 @@ struct AlbumDetailView<Content: View>: View {
     }
 
     private var titleSection: some View {
-        AlbumDetailTitleSection(album: album)
+        AlbumDetailTitleSection(title: albumTitle, createdAt: album.createdAt)
+    }
+
+    private var albumTitle: String {
+        editedAlbumTitle ?? album.title
     }
 
     private var selectionActionItems: [ActionBarItem] {
@@ -219,7 +257,38 @@ struct AlbumDetailView<Content: View>: View {
         isPhotoPickerPresented = true
     }
 
-    private func manageAlbum() {}
+    private func manageAlbum() {
+        exitSelectionMode()
+        albumTitleDraft = albumTitle
+        isAlbumManagementPresented = true
+    }
+
+    private func dismissAlbumManagement() {
+        isAlbumManagementPresented = false
+    }
+
+    private func completeAlbumManagement() {
+        let trimmedTitle = albumTitleDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedTitle.isEmpty else {
+            return
+        }
+
+        editedAlbumTitle = trimmedTitle
+        isAlbumManagementPresented = false
+    }
+
+    private func deleteAlbum() {
+        isAlbumDeleteAlertPresented = true
+    }
+
+    private func dismissAlbumDeleteAlert() {
+        isAlbumDeleteAlertPresented = false
+    }
+
+    private func confirmAlbumDeletion() {
+        isAlbumDeleteAlertPresented = false
+        isAlbumManagementPresented = false
+    }
 
     private func moveSelectedPhotos() {
         guard !selectedPhotoIDs.isEmpty else {
@@ -261,11 +330,12 @@ struct AlbumDetailEmptyView: View {
 }
 
 private struct AlbumDetailTitleSection: View {
-    let album: AlbumDetailItem
+    let title: String
+    let createdAt: Date
 
     var body: some View {
         VStack(spacing: 2) {
-            Text(album.title)
+            Text(title)
                 .font(.t1_sb)
                 .foregroundStyle(.grey1000)
                 .lineLimit(1)
@@ -288,7 +358,62 @@ private struct AlbumDetailTitleSection: View {
     private var dateText: String {
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyy. M. d"
-        return formatter.string(from: album.createdAt)
+        return formatter.string(from: createdAt)
+    }
+}
+
+private struct AlbumManagementSheetHeaderButton: View {
+    let title: String
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Text(title)
+                .font(.b1_sb)
+                .foregroundStyle(.white00)
+                .frame(width: 72, height: 48)
+                .contentShape(.rect)
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+private struct AlbumManagementSheetContent: View {
+    @Binding var albumName: String
+
+    let onCompleteTap: () -> Void
+
+    var body: some View {
+        VStack(spacing: 34) {
+            AlbumFolder(state: .plain) {
+                EmptyView()
+            }
+            .accessibilityHidden(true)
+
+            VStack(spacing: 49) {
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("사진집 이름")
+                        .font(.t3_md)
+                        .foregroundStyle(.grey300)
+
+                    TextInput("이름 입력", text: $albumName)
+                }
+
+                CommonButton(
+                    title: "완료",
+                    property1: isCompletionDisabled ? .disabled : .cta,
+                    action: onCompleteTap
+                )
+            }
+            .frame(width: 358)
+        }
+        .padding(.horizontal, 16)
+        .padding(.top, 12)
+        .frame(maxWidth: .infinity, alignment: .top)
+    }
+
+    private var isCompletionDisabled: Bool {
+        albumName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 }
 
