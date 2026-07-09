@@ -15,6 +15,7 @@ struct PhotoDetailView: View {
     @State private var isEditingInfo = false
     @State private var showShareSheet = false
     @State private var showDeleteAlert = false
+    @State private var isFavorite = false
 
     private let photoPeekHeight: CGFloat = 160
 
@@ -85,7 +86,7 @@ struct PhotoDetailView: View {
 
     private var actionBar: some View {
         ActionBar(items: [
-            .init(icon: .starStroke, title: "즐겨찾기") { /* TODO: 즐겨찾기 */ },
+            .init(icon: isFavorite ? .starFilled : .starStroke, title: "즐겨찾기") { isFavorite.toggle() },
             .init(icon: .moveToAlbum, title: "집으로") { showShareSheet = true },
             .init(icon: .metadata, title: "정보 수정") {
                 withAnimation { isEditingInfo = true }
