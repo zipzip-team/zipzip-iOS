@@ -265,15 +265,18 @@ struct AlbumDetailGalleryPlaceholderView: View {
     var showsSelectionControls = false
 
     private let sections = PhotoSection.sample
+    private let onOpenPhoto: ((Photo) -> Void)?
 
     init(
         photoCount: Int,
         showsSelectionControls: Bool = false,
-        selectedPhotoIDs: Binding<[UUID]> = .constant([])
+        selectedPhotoIDs: Binding<[UUID]> = .constant([]),
+        onOpenPhoto: ((Photo) -> Void)? = nil
     ) {
         self.photoCount = photoCount
         self.showsSelectionControls = showsSelectionControls
         _selectedPhotoIDs = selectedPhotoIDs
+        self.onOpenPhoto = onOpenPhoto
     }
 
     var body: some View {
@@ -284,7 +287,8 @@ struct AlbumDetailGalleryPlaceholderView: View {
                 sections: sections,
                 isSelectionMode: showsSelectionControls,
                 selectedPhotoIDs: selectedPhotoIDs,
-                onTapPhoto: toggleSelection
+                onTapPhoto: toggleSelection,
+                onOpenPhoto: onOpenPhoto
             )
             .padding(.horizontal, 16)
         }

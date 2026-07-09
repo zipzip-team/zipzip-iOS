@@ -44,10 +44,13 @@ struct AlbumView: View {
                                 AlbumDetailGalleryPlaceholderView(
                                     photoCount: album.photoCount,
                                     showsSelectionControls: isSelectionMode,
-                                    selectedPhotoIDs: selectedPhotoIDs
+                                    selectedPhotoIDs: selectedPhotoIDs,
+                                    onOpenPhoto: showPhotoDetail
                                 )
                             }
                         }
+                    case let .photoDetail(photo):
+                        PhotoDetailView(photo: photo, deletionContext: .album)
                     }
                 }
         }
@@ -213,6 +216,10 @@ struct AlbumView: View {
         )
     }
 
+    private func showPhotoDetail(_ photo: Photo) {
+        navigationPath.append(.photoDetail(photo))
+    }
+
     private func toggleSelection(for album: AlbumViewItem) {
         if let index = selectedAlbumIDs.firstIndex(of: album.id) {
             selectedAlbumIDs.remove(at: index)
@@ -242,6 +249,7 @@ struct AlbumView: View {
 
 private enum AlbumRoute: Hashable {
     case detail(AlbumDetailItem)
+    case photoDetail(Photo)
 }
 
 private struct AlbumGridCard: View {
