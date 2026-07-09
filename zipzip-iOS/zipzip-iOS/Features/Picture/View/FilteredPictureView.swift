@@ -12,28 +12,16 @@ struct FilteredPictureView: View {
     @Environment(Router.self) private var router
 
     @State private var pictureViewModel = PictureViewModel()
+    @State private var viewModel: FilteredPictureViewModel
     @State private var showShareSheet = false
 
-    @State private var appliedFilters: [AppliedFilter]
-    @State private var showDeviceSheet = false
-    @State private var pickerDevice = ""
-    @State private var showLocationSheet = false
-    @State private var pickerLocation = ""
-    @State private var showDateSheet = false
-    @State private var pickerDate = Date()
-    @State private var showEtcSheet = false
-    @State private var pickerEtc = ""
-
-    private let devices: [FilterDevice] = PhotoFilterOptions.sample.devices
-    private let locations: [String] = PhotoFilterOptions.sample.locations
-    private let etcItems: [String] = PhotoFilterOptions.sample.etcItems
-
     init(appliedFilters: [AppliedFilter]) {
-        _appliedFilters = State(initialValue: appliedFilters)
+        _viewModel = State(initialValue: FilteredPictureViewModel(appliedFilters: appliedFilters))
     }
 
     var body: some View {
         @Bindable var pictureViewModel = pictureViewModel
+        @Bindable var viewModel = viewModel
 
         return VStack(spacing: 8) {
             topBar
@@ -52,27 +40,27 @@ struct FilteredPictureView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .background(Color.orange30.ignoresSafeArea())
         .navigationBarBackButtonHidden(true)
-        .bottomSheet(isPresented: $showDeviceSheet, detents: [.content]) { dismiss in
-            DeviceFilterSheet(devices: devices, selected: $pickerDevice) {
-                applyDevice(pickerDevice)
+        .bottomSheet(isPresented: $viewModel.showDeviceSheet, detents: [.content]) { dismiss in
+            DeviceFilterSheet(devices: viewModel.options.devices, selected: $viewModel.pickerDevice) {
+                viewModel.applyDevice(viewModel.pickerDevice)
                 dismiss()
             }
         }
-        .bottomSheet(isPresented: $showLocationSheet, detents: [.content]) { dismiss in
-            LocationFilterSheet(locations: locations, selected: $pickerLocation) {
-                applyLocation(pickerLocation)
+        .bottomSheet(isPresented: $viewModel.showLocationSheet, detents: [.content]) { dismiss in
+            LocationFilterSheet(locations: viewModel.options.locations, selected: $viewModel.pickerLocation) {
+                viewModel.applyLocation(viewModel.pickerLocation)
                 dismiss()
             }
         }
-        .bottomSheet(isPresented: $showDateSheet, detents: [.height(dateSheetHeight)]) { dismiss in
-            DateFilterSheet(date: $pickerDate) {
-                applyDate(pickerDate)
+        .bottomSheet(isPresented: $viewModel.showDateSheet, detents: [.height(dateSheetHeight)]) { dismiss in
+            DateFilterSheet(date: $viewModel.pickerDate) {
+                viewModel.applyDate(viewModel.pickerDate)
                 dismiss()
             }
         }
-        .bottomSheet(isPresented: $showEtcSheet, detents: [.content]) { dismiss in
-            EtcFilterSheet(items: etcItems, selected: $pickerEtc) {
-                applyEtc(pickerEtc)
+        .bottomSheet(isPresented: $viewModel.showEtcSheet, detents: [.content]) { dismiss in
+            EtcFilterSheet(items: viewModel.options.etcItems, selected: $viewModel.pickerEtc) {
+                viewModel.applyEtc(viewModel.pickerEtc)
                 dismiss()
             }
         }
@@ -139,50 +127,13 @@ struct FilteredPictureView: View {
 
     private var filterChipBar: some View {
         HStack(spacing: 10) {
-            ForEach(appliedFilters, id: \.self) { filter in
-                AppliedFilterChip(filter: filter) { editFilter(filter) }
+            ForEach(viewModel.appliedFilters, id: \.self) { filter in
+                AppliedFilterChip(filter: filter) { viewModel.editFilter(filter) }
             }
             AddFilterChip { router.pop() }
         }
         .padding(.horizontal, 16)
         .padding(.bottom, 8)
-    }
-
-    private func editFilter(_ filter: AppliedFilter) {
-        switch filter.kind {
-        case .device:
-            pickerDevice = filter.value
-            showDeviceSheet = true
-        case .location:
-            pickerLocation = filter.value
-            showLocationSheet = true
-        case .date:
-            pickerDate = AppliedFilter.date(from: filter.value) ?? Date()
-            showDateSheet = true
-        case .etc:
-            pickerEtc = filter.value
-            showEtcSheet = true
-        }
-    }
-
-    private func applyDevice(_ name: String) {
-        guard let index = appliedFilters.firstIndex(where: { $0.kind == .device }) else { return }
-        appliedFilters[index] = AppliedFilter(kind: .device, value: name)
-    }
-
-    private func applyLocation(_ name: String) {
-        guard let index = appliedFilters.firstIndex(where: { $0.kind == .location }) else { return }
-        appliedFilters[index] = AppliedFilter(kind: .location, value: name)
-    }
-
-    private func applyDate(_ date: Date) {
-        guard let index = appliedFilters.firstIndex(where: { $0.kind == .date }) else { return }
-        appliedFilters[index] = AppliedFilter(kind: .date, value: AppliedFilter.dateText(date))
-    }
-
-    private func applyEtc(_ value: String) {
-        guard let index = appliedFilters.firstIndex(where: { $0.kind == .etc }) else { return }
-        appliedFilters[index] = AppliedFilter(kind: .etc, value: value)
     }
 
     private var dateSheetHeight: CGFloat {
