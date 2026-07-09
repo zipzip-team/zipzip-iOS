@@ -194,31 +194,31 @@ private struct AlbumDetailEmptyContent: View {
 }
 
 struct AlbumDetailGalleryPlaceholderView: View {
+    @State private var selectedPhotoIDs: [UUID] = []
+
     let photoCount: Int
     var showsSelectionControls = false
 
-    private let sections: [AlbumDetailGallerySection] = [
-        .init(title: "오늘", itemCount: 8),
-        .init(title: "어제", itemCount: 8),
-        .init(title: "7월 1일", itemCount: 8),
-        .init(title: "6월 30일", itemCount: 8)
-    ]
+    private let sections = PhotoSection.sample
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             totalCount
 
-            LazyVStack(alignment: .leading, spacing: 20) {
-                ForEach(sections) { section in
-                    AlbumDetailGallerySectionView(
-                        section: section,
-                        showsSelectionControls: showsSelectionControls
-                    )
-                }
-            }
+            PhotoGallery(
+                sections: sections,
+                isSelectionMode: showsSelectionControls,
+                selectedPhotoIDs: selectedPhotoIDs,
+                onTapPhoto: toggleSelection
+            )
             .padding(.horizontal, 16)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+        .onChange(of: showsSelectionControls) { _, newValue in
+            if !newValue {
+                selectedPhotoIDs.removeAll()
+            }
+        }
     }
 
     private var totalCount: some View {
@@ -232,56 +232,17 @@ struct AlbumDetailGalleryPlaceholderView: View {
         .padding(.vertical, 12)
         .frame(maxWidth: .infinity, alignment: .leading)
     }
-}
 
-private struct AlbumDetailGallerySection: Identifiable {
-    let title: String
-    let itemCount: Int
-
-    var id: String {
-        title
-    }
-}
-
-private struct AlbumDetailGallerySectionView: View {
-    let section: AlbumDetailGallerySection
-    let showsSelectionControls: Bool
-
-    private let columns = Array(
-        repeating: GridItem(.fixed(88), spacing: 2),
-        count: 4
-    )
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(section.title)
-                .font(.b2_sb)
-                .foregroundStyle(.grey1000)
-
-            LazyVGrid(columns: columns, alignment: .leading, spacing: 2) {
-                ForEach(0 ..< section.itemCount, id: \.self) { _ in
-                    AlbumDetailGalleryPlaceholderTile(
-                        showsSelectionControls: showsSelectionControls
-                    )
-                }
-            }
+    private func toggleSelection(_ id: UUID) {
+        guard showsSelectionControls else {
+            return
         }
-    }
-}
 
-private struct AlbumDetailGalleryPlaceholderTile: View {
-    let showsSelectionControls: Bool
-
-    var body: some View {
-        Rectangle()
-            .fill(.grey200)
-            .frame(width: 88, height: 88)
-            .overlay(alignment: .bottomTrailing) {
-                if showsSelectionControls {
-                    Indicator(status: .default)
-                        .padding(6)
-                }
-            }
+        if let index = selectedPhotoIDs.firstIndex(of: id) {
+            selectedPhotoIDs.remove(at: index)
+        } else {
+            selectedPhotoIDs.append(id)
+        }
     }
 }
 
