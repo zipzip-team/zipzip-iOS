@@ -1,14 +1,14 @@
 //
-//  LocationFilterSheet.swift
+//  EtcFilterSheet.swift
 //  zipzip-iOS
 //
-//  Created by 성환 on 7/8/26.
+//  Created by 성환 on 7/9/26.
 //
 
 import SwiftUI
 
-struct LocationFilterSheet: View {
-    let locations: [String]
+struct EtcFilterSheet: View {
+    let items: [String]
     @Binding var selected: String
     let onDone: () -> Void
 
@@ -28,12 +28,12 @@ struct LocationFilterSheet: View {
 
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 8) {
-                        ForEach(locations, id: \.self) { location in
+                        ForEach(items, id: \.self) { item in
                             TextMetadataChip(
-                                title: location,
-                                isSelected: selected == location
+                                title: item,
+                                isSelected: selected == item
                             ) {
-                                selected = location
+                                selected = item
                             }
                         }
                     }
@@ -45,21 +45,16 @@ struct LocationFilterSheet: View {
     }
 
     private var titleBlock: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text("장소")
-                .font(.t3_sb)
-                .foregroundStyle(.white00)
-            Text("사진을 많이 찍은 장소를 기준으로 추천해요.")
-                .font(.b2_md)
-                .foregroundStyle(.grey300)
-        }
+        Text("기타")
+            .font(.t3_sb)
+            .foregroundStyle(.white00)
     }
 }
 
 #Preview {
-    LocationFilterSheet(
-        locations: PhotoFilterOptions.sample.locations,
-        selected: .constant("도쿄"),
+    EtcFilterSheet(
+        items: PhotoFilterOptions.sample.etcItems,
+        selected: .constant("장소 정보 없음"),
         onDone: {}
     )
     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)

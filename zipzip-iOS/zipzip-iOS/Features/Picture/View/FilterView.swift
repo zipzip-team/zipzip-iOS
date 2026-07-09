@@ -18,7 +18,7 @@ struct FilterView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
                 RoundedIconButton(items: [
-                    .init(id: "back", icon: .iconChevronLeft) { router.pop() }
+                    .init(id: "back", icon: .chevronLeft) { router.pop() }
                 ])
                 .padding(.vertical, 6)
 
@@ -84,7 +84,7 @@ struct FilterView: View {
         section(title: "장소", subtitle: "사진을 많이 찍은 장소를 기준으로 추천해요.") {
             chipRow {
                 ForEach(viewModel.options.locations, id: \.self) { location in
-                    LocationMetadataChip(
+                    TextMetadataChip(
                         title: location,
                         isSelected: viewModel.selectedLocation == location
                     ) {
@@ -111,7 +111,7 @@ struct FilterView: View {
         section(title: "기타", subtitle: nil) {
             chipRow {
                 ForEach(viewModel.options.etcItems, id: \.self) { item in
-                    LocationMetadataChip(
+                    TextMetadataChip(
                         title: item,
                         isSelected: viewModel.selectedEtc == item
                     ) {

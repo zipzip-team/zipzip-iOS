@@ -45,7 +45,6 @@ struct PhotoFilterOptions {
     let devices: [FilterDevice]
     let locations: [String]
     let etcItems: [String]
-    let dateText: String
 }
 
 extension PhotoFilterOptions {
@@ -57,7 +56,6 @@ extension PhotoFilterOptions {
             FilterDevice(name: "Iphone 6", type: "아이폰")
         ],
         locations: ["오사카", "교토", "도쿄", "후쿠오카", "삿포로", "히로시마"],
-        etcItems: ["최근 저장된 사진", "장소 정보 없음", "날짜 정보 없음"],
-        dateText: "2026년 7월 2일"
+        etcItems: ["최근 저장된 사진", "장소 정보 없음", "날짜 정보 없음"]
     )
 }

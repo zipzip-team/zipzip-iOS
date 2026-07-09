@@ -14,6 +14,8 @@ struct PhotoDetailView: View {
 
     @State private var isEditingInfo = false
     @State private var showShareSheet = false
+    @State private var showDeleteAlert = false
+    @State private var isFavorite = false
 
     private let photoPeekHeight: CGFloat = 160
 
@@ -56,11 +58,20 @@ struct PhotoDetailView: View {
                 onDismiss: { dismiss() }
             )
         }
+        .bottomSheetAlert(
+            isPresented: $showDeleteAlert,
+            title: "이 사진을 삭제하시겠어요?",
+            message: "삭제하면 집집과 사진 앱에서 모두 사라져요.",
+            secondaryTitle: "취소",
+            primaryTitle: "삭제",
+            onSecondaryTap: { showDeleteAlert = false },
+            onPrimaryTap: { showDeleteAlert = false } // TODO: 삭제 실행 연결
+        )
     }
 
     private var backButton: some View {
         RoundedIconButton(items: [
-            .init(id: "back", icon: .iconChevronLeft) {
+            .init(id: "back", icon: .chevronLeft) {
                 if isEditingInfo {
                     withAnimation { isEditingInfo = false }
                 } else {
@@ -75,12 +86,12 @@ struct PhotoDetailView: View {
 
     private var actionBar: some View {
         ActionBar(items: [
-            .init(icon: .starStroke, title: "즐겨찾기") { /* TODO: 즐겨찾기 */ },
+            .init(icon: isFavorite ? .starFilled : .starStroke, title: "즐겨찾기") { isFavorite.toggle() },
             .init(icon: .moveToAlbum, title: "집으로") { showShareSheet = true },
             .init(icon: .metadata, title: "정보 수정") {
                 withAnimation { isEditingInfo = true }
             },
-            .init(icon: .delete, title: "삭제") { /* TODO: 삭제 */ }
+            .init(icon: .delete, title: "삭제") { showDeleteAlert = true }
         ])
         .padding(.bottom, 16)
     }
