@@ -71,7 +71,7 @@ struct AlbumDetailView<Content: View>: View {
         }
         .overlay(alignment: .bottom) {
             if isSelectionMode {
-                AlbumDetailSelectionActionBar()
+                ActionBar(items: selectionActionItems)
                     .padding(.bottom, 49)
             }
         }
@@ -100,6 +100,15 @@ struct AlbumDetailView<Content: View>: View {
         AlbumDetailTitleSection(album: album)
     }
 
+    private var selectionActionItems: [ActionBarItem] {
+        [
+            .init(icon: .moveToAlbum, title: "집 관리", action: manageAlbum),
+            .init(icon: .chevronRight, title: "이동하기", isDisabled: true) {},
+            .init(icon: .metadata, title: "정보 수정", isDisabled: true) {},
+            .init(icon: .delete, title: "삭제", isDisabled: true) {}
+        ]
+    }
+
     @ViewBuilder private var leadingActionButton: some View {
         if isSelectionMode {
             RoundedTextButton(title: "취소", style: .cancel, action: exitSelectionMode)
@@ -123,6 +132,8 @@ struct AlbumDetailView<Content: View>: View {
     private func exitSelectionMode() {
         isSelectionMode = false
     }
+
+    private func manageAlbum() {}
 }
 
 struct AlbumDetailEmptyView: View {
@@ -267,107 +278,10 @@ private struct AlbumDetailGalleryPlaceholderTile: View {
             .frame(width: 88, height: 88)
             .overlay(alignment: .bottomTrailing) {
                 if showsSelectionControls {
-                    Circle()
-                        .fill(.grey50)
-                        .stroke(.grey900, lineWidth: 2)
-                        .frame(width: 22, height: 22)
+                    Indicator(status: .default)
                         .padding(6)
                 }
             }
-    }
-}
-
-private struct AlbumDetailSelectionActionBar: View {
-    private let items: [AlbumDetailSelectionActionItem] = [
-        .init(icon: .asset(.moveToAlbum), title: "집 관리", isEnabled: true),
-        .init(icon: .system("arrow.right"), title: "이동하기", isEnabled: false),
-        .init(icon: .asset(.metadata), title: "정보 수정", isEnabled: false),
-        .init(icon: .asset(.delete), title: "삭제", isEnabled: false)
-    ]
-
-    var body: some View {
-        HStack(spacing: 0) {
-            ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
-                actionButton(
-                    item,
-                    isLast: index == items.count - 1
-                )
-            }
-        }
-        .padding(4)
-        .background(.grey950, in: .capsule)
-        .shadow(color: .black.opacity(0.05), radius: 12, y: 1)
-    }
-
-    private func actionButton(
-        _ item: AlbumDetailSelectionActionItem,
-        isLast: Bool
-    ) -> some View {
-        Button {} label: {
-            VStack(spacing: 0) {
-                item.icon.image(color: item.foregroundColor)
-                    .frame(width: 32, height: 32)
-
-                Text(item.title)
-                    .font(.b2_md)
-                    .foregroundStyle(item.foregroundColor)
-                    .fixedSize()
-            }
-            .frame(width: 84)
-            .padding(.vertical, 2)
-            .overlay(alignment: .trailing) {
-                if !isLast {
-                    Rectangle()
-                        .fill(.grey900)
-                        .frame(width: 1)
-                }
-            }
-        }
-        .buttonStyle(.plain)
-        .disabled(!item.isEnabled)
-    }
-}
-
-private struct AlbumDetailSelectionActionItem: Identifiable {
-    let id: String
-    let icon: AlbumDetailSelectionActionIcon
-    let title: String
-    let isEnabled: Bool
-
-    init(
-        icon: AlbumDetailSelectionActionIcon,
-        title: String,
-        isEnabled: Bool
-    ) {
-        self.id = title
-        self.icon = icon
-        self.title = title
-        self.isEnabled = isEnabled
-    }
-
-    var foregroundColor: Color {
-        isEnabled ? .grey50 : .grey700
-    }
-}
-
-private enum AlbumDetailSelectionActionIcon {
-    case asset(ImageResource)
-    case system(String)
-
-    @ViewBuilder func image(color: Color) -> some View {
-        switch self {
-        case let .asset(resource):
-            Image(resource)
-                .renderingMode(.template)
-                .resizable()
-                .scaledToFit()
-                .foregroundStyle(color)
-                .frame(width: 24, height: 24)
-        case let .system(name):
-            Image(systemName: name)
-                .font(.system(size: 24, weight: .medium))
-                .foregroundStyle(color)
-        }
     }
 }
 

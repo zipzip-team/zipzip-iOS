@@ -46,8 +46,8 @@ struct RoundedIconButton: View {
         }
     }
 
-    private func button(for item: RoundedIconButtonItem) -> some View {
-        Button(action: item.action) {
+    @ViewBuilder private func button(for item: RoundedIconButtonItem) -> some View {
+        let button = Button(action: item.action) {
             Image(item.icon)
                 .renderingMode(.template)
                 .resizable()
@@ -57,8 +57,15 @@ struct RoundedIconButton: View {
                 .padding(.horizontal, items.count == 1 ? 8 : 12)
                 .frame(height: 44)
                 .contentShape(.rect)
+                .accessibilityHidden(item.accessibilityLabel != nil)
         }
         .buttonStyle(.plain)
+
+        if let accessibilityLabel = item.accessibilityLabel {
+            button.accessibilityLabel(accessibilityLabel)
+        } else {
+            button
+        }
     }
 }
 

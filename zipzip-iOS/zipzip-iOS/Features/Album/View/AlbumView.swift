@@ -381,48 +381,20 @@ struct AlbumHeaderActionButton: View {
     let onAddTap: () -> Void
 
     var body: some View {
-        HStack(spacing: 0) {
-            button(
+        RoundedIconButton(items: [
+            .init(
+                id: "selection",
                 icon: .iconSelection,
                 accessibilityLabel: "사진집 선택",
                 action: onSelectionTap
-            )
-
-            Rectangle()
-                .fill(.grey50)
-                .frame(width: 1, height: 36)
-
-            button(
+            ),
+            .init(
+                id: "add",
                 icon: .plus,
                 accessibilityLabel: "사진집 추가",
                 action: onAddTap
             )
-        }
-        .padding(.horizontal, 4)
-        .frame(height: 44)
-        .background(.white00, in: .capsule)
-        .shadow(color: .black.opacity(0.05), radius: 6, y: 4)
-    }
-
-    private func button(
-        icon: ImageResource,
-        accessibilityLabel: String,
-        action: @escaping () -> Void
-    ) -> some View {
-        Button(action: action) {
-            Image(icon)
-                .renderingMode(.template)
-                .resizable()
-                .scaledToFit()
-                .foregroundStyle(.grey1000)
-                .frame(width: 28, height: 28)
-                .padding(.horizontal, 12)
-                .frame(height: 44)
-                .contentShape(.rect)
-                .accessibilityHidden(true)
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(accessibilityLabel)
+        ])
     }
 }
 
