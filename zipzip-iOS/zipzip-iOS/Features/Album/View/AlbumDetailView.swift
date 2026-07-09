@@ -17,10 +17,11 @@ struct AlbumDetailItem: Hashable, Identifiable {
 struct AlbumDetailView<Content: View>: View {
     @Environment(\.dismiss) private var dismiss
     @State private var isSelectionMode: Bool
+    @State private var isPhotoPickerPresented = false
 
     let album: AlbumDetailItem
     private let contentTopSpacing: CGFloat
-    private let detailContent: (Bool) -> Content
+    private let detailContent: (Bool, @escaping () -> Void) -> Content
 
     init(
         album: AlbumDetailItem,
@@ -31,7 +32,7 @@ struct AlbumDetailView<Content: View>: View {
         self.album = album
         self.contentTopSpacing = contentTopSpacing
         _isSelectionMode = State(initialValue: initialSelectionMode)
-        self.detailContent = { _ in content() }
+        self.detailContent = { _, _ in content() }
     }
 
     init(
@@ -39,6 +40,18 @@ struct AlbumDetailView<Content: View>: View {
         contentTopSpacing: CGFloat = 30,
         initialSelectionMode: Bool = false,
         @ViewBuilder content: @escaping (Bool) -> Content
+    ) {
+        self.album = album
+        self.contentTopSpacing = contentTopSpacing
+        _isSelectionMode = State(initialValue: initialSelectionMode)
+        self.detailContent = { isSelectionMode, _ in content(isSelectionMode) }
+    }
+
+    init(
+        album: AlbumDetailItem,
+        contentTopSpacing: CGFloat = 30,
+        initialSelectionMode: Bool = false,
+        @ViewBuilder content: @escaping (Bool, @escaping () -> Void) -> Content
     ) {
         self.album = album
         self.contentTopSpacing = contentTopSpacing
@@ -61,7 +74,7 @@ struct AlbumDetailView<Content: View>: View {
         .overlay(alignment: .topTrailing) {
             AlbumHeaderActionButton(
                 onSelectionTap: enterSelectionMode,
-                onAddTap: loadAlbumDetailPhotos
+                onAddTap: presentPhotoPicker
             )
             .padding(.top, 19)
             .padding(.trailing, 16)
@@ -75,6 +88,9 @@ struct AlbumDetailView<Content: View>: View {
                     .padding(.bottom, 49)
             }
         }
+        .navigationDestination(isPresented: $isPhotoPickerPresented) {
+            AlbumPhotoPickerView()
+        }
         .navigationBarBackButtonHidden(true)
         .toolbarVisibility(.hidden, for: .navigationBar)
     }
@@ -84,7 +100,7 @@ struct AlbumDetailView<Content: View>: View {
             VStack(spacing: contentTopSpacing) {
                 titleSection
 
-                detailContent(isSelectionMode)
+                detailContent(isSelectionMode, presentPhotoPicker)
             }
             .padding(.top, 168)
             .padding(.bottom, 40)
@@ -133,6 +149,10 @@ struct AlbumDetailView<Content: View>: View {
         isSelectionMode = false
     }
 
+    private func presentPhotoPicker() {
+        isPhotoPickerPresented = true
+    }
+
     private func manageAlbum() {}
 }
 
@@ -140,8 +160,8 @@ struct AlbumDetailEmptyView: View {
     let album: AlbumDetailItem
 
     var body: some View {
-        AlbumDetailView(album: album, contentTopSpacing: 125) {
-            AlbumDetailEmptyContent()
+        AlbumDetailView(album: album, contentTopSpacing: 125) { _, presentPhotoPicker in
+            AlbumDetailEmptyContent(onLoadPhotos: presentPhotoPicker)
         }
     }
 }
@@ -179,6 +199,8 @@ private struct AlbumDetailTitleSection: View {
 }
 
 private struct AlbumDetailEmptyContent: View {
+    let onLoadPhotos: () -> Void
+
     var body: some View {
         VStack(spacing: 32) {
             VStack(spacing: 8) {
@@ -197,7 +219,7 @@ private struct AlbumDetailEmptyContent: View {
                 title: "사진 불러오기",
                 property1: .default,
                 property2: .pressed,
-                action: loadAlbumDetailPhotos
+                action: onLoadPhotos
             )
             .frame(width: 171)
         }
@@ -346,8 +368,6 @@ private struct AlbumDetailFolderShape: Shape {
         return path
     }
 }
-
-private func loadAlbumDetailPhotos() {}
 
 #Preview("Album Detail Empty", traits: .fixedLayout(width: 390, height: 844)) {
     AlbumDetailEmptyView(
