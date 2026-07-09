@@ -7,14 +7,21 @@
 
 import SwiftUI
 
+enum ShareDestination: Hashable {
+    case album(Album.ID)
+    case sharedAlbum(shareAlbumID: ShareAlbum.ID, albumID: Album.ID)
+}
+
 struct ShareSheet: View {
+    @Environment(AuthenticationState.self) private var authenticationState
+
     let albums: [Album]
     let sharedAlbums: [Album]
     let shareAlbums: [ShareAlbum]
     let onDismiss: () -> Void
+    var onComplete: (ShareDestination) -> Void = { _ in }
 
     @State private var selection: BottomSheetTabSelection = .left
-    @State private var isLoggedIn = false
     @State private var selectedAlbumID: Album.ID?
     @State private var targetShareAlbum: ShareAlbum?
 
@@ -25,13 +32,14 @@ struct ShareSheet: View {
                 headerButton("취소") { onDismiss() }
             },
             rightItem: {
-                headerButton("완료") { onDismiss() } // TODO: 실제 저장 연동
+                headerButton("완료", isDisabled: selectedDestination == nil, action: completeSelection)
             }
         ) {
             content
         }
         .onChange(of: selection) { _, _ in
             targetShareAlbum = nil
+            selectedAlbumID = nil
         }
     }
 
@@ -44,9 +52,9 @@ struct ShareSheet: View {
                 onSelect: selectAlbum
             )
         case .right:
-            if !isLoggedIn {
+            if !authenticationState.isLoggedIn {
                 ShareLoginPrompt {
-                    isLoggedIn = true
+                    authenticationState.logIn()
                 }
             } else if targetShareAlbum != nil {
                 AlbumSelectionGrid(
@@ -63,19 +71,49 @@ struct ShareSheet: View {
         }
     }
 
-    private func headerButton(_ title: String, action: @escaping () -> Void) -> some View {
+    private func headerButton(
+        _ title: String,
+        isDisabled: Bool = false,
+        action: @escaping () -> Void
+    ) -> some View {
         Button(action: action) {
             Text(title)
                 .font(.b1_sb)
-                .foregroundStyle(.white00)
+                .foregroundStyle(isDisabled ? .grey700 : .white00)
                 .frame(width: 72, height: 48)
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .disabled(isDisabled)
     }
 
     private func selectAlbum(_ album: Album) {
         selectedAlbumID = album.id
+    }
+
+    private var selectedDestination: ShareDestination? {
+        guard let selectedAlbumID else {
+            return nil
+        }
+
+        switch selection {
+        case .left:
+            return .album(selectedAlbumID)
+        case .right:
+            guard let targetShareAlbum else {
+                return nil
+            }
+            return .sharedAlbum(shareAlbumID: targetShareAlbum.id, albumID: selectedAlbumID)
+        }
+    }
+
+    private func completeSelection() {
+        guard let selectedDestination else {
+            return
+        }
+
+        onComplete(selectedDestination)
+        onDismiss()
     }
 }
 
@@ -173,4 +211,5 @@ struct ShareAlbumList: View {
     )
     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
     .background(.black)
+    .environment(AuthenticationState())
 }

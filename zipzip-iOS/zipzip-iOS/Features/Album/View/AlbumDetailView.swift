@@ -8,10 +8,44 @@
 import SwiftUI
 
 struct AlbumDetailItem: Hashable, Identifiable {
-    let id = UUID()
+    let id: UUID
     let title: String
     let createdAt: Date
     let photoCount: Int
+
+    init(
+        id: UUID = UUID(),
+        title: String,
+        createdAt: Date,
+        photoCount: Int
+    ) {
+        self.id = id
+        self.title = title
+        self.createdAt = createdAt
+        self.photoCount = photoCount
+    }
+}
+
+struct AlbumDetailActions {
+    let onRename: (String) -> Void
+    let onDelete: () -> Void
+    let onAddPhotos: ([UUID]) -> Void
+    let onDeletePhotos: ([UUID], PhotoDeletionAction) -> Void
+    let onMovePhotos: ([UUID], ShareDestination) -> Void
+
+    init(
+        onRename: @escaping (String) -> Void = { _ in },
+        onDelete: @escaping () -> Void = {},
+        onAddPhotos: @escaping ([UUID]) -> Void = { _ in },
+        onDeletePhotos: @escaping ([UUID], PhotoDeletionAction) -> Void = { _, _ in },
+        onMovePhotos: @escaping ([UUID], ShareDestination) -> Void = { _, _ in }
+    ) {
+        self.onRename = onRename
+        self.onDelete = onDelete
+        self.onAddPhotos = onAddPhotos
+        self.onDeletePhotos = onDeletePhotos
+        self.onMovePhotos = onMovePhotos
+    }
 }
 
 struct AlbumDetailView<Content: View>: View {
@@ -23,18 +57,23 @@ struct AlbumDetailView<Content: View>: View {
     @State private var isMoveSheetPresented = false
     @State private var isDeleteAlertPresented = false
     @State private var selectedPhotoIDs: [UUID] = []
-    @State private var editedAlbumTitle: String?
     @State private var albumTitleDraft = ""
 
     let album: AlbumDetailItem
     private let contentTopSpacing: CGFloat
     private let detailContent: (Bool, Binding<[UUID]>, @escaping () -> Void) -> Content
+    private let actions: AlbumDetailActions
+    private let moveAlbums: [Album]
+    private let photoPickerSections: [PhotoSection]
     private let onEditPhotoInfo: (UUID) -> Void
 
     init(
         album: AlbumDetailItem,
         contentTopSpacing: CGFloat = 30,
         initialSelectionMode: Bool = false,
+        actions: AlbumDetailActions = .init(),
+        moveAlbums: [Album] = Album.samples,
+        photoPickerSections: [PhotoSection] = PhotoSection.sample,
         onEditPhotoInfo: @escaping (UUID) -> Void = { _ in },
         @ViewBuilder content: @escaping () -> Content
     ) {
@@ -42,6 +81,9 @@ struct AlbumDetailView<Content: View>: View {
         self.contentTopSpacing = contentTopSpacing
         _isSelectionMode = State(initialValue: initialSelectionMode)
         self.detailContent = { _, _, _ in content() }
+        self.actions = actions
+        self.moveAlbums = moveAlbums
+        self.photoPickerSections = photoPickerSections
         self.onEditPhotoInfo = onEditPhotoInfo
     }
 
@@ -49,6 +91,9 @@ struct AlbumDetailView<Content: View>: View {
         album: AlbumDetailItem,
         contentTopSpacing: CGFloat = 30,
         initialSelectionMode: Bool = false,
+        actions: AlbumDetailActions = .init(),
+        moveAlbums: [Album] = Album.samples,
+        photoPickerSections: [PhotoSection] = PhotoSection.sample,
         onEditPhotoInfo: @escaping (UUID) -> Void = { _ in },
         @ViewBuilder content: @escaping (Bool) -> Content
     ) {
@@ -56,6 +101,9 @@ struct AlbumDetailView<Content: View>: View {
         self.contentTopSpacing = contentTopSpacing
         _isSelectionMode = State(initialValue: initialSelectionMode)
         self.detailContent = { isSelectionMode, _, _ in content(isSelectionMode) }
+        self.actions = actions
+        self.moveAlbums = moveAlbums
+        self.photoPickerSections = photoPickerSections
         self.onEditPhotoInfo = onEditPhotoInfo
     }
 
@@ -63,6 +111,9 @@ struct AlbumDetailView<Content: View>: View {
         album: AlbumDetailItem,
         contentTopSpacing: CGFloat = 30,
         initialSelectionMode: Bool = false,
+        actions: AlbumDetailActions = .init(),
+        moveAlbums: [Album] = Album.samples,
+        photoPickerSections: [PhotoSection] = PhotoSection.sample,
         onEditPhotoInfo: @escaping (UUID) -> Void = { _ in },
         @ViewBuilder content: @escaping (Bool, Binding<[UUID]>) -> Content
     ) {
@@ -72,6 +123,9 @@ struct AlbumDetailView<Content: View>: View {
         self.detailContent = { isSelectionMode, selectedPhotoIDs, _ in
             content(isSelectionMode, selectedPhotoIDs)
         }
+        self.actions = actions
+        self.moveAlbums = moveAlbums
+        self.photoPickerSections = photoPickerSections
         self.onEditPhotoInfo = onEditPhotoInfo
     }
 
@@ -79,6 +133,9 @@ struct AlbumDetailView<Content: View>: View {
         album: AlbumDetailItem,
         contentTopSpacing: CGFloat = 30,
         initialSelectionMode: Bool = false,
+        actions: AlbumDetailActions = .init(),
+        moveAlbums: [Album] = Album.samples,
+        photoPickerSections: [PhotoSection] = PhotoSection.sample,
         onEditPhotoInfo: @escaping (UUID) -> Void = { _ in },
         @ViewBuilder content: @escaping (Bool, @escaping () -> Void) -> Content
     ) {
@@ -88,6 +145,9 @@ struct AlbumDetailView<Content: View>: View {
         self.detailContent = { isSelectionMode, _, presentPhotoPicker in
             content(isSelectionMode, presentPhotoPicker)
         }
+        self.actions = actions
+        self.moveAlbums = moveAlbums
+        self.photoPickerSections = photoPickerSections
         self.onEditPhotoInfo = onEditPhotoInfo
     }
 
@@ -95,6 +155,9 @@ struct AlbumDetailView<Content: View>: View {
         album: AlbumDetailItem,
         contentTopSpacing: CGFloat = 30,
         initialSelectionMode: Bool = false,
+        actions: AlbumDetailActions = .init(),
+        moveAlbums: [Album] = Album.samples,
+        photoPickerSections: [PhotoSection] = PhotoSection.sample,
         onEditPhotoInfo: @escaping (UUID) -> Void = { _ in },
         @ViewBuilder content: @escaping (Bool, Binding<[UUID]>, @escaping () -> Void) -> Content
     ) {
@@ -102,6 +165,9 @@ struct AlbumDetailView<Content: View>: View {
         self.contentTopSpacing = contentTopSpacing
         _isSelectionMode = State(initialValue: initialSelectionMode)
         self.detailContent = content
+        self.actions = actions
+        self.moveAlbums = moveAlbums
+        self.photoPickerSections = photoPickerSections
         self.onEditPhotoInfo = onEditPhotoInfo
     }
 
@@ -135,7 +201,10 @@ struct AlbumDetailView<Content: View>: View {
             }
         }
         .navigationDestination(isPresented: $isPhotoPickerPresented) {
-            AlbumPhotoPickerView()
+            AlbumPhotoPickerView(
+                sections: photoPickerSections,
+                onComplete: actions.onAddPhotos
+            )
         }
         .bottomSheet(
             isPresented: $isAlbumManagementPresented,
@@ -169,10 +238,11 @@ struct AlbumDetailView<Content: View>: View {
         }
         .bottomSheet(isPresented: $isMoveSheetPresented, detents: [.full]) { dismiss in
             ShareSheet(
-                albums: Album.samples,
+                albums: moveAlbums,
                 sharedAlbums: Album.sharedSamples,
                 shareAlbums: ShareAlbum.samples,
-                onDismiss: { dismiss() }
+                onDismiss: { dismiss() },
+                onComplete: completePhotoMove
             )
         }
         .bottomSheetAlert(
@@ -181,8 +251,8 @@ struct AlbumDetailView<Content: View>: View {
             message: deleteAlertContent.message,
             secondaryTitle: deleteAlertContent.secondaryTitle,
             primaryTitle: deleteAlertContent.primaryTitle,
-            onSecondaryTap: dismissDeleteAlert,
-            onPrimaryTap: dismissDeleteAlert
+            onSecondaryTap: deleteSelectedPhotosPermanently,
+            onPrimaryTap: removeSelectedPhotosFromAlbum
         )
         .navigationBarBackButtonHidden(true)
         .toolbarVisibility(.hidden, for: .navigationBar)
@@ -196,7 +266,7 @@ struct AlbumDetailView<Content: View>: View {
                 detailContent(isSelectionMode, $selectedPhotoIDs, presentPhotoPicker)
             }
             .padding(.top, 168)
-            .padding(.bottom, 40)
+            .padding(.bottom, isSelectionMode ? 140 : 40)
             .frame(maxWidth: .infinity, alignment: .top)
             .background(alignment: .top) {
                 AlbumDetailFolderBackground()
@@ -210,7 +280,7 @@ struct AlbumDetailView<Content: View>: View {
     }
 
     private var albumTitle: String {
-        editedAlbumTitle ?? album.title
+        album.title
     }
 
     private var selectionActionItems: [ActionBarItem] {
@@ -273,7 +343,7 @@ struct AlbumDetailView<Content: View>: View {
             return
         }
 
-        editedAlbumTitle = trimmedTitle
+        actions.onRename(trimmedTitle)
         isAlbumManagementPresented = false
     }
 
@@ -288,6 +358,7 @@ struct AlbumDetailView<Content: View>: View {
     private func confirmAlbumDeletion() {
         isAlbumDeleteAlertPresented = false
         isAlbumManagementPresented = false
+        actions.onDelete()
     }
 
     private func moveSelectedPhotos() {
@@ -296,6 +367,12 @@ struct AlbumDetailView<Content: View>: View {
         }
 
         isMoveSheetPresented = true
+    }
+
+    private func completePhotoMove(to destination: ShareDestination) {
+        actions.onMovePhotos(selectedPhotoIDs, destination)
+        isMoveSheetPresented = false
+        exitSelectionMode()
     }
 
     private func editSelectedPhotoInfo() {
@@ -314,16 +391,35 @@ struct AlbumDetailView<Content: View>: View {
         isDeleteAlertPresented = true
     }
 
-    private func dismissDeleteAlert() {
+    private func deleteSelectedPhotosPermanently() {
+        completeSelectedPhotoDeletion(.deletePermanently)
+    }
+
+    private func removeSelectedPhotosFromAlbum() {
+        completeSelectedPhotoDeletion(.removeFromAlbum)
+    }
+
+    private func completeSelectedPhotoDeletion(_ action: PhotoDeletionAction) {
+        actions.onDeletePhotos(selectedPhotoIDs, action)
         isDeleteAlertPresented = false
+        exitSelectionMode()
     }
 }
 
 struct AlbumDetailEmptyView: View {
     let album: AlbumDetailItem
+    var actions = AlbumDetailActions()
+    var moveAlbums = Album.samples
+    var photoPickerSections = PhotoSection.sample
 
     var body: some View {
-        AlbumDetailView(album: album, contentTopSpacing: 125) { _, presentPhotoPicker in
+        AlbumDetailView(
+            album: album,
+            contentTopSpacing: 125,
+            actions: actions,
+            moveAlbums: moveAlbums,
+            photoPickerSections: photoPickerSections
+        ) { _, presentPhotoPicker in
             AlbumDetailEmptyContent(onLoadPhotos: presentPhotoPicker)
         }
     }
@@ -405,7 +501,7 @@ private struct AlbumManagementSheetContent: View {
                     action: onCompleteTap
                 )
             }
-            .frame(width: 358)
+            .frame(maxWidth: 358)
         }
         .padding(.horizontal, 16)
         .padding(.top, 12)
@@ -451,15 +547,17 @@ struct AlbumDetailGalleryPlaceholderView: View {
     let photoCount: Int
     var showsSelectionControls = false
 
-    private let sections = PhotoSection.sample
+    private let sections: [PhotoSection]
     private let onOpenPhoto: ((Photo) -> Void)?
 
     init(
+        sections: [PhotoSection] = PhotoSection.sample,
         photoCount: Int,
         showsSelectionControls: Bool = false,
         selectedPhotoIDs: Binding<[UUID]> = .constant([]),
         onOpenPhoto: ((Photo) -> Void)? = nil
     ) {
+        self.sections = sections
         self.photoCount = photoCount
         self.showsSelectionControls = showsSelectionControls
         _selectedPhotoIDs = selectedPhotoIDs

@@ -38,11 +38,17 @@ enum PhotoDeletionContext {
     }
 }
 
+enum PhotoDeletionAction {
+    case deletePermanently
+    case removeFromAlbum
+}
+
 struct PhotoDetailView: View {
     @Environment(\.dismiss) private var dismiss
 
     let photo: Photo
     let deletionContext: PhotoDeletionContext
+    private let onDelete: (PhotoDeletionAction) -> Void
 
     @State private var isEditingInfo = false
     @State private var showShareSheet = false
@@ -51,9 +57,14 @@ struct PhotoDetailView: View {
 
     private let photoPeekHeight: CGFloat = 160
 
-    init(photo: Photo, deletionContext: PhotoDeletionContext = .gallery) {
+    init(
+        photo: Photo,
+        deletionContext: PhotoDeletionContext = .gallery,
+        onDelete: @escaping (PhotoDeletionAction) -> Void = { _ in }
+    ) {
         self.photo = photo
         self.deletionContext = deletionContext
+        self.onDelete = onDelete
     }
 
     var body: some View {
@@ -101,8 +112,8 @@ struct PhotoDetailView: View {
             message: deleteAlertContent.message,
             secondaryTitle: deleteAlertContent.secondaryTitle,
             primaryTitle: deleteAlertContent.primaryTitle,
-            onSecondaryTap: dismissDeleteAlert,
-            onPrimaryTap: dismissDeleteAlert
+            onSecondaryTap: handleSecondaryDeleteAction,
+            onPrimaryTap: handlePrimaryDeleteAction
         )
     }
 
@@ -139,6 +150,30 @@ struct PhotoDetailView: View {
 
     private func dismissDeleteAlert() {
         showDeleteAlert = false
+    }
+
+    private func handleSecondaryDeleteAction() {
+        switch deletionContext {
+        case .gallery:
+            dismissDeleteAlert()
+        case .album:
+            completeDeletion(.deletePermanently)
+        }
+    }
+
+    private func handlePrimaryDeleteAction() {
+        switch deletionContext {
+        case .gallery:
+            completeDeletion(.deletePermanently)
+        case .album:
+            completeDeletion(.removeFromAlbum)
+        }
+    }
+
+    private func completeDeletion(_ action: PhotoDeletionAction) {
+        showDeleteAlert = false
+        onDelete(action)
+        dismiss()
     }
 }
 

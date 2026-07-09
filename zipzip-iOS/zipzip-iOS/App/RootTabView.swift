@@ -21,8 +21,6 @@ struct RootTabView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .safeAreaInset(edge: .bottom, spacing: 0) {
                 bottomBar
-                    .padding(.bottom, 28)
-                    .ignoresSafeArea(.container, edges: .bottom)
             }
             .onChange(of: selection) { _, newValue in
                 loaded.insert(newValue)
@@ -51,8 +49,12 @@ struct RootTabView: View {
                 },
                 .init(icon: .delete, title: "삭제") { pictureViewModel.requestDelete() }
             ])
+            .padding(.bottom, 28)
+            .ignoresSafeArea(.container, edges: .bottom)
         } else if showsNavbar {
             Navbar(selection: $selection)
+                .padding(.bottom, 28)
+                .ignoresSafeArea(.container, edges: .bottom)
         }
     }
 

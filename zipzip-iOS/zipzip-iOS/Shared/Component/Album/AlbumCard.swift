@@ -31,6 +31,7 @@ struct AlbumCard: View {
             }
             .frame(width: 134)
         }
+        .frame(maxWidth: 170)
     }
 
     private var nameColor: Color {

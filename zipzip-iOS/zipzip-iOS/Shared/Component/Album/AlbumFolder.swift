@@ -29,7 +29,7 @@ struct AlbumFolder<Slot: View>: View {
         ZStack {
             Image(folderImage)
                 .resizable()
-                .frame(width: 170, height: 152)
+                .scaledToFit()
 
             slot()
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
@@ -39,7 +39,8 @@ struct AlbumFolder<Slot: View>: View {
                     transaction.animation = nil
                 }
         }
-        .frame(width: 170, height: 152)
+        .aspectRatio(170 / 152, contentMode: .fit)
+        .frame(maxWidth: 170)
         .overlay(alignment: .bottomTrailing) {
             badge
                 .padding(8)

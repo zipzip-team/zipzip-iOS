@@ -17,10 +17,10 @@ struct AlbumView: View {
     @State private var isShareAlbumSheetPresented = false
     @State private var createAlbumName = ""
 
-    private let albums = AlbumViewItem.samples
+    @State private var albums = AlbumViewItem.samples
     private let columns = [
-        GridItem(.fixed(170), spacing: 17),
-        GridItem(.fixed(170), spacing: 17)
+        GridItem(.flexible(), spacing: 17),
+        GridItem(.flexible(), spacing: 17)
     ]
 
     init(
@@ -37,24 +37,16 @@ struct AlbumView: View {
                 .toolbarVisibility(.hidden, for: .navigationBar)
                 .navigationDestination(for: AlbumRoute.self) { route in
                     switch route {
-                    case let .detail(album):
-                        if album.photoCount == 0 {
-                            AlbumDetailEmptyView(album: album)
-                        } else {
-                            AlbumDetailView(
-                                album: album,
-                                onEditPhotoInfo: showPhotoInfoEdit
-                            ) { isSelectionMode, selectedPhotoIDs in
-                                AlbumDetailGalleryPlaceholderView(
-                                    photoCount: album.photoCount,
-                                    showsSelectionControls: isSelectionMode,
-                                    selectedPhotoIDs: selectedPhotoIDs,
-                                    onOpenPhoto: showPhotoDetail
-                                )
+                    case let .detail(albumID):
+                        albumDetailDestination(for: albumID)
+                    case let .photoDetail(albumID, photo):
+                        PhotoDetailView(
+                            photo: photo,
+                            deletionContext: .album,
+                            onDelete: { action in
+                                deletePhotos([photo.id], from: albumID, action: action)
                             }
-                        }
-                    case let .photoDetail(photo):
-                        PhotoDetailView(photo: photo, deletionContext: .album)
+                        )
                     case let .photoInfoEdit(metadata):
                         PhotoInfoEditView(metadata: metadata)
                     }
@@ -95,6 +87,7 @@ struct AlbumView: View {
                 }
                 .padding(.horizontal, 16)
                 .padding(.top, 17)
+                .padding(.bottom, isSelectionMode && !selectedAlbumIDs.isEmpty ? 140 : 20)
                 .transaction { transaction in
                     transaction.animation = nil
                 }
@@ -145,10 +138,10 @@ struct AlbumView: View {
             isPresented: $isDeleteAlertPresented,
             title: "\(selectedAlbumIDs.count)개의 사진집을 삭제하시겠어요?",
             message: "사진집에 담긴 사진들은 삭제되지 않아요.",
-            secondaryTitle: "삭제",
-            primaryTitle: "앨범에서 제거",
+            secondaryTitle: "취소",
+            primaryTitle: "삭제",
             onSecondaryTap: dismissDeleteAlert,
-            onPrimaryTap: dismissDeleteAlert
+            onPrimaryTap: confirmSelectedAlbumDeletion
         )
         .bottomSheet(
             isPresented: $isCreateAlbumSheetPresented,
@@ -187,6 +180,47 @@ struct AlbumView: View {
         ]
     }
 
+    @ViewBuilder private func albumDetailDestination(for albumID: AlbumViewItem.ID) -> some View {
+        if let album = albums.first(where: { $0.id == albumID }) {
+            let actions = AlbumDetailActions(
+                onRename: { renameAlbum(albumID, to: $0) },
+                onDelete: { deleteAlbum(albumID) },
+                onAddPhotos: { addPhotos($0, to: albumID) },
+                onDeletePhotos: { photoIDs, action in
+                    deletePhotos(photoIDs, from: albumID, action: action)
+                },
+                onMovePhotos: { photoIDs, destination in
+                    movePhotos(photoIDs, from: albumID, to: destination)
+                }
+            )
+
+            if !album.hasPhotos {
+                AlbumDetailEmptyView(
+                    album: album.detailItem,
+                    actions: actions,
+                    moveAlbums: moveDestinations(excluding: albumID),
+                    photoPickerSections: availablePhotoSections(excluding: album.photoIDs)
+                )
+            } else {
+                AlbumDetailView(
+                    album: album.detailItem,
+                    actions: actions,
+                    moveAlbums: moveDestinations(excluding: albumID),
+                    photoPickerSections: availablePhotoSections(excluding: album.photoIDs),
+                    onEditPhotoInfo: showPhotoInfoEdit
+                ) { isSelectionMode, selectedPhotoIDs in
+                    AlbumDetailGalleryPlaceholderView(
+                        sections: photoSections(for: album),
+                        photoCount: album.count,
+                        showsSelectionControls: isSelectionMode,
+                        selectedPhotoIDs: selectedPhotoIDs,
+                        onOpenPhoto: { showPhotoDetail($0, in: albumID) }
+                    )
+                }
+            }
+        }
+    }
+
     private func enterSelectionMode() {
         isSelectionMode = true
     }
@@ -210,30 +244,25 @@ struct AlbumView: View {
 
     private func createAlbum() {
         let trimmedName = createAlbumName.trimmingCharacters(in: .whitespacesAndNewlines)
-        let album = AlbumDetailItem(
-            title: trimmedName.isEmpty ? "집집 🏠" : trimmedName,
+        let album = AlbumViewItem(
+            id: UUID(),
+            name: trimmedName.isEmpty ? "집집 🏠" : trimmedName,
             createdAt: .now,
-            photoCount: 0
+            count: 0,
+            photoIDs: []
         )
 
+        albums.append(album)
         isCreateAlbumSheetPresented = false
-        navigationPath = [.detail(album)]
+        navigationPath = [.detail(album.id)]
     }
 
     private func showDetail(for album: AlbumViewItem) {
-        navigationPath.append(
-            .detail(
-                .init(
-                    title: album.name,
-                    createdAt: .now,
-                    photoCount: album.count
-                )
-            )
-        )
+        navigationPath.append(.detail(album.id))
     }
 
-    private func showPhotoDetail(_ photo: Photo) {
-        navigationPath.append(.photoDetail(photo))
+    private func showPhotoDetail(_ photo: Photo, in albumID: AlbumViewItem.ID) {
+        navigationPath.append(.photoDetail(albumID: albumID, photo: photo))
     }
 
     private func showPhotoInfoEdit(for photoID: UUID) {
@@ -271,9 +300,13 @@ struct AlbumView: View {
         isShareAlbumSheetPresented = false
     }
 
-    private func presentShareAlbumCreation() {}
+    private func presentShareAlbumCreation() {
+        // 공유집 생성 화면이 구현되면 이 진입점을 연결한다.
+    }
 
-    private func completeShareAlbumMove() {
+    private func completeShareAlbumMove(to _: ShareAlbum, album _: Album) {
+        let movedAlbumIDs = Set(selectedAlbumIDs)
+        albums.removeAll { movedAlbumIDs.contains($0.id) }
         isShareAlbumSheetPresented = false
         exitSelectionMode()
     }
@@ -289,11 +322,109 @@ struct AlbumView: View {
     private func dismissDeleteAlert() {
         isDeleteAlertPresented = false
     }
+
+    private func confirmSelectedAlbumDeletion() {
+        let idsToDelete = Set(selectedAlbumIDs)
+        albums.removeAll { idsToDelete.contains($0.id) }
+        isDeleteAlertPresented = false
+        exitSelectionMode()
+    }
+
+    private func renameAlbum(_ albumID: AlbumViewItem.ID, to name: String) {
+        guard let index = albums.firstIndex(where: { $0.id == albumID }) else {
+            return
+        }
+
+        albums[index].name = name
+    }
+
+    private func deleteAlbum(_ albumID: AlbumViewItem.ID) {
+        albums.removeAll { $0.id == albumID }
+        navigationPath.removeAll()
+    }
+
+    private func addPhotos(_ photoIDs: [UUID], to albumID: AlbumViewItem.ID) {
+        guard let index = albums.firstIndex(where: { $0.id == albumID }) else {
+            return
+        }
+
+        let existingIDs = Set(albums[index].photoIDs)
+        let newIDs = photoIDs.filter { !existingIDs.contains($0) }
+        albums[index].photoIDs.append(contentsOf: newIDs)
+        albums[index].count += newIDs.count
+    }
+
+    private func deletePhotos(
+        _ photoIDs: [UUID],
+        from albumID: AlbumViewItem.ID,
+        action: PhotoDeletionAction
+    ) {
+        if action == .deletePermanently {
+            for albumIndex in albums.indices {
+                removePhotos(photoIDs, fromAlbumAt: albumIndex)
+            }
+            return
+        }
+
+        guard let index = albums.firstIndex(where: { $0.id == albumID }) else {
+            return
+        }
+
+        removePhotos(photoIDs, fromAlbumAt: index)
+    }
+
+    private func movePhotos(
+        _ photoIDs: [UUID],
+        from albumID: AlbumViewItem.ID,
+        to destination: ShareDestination
+    ) {
+        if case let .album(destinationID) = destination,
+           let destinationIndex = albums.firstIndex(where: { $0.id == destinationID }) {
+            let destinationPhotoIDs = Set(albums[destinationIndex].photoIDs)
+            let movedPhotoIDs = photoIDs.filter { !destinationPhotoIDs.contains($0) }
+            albums[destinationIndex].photoIDs.append(contentsOf: movedPhotoIDs)
+            albums[destinationIndex].count += movedPhotoIDs.count
+        }
+
+        deletePhotos(photoIDs, from: albumID, action: .removeFromAlbum)
+    }
+
+    private func removePhotos(_ photoIDs: [UUID], fromAlbumAt index: Int) {
+        let idsToDelete = Set(photoIDs)
+        let previousCount = albums[index].photoIDs.count
+        albums[index].photoIDs.removeAll { idsToDelete.contains($0) }
+        let deletedCount = previousCount - albums[index].photoIDs.count
+        albums[index].count = max(0, albums[index].count - deletedCount)
+    }
+
+    private func moveDestinations(excluding albumID: AlbumViewItem.ID) -> [Album] {
+        albums
+            .filter { $0.id != albumID }
+            .map { Album(id: $0.id, name: $0.name, count: $0.count) }
+    }
+
+    private func availablePhotoSections(excluding photoIDs: [UUID]) -> [PhotoSection] {
+        let excludedPhotoIDs = Set(photoIDs)
+
+        return PhotoSection.sample.compactMap { section in
+            let photos = section.photos.filter { !excludedPhotoIDs.contains($0.id) }
+            return photos.isEmpty ? nil : PhotoSection(title: section.title, photos: photos)
+        }
+    }
+
+    private func photoSections(for album: AlbumViewItem) -> [PhotoSection] {
+        let photoIDs = Set(album.photoIDs)
+
+        return PhotoSection.sample.compactMap { section in
+            let photos = section.photos.filter { photoIDs.contains($0.id) }
+            return photos.isEmpty ? nil : PhotoSection(title: section.title, photos: photos)
+        }
+    }
 }
 
 private enum AlbumRoute: Hashable {
-    case detail(AlbumDetailItem)
-    case photoDetail(Photo)
+    case detail(AlbumViewItem.ID)
+    case photoDetail(albumID: AlbumViewItem.ID, photo: Photo)
     case photoInfoEdit(PhotoMetadata)
 }
 
@@ -359,17 +490,19 @@ private struct StaticButtonStyle: ButtonStyle {
 
 private struct AlbumSheetTextButton: View {
     let title: String
+    var isDisabled = false
     let action: () -> Void
 
     var body: some View {
         Button(action: action) {
             Text(title)
                 .font(.b1_sb)
-                .foregroundStyle(.white00)
+                .foregroundStyle(isDisabled ? .grey700 : .white00)
                 .frame(width: 72, height: 48)
                 .contentShape(.rect)
         }
         .buttonStyle(.plain)
+        .disabled(isDisabled)
     }
 }
 
@@ -409,7 +542,7 @@ private struct AlbumCreateSheetContent: View {
                     )
                 }
             }
-            .frame(width: 358)
+            .frame(maxWidth: 358)
         }
         .padding(.horizontal, 16)
         .padding(.top, 12)
@@ -418,13 +551,14 @@ private struct AlbumCreateSheetContent: View {
 }
 
 private struct AlbumShareDestinationSheet: View {
+    @Environment(AuthenticationState.self) private var authenticationState
+
     let shareAlbums: [ShareAlbum]
     let sharedAlbums: [Album]
     let onCancel: () -> Void
-    let onComplete: () -> Void
+    let onComplete: (ShareAlbum, Album) -> Void
     let onAddTap: () -> Void
 
-    @State private var isLoggedIn = false
     @State private var selectedShareAlbum: ShareAlbum?
     @State private var selectedAlbumID: Album.ID?
 
@@ -434,16 +568,22 @@ private struct AlbumShareDestinationSheet: View {
                 AlbumSheetTextButton(title: "취소", action: onCancel)
             },
             rightItem: {
-                if selectedShareAlbum == nil {
-                    addButton
-                } else {
-                    AlbumSheetTextButton(title: "완료", action: onComplete)
+                if authenticationState.isLoggedIn {
+                    if selectedShareAlbum == nil {
+                        addButton
+                    } else {
+                        AlbumSheetTextButton(
+                            title: "완료",
+                            isDisabled: selectedAlbumID == nil,
+                            action: completeSelection
+                        )
+                    }
                 }
             }
         ) {
-            if !isLoggedIn {
+            if !authenticationState.isLoggedIn {
                 ShareLoginPrompt {
-                    isLoggedIn = true
+                    authenticationState.logIn()
                 }
             } else if selectedShareAlbum == nil {
                 ShareAlbumList(albums: shareAlbums, onSelect: selectShareAlbum)
@@ -464,6 +604,16 @@ private struct AlbumShareDestinationSheet: View {
 
     private func selectAlbum(_ album: Album) {
         selectedAlbumID = album.id
+    }
+
+    private func completeSelection() {
+        guard let selectedShareAlbum,
+              let selectedAlbum = sharedAlbums.first(where: { $0.id == selectedAlbumID })
+        else {
+            return
+        }
+
+        onComplete(selectedShareAlbum, selectedAlbum)
     }
 
     private var addButton: some View {
@@ -519,23 +669,49 @@ struct AlbumHeaderActionButton: View {
 }
 
 private struct AlbumViewItem: Identifiable, Equatable {
-    let id: String
-    let name: String
-    let count: Int
+    let id: UUID
+    var name: String
+    let createdAt: Date
+    var count: Int
+    var photoIDs: [UUID]
+
+    var detailItem: AlbumDetailItem {
+        AlbumDetailItem(
+            id: id,
+            title: name,
+            createdAt: createdAt,
+            photoCount: count
+        )
+    }
+
+    var hasPhotos: Bool {
+        count > 0
+    }
 }
 
 extension AlbumViewItem {
+    private static let samplePhotoIDs = PhotoSection.sample.flatMap(\.photos).map(\.id)
+
+    private static func samplePhotoIDs(offset: Int) -> [UUID] {
+        guard !samplePhotoIDs.isEmpty else {
+            return []
+        }
+
+        let count = min(16, samplePhotoIDs.count)
+        return (0 ..< count).map { samplePhotoIDs[($0 + offset) % samplePhotoIDs.count] }
+    }
+
     fileprivate static let samples: [AlbumViewItem] = [
-        .init(id: "1", name: "우리 가족", count: 678),
-        .init(id: "2", name: "집집 🏠", count: 234),
-        .init(id: "3", name: "도쿄 여행 🍥", count: 456),
-        .init(id: "4", name: "솝트", count: 1234),
-        .init(id: "5", name: "호미c🐶", count: 45),
-        .init(id: "6", name: "도쿄 여행b 🍥", count: 456),
-        .init(id: "7", name: "솝트a", count: 1234),
-        .init(id: "8", name: "호미c🐶", count: 45),
-        .init(id: "9", name: "솝트b", count: 1234),
-        .init(id: "10", name: "호미a🐶", count: 45)
+        .init(id: UUID(), name: "우리 가족", createdAt: .now, count: 678, photoIDs: samplePhotoIDs(offset: 0)),
+        .init(id: UUID(), name: "집집 🏠", createdAt: .now, count: 234, photoIDs: samplePhotoIDs(offset: 2)),
+        .init(id: UUID(), name: "도쿄 여행 🍥", createdAt: .now, count: 456, photoIDs: samplePhotoIDs(offset: 4)),
+        .init(id: UUID(), name: "솝트", createdAt: .now, count: 1234, photoIDs: samplePhotoIDs(offset: 6)),
+        .init(id: UUID(), name: "호미c🐶", createdAt: .now, count: 45, photoIDs: samplePhotoIDs(offset: 8)),
+        .init(id: UUID(), name: "도쿄 여행b 🍥", createdAt: .now, count: 456, photoIDs: samplePhotoIDs(offset: 10)),
+        .init(id: UUID(), name: "솝트a", createdAt: .now, count: 1234, photoIDs: samplePhotoIDs(offset: 12)),
+        .init(id: UUID(), name: "호미c🐶", createdAt: .now, count: 45, photoIDs: samplePhotoIDs(offset: 14)),
+        .init(id: UUID(), name: "솝트b", createdAt: .now, count: 1234, photoIDs: samplePhotoIDs(offset: 16)),
+        .init(id: UUID(), name: "호미a🐶", createdAt: .now, count: 45, photoIDs: samplePhotoIDs(offset: 18))
     ]
 }
 
@@ -556,5 +732,6 @@ private struct AlbumViewPreview: View {
                         .ignoresSafeArea(.container, edges: .bottom)
                 }
             }
+            .environment(AuthenticationState())
     }
 }

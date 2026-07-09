@@ -12,13 +12,16 @@ struct AlbumPhotoPickerView: View {
     @State private var selectedPhotoIDs: [UUID]
 
     private let sections: [PhotoSection]
+    private let onComplete: ([UUID]) -> Void
 
     init(
         sections: [PhotoSection] = PhotoSection.sample,
-        selectedPhotoIDs: [UUID] = []
+        selectedPhotoIDs: [UUID] = [],
+        onComplete: @escaping ([UUID]) -> Void = { _ in }
     ) {
         self.sections = sections
         _selectedPhotoIDs = State(initialValue: selectedPhotoIDs)
+        self.onComplete = onComplete
     }
 
     var body: some View {
@@ -60,8 +63,11 @@ struct AlbumPhotoPickerView: View {
 
     private var completionButton: some View {
         RoundedTextButton(title: "완료", style: .cancel) {
+            onComplete(selectedPhotoIDs)
             dismiss()
         }
+        .disabled(selectedPhotoIDs.isEmpty)
+        .opacity(selectedPhotoIDs.isEmpty ? 0.4 : 1)
     }
 
     private func toggleSelection(_ id: UUID) {
