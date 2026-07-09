@@ -15,8 +15,8 @@ final class ServiceIntroViewModel {
     var currentPage = 0
     var showsOnboardingCompleteView = false
 
-    init(pages: [ServiceIntroPage] = ServiceIntroPage.pages) {
-        self.pages = pages
+    init(pages: [ServiceIntroPage]? = nil) {
+        self.pages = pages ?? ServiceIntroPage.pages
     }
 
     var currentPageContent: ServiceIntroPage {
