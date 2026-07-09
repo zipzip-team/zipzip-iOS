@@ -18,11 +18,6 @@ struct ShareSheet: View {
     @State private var selectedAlbumID: Album.ID?
     @State private var targetShareAlbum: ShareAlbum?
 
-    private let columns = [
-        GridItem(.flexible(), spacing: 17),
-        GridItem(.flexible(), spacing: 17)
-    ]
-
     var body: some View {
         BottomSheet(
             middleItem: .init(leftField: "사진집", rightField: "공유", selection: $selection),
@@ -43,14 +38,25 @@ struct ShareSheet: View {
     @ViewBuilder private var content: some View {
         switch selection {
         case .left:
-            albumGrid(albums)
+            AlbumSelectionGrid(
+                albums: albums,
+                selectedAlbumID: selectedAlbumID,
+                onSelect: selectAlbum
+            )
         case .right:
             if !isLoggedIn {
                 loginPrompt
             } else if targetShareAlbum != nil {
-                albumGrid(sharedAlbums)
+                AlbumSelectionGrid(
+                    albums: sharedAlbums,
+                    selectedAlbumID: selectedAlbumID,
+                    onSelect: selectAlbum
+                )
             } else {
-                shareList
+                ShareAlbumList(albums: shareAlbums) { album in
+                    targetShareAlbum = album
+                    selectedAlbumID = nil
+                }
             }
         }
     }
@@ -66,26 +72,8 @@ struct ShareSheet: View {
         .buttonStyle(.plain)
     }
 
-    private func albumGrid(_ items: [Album]) -> some View {
-        ScrollView {
-            LazyVGrid(columns: columns, spacing: 20) {
-                ForEach(items) { album in
-                    Button {
-                        selectedAlbumID = album.id
-                    } label: {
-                        AlbumCard(
-                            name: album.name,
-                            count: album.count,
-                            state: selectedAlbumID == album.id ? .highlighted : .plain,
-                            nameColorOverride: .white00
-                        )
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 28)
-        }
+    private func selectAlbum(_ album: Album) {
+        selectedAlbumID = album.id
     }
 
     private var loginPrompt: some View {
@@ -109,14 +97,51 @@ struct ShareSheet: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .padding(16)
     }
+}
 
-    private var shareList: some View {
+struct AlbumSelectionGrid: View {
+    let albums: [Album]
+    let selectedAlbumID: Album.ID?
+    let onSelect: (Album) -> Void
+
+    private let columns = [
+        GridItem(.flexible(), spacing: 17),
+        GridItem(.flexible(), spacing: 17)
+    ]
+
+    var body: some View {
+        ScrollView {
+            LazyVGrid(columns: columns, spacing: 20) {
+                ForEach(albums) { album in
+                    Button {
+                        onSelect(album)
+                    } label: {
+                        AlbumCard(
+                            name: album.name,
+                            count: album.count,
+                            state: selectedAlbumID == album.id ? .highlighted : .plain,
+                            nameColorOverride: .white00
+                        )
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 28)
+        }
+    }
+}
+
+struct ShareAlbumList: View {
+    let albums: [ShareAlbum]
+    let onSelect: (ShareAlbum) -> Void
+
+    var body: some View {
         ScrollView {
             LazyVStack(spacing: 8) {
-                ForEach(shareAlbums) { album in
+                ForEach(albums) { album in
                     Button {
-                        targetShareAlbum = album
-                        selectedAlbumID = nil
+                        onSelect(album)
                     } label: {
                         ShareAlbumCard(
                             thumbnail: nil,

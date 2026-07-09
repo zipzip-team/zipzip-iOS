@@ -14,6 +14,7 @@ struct AlbumView: View {
     @State private var selectedAlbumIDs: [AlbumViewItem.ID] = []
     @State private var isDeleteAlertPresented = false
     @State private var isCreateAlbumSheetPresented = false
+    @State private var isShareAlbumSheetPresented = false
     @State private var createAlbumName = ""
 
     private let albums = AlbumViewItem.samples
@@ -132,6 +133,7 @@ struct AlbumView: View {
             if !newValue {
                 selectedAlbumIDs.removeAll()
                 isDeleteAlertPresented = false
+                isShareAlbumSheetPresented = false
             }
         }
         .onChange(of: isCreateAlbumSheetPresented) { _, newValue in
@@ -157,7 +159,7 @@ struct AlbumView: View {
         ) { _ in
             BottomSheet(
                 leftItem: {
-                    AlbumCreateSheetCancelButton(action: dismissCreateAlbumSheet)
+                    AlbumSheetTextButton(title: "취소", action: dismissCreateAlbumSheet)
                 }
             ) {
                 AlbumCreateSheetContent(
@@ -166,6 +168,15 @@ struct AlbumView: View {
                     onCreateTap: createAlbum
                 )
             }
+        }
+        .bottomSheet(isPresented: $isShareAlbumSheetPresented, detents: [.full]) { _ in
+            AlbumShareDestinationSheet(
+                shareAlbums: ShareAlbum.samples,
+                sharedAlbums: Album.sharedSamples,
+                onCancel: dismissShareAlbumSheet,
+                onComplete: completeShareAlbumMove,
+                onAddTap: presentShareAlbumCreation
+            )
         }
     }
 
@@ -248,7 +259,24 @@ struct AlbumView: View {
         selectedAlbumIDs.firstIndex(of: album.id).map { $0 + 1 }
     }
 
-    private func moveSelectedAlbumsToShare() {}
+    private func moveSelectedAlbumsToShare() {
+        guard !selectedAlbumIDs.isEmpty else {
+            return
+        }
+
+        isShareAlbumSheetPresented = true
+    }
+
+    private func dismissShareAlbumSheet() {
+        isShareAlbumSheetPresented = false
+    }
+
+    private func presentShareAlbumCreation() {}
+
+    private func completeShareAlbumMove() {
+        isShareAlbumSheetPresented = false
+        exitSelectionMode()
+    }
 
     private func deleteSelectedAlbums() {
         guard !selectedAlbumIDs.isEmpty else {
@@ -329,12 +357,13 @@ private struct StaticButtonStyle: ButtonStyle {
     }
 }
 
-private struct AlbumCreateSheetCancelButton: View {
+private struct AlbumSheetTextButton: View {
+    let title: String
     let action: () -> Void
 
     var body: some View {
         Button(action: action) {
-            Text("취소")
+            Text(title)
                 .font(.b1_sb)
                 .foregroundStyle(.white00)
                 .frame(width: 72, height: 48)
@@ -385,6 +414,66 @@ private struct AlbumCreateSheetContent: View {
         .padding(.horizontal, 16)
         .padding(.top, 12)
         .frame(maxWidth: .infinity, alignment: .top)
+    }
+}
+
+private struct AlbumShareDestinationSheet: View {
+    let shareAlbums: [ShareAlbum]
+    let sharedAlbums: [Album]
+    let onCancel: () -> Void
+    let onComplete: () -> Void
+    let onAddTap: () -> Void
+
+    @State private var selectedShareAlbum: ShareAlbum?
+    @State private var selectedAlbumID: Album.ID?
+
+    var body: some View {
+        BottomSheet(
+            leftItem: {
+                AlbumSheetTextButton(title: "취소", action: onCancel)
+            },
+            rightItem: {
+                if selectedShareAlbum == nil {
+                    addButton
+                } else {
+                    AlbumSheetTextButton(title: "완료", action: onComplete)
+                }
+            }
+        ) {
+            if selectedShareAlbum == nil {
+                ShareAlbumList(albums: shareAlbums, onSelect: selectShareAlbum)
+            } else {
+                AlbumSelectionGrid(
+                    albums: sharedAlbums,
+                    selectedAlbumID: selectedAlbumID,
+                    onSelect: selectAlbum
+                )
+            }
+        }
+    }
+
+    private func selectShareAlbum(_ album: ShareAlbum) {
+        selectedShareAlbum = album
+        selectedAlbumID = nil
+    }
+
+    private func selectAlbum(_ album: Album) {
+        selectedAlbumID = album.id
+    }
+
+    private var addButton: some View {
+        Button(action: onAddTap) {
+            Image(.plus)
+                .renderingMode(.template)
+                .resizable()
+                .scaledToFit()
+                .foregroundStyle(.white00)
+                .frame(width: 24, height: 24)
+                .frame(width: 72, height: 48)
+                .contentShape(.rect)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("공유집 추가")
     }
 }
 
