@@ -18,40 +18,48 @@ struct AlbumDetailView<Content: View>: View {
     @Environment(\.dismiss) private var dismiss
     @State private var isSelectionMode: Bool
     @State private var isPhotoPickerPresented = false
+    @State private var isMoveSheetPresented = false
+    @State private var isDeleteAlertPresented = false
     @State private var selectedPhotoIDs: [UUID] = []
 
     let album: AlbumDetailItem
     private let contentTopSpacing: CGFloat
     private let detailContent: (Bool, Binding<[UUID]>, @escaping () -> Void) -> Content
+    private let onEditPhotoInfo: (UUID) -> Void
 
     init(
         album: AlbumDetailItem,
         contentTopSpacing: CGFloat = 30,
         initialSelectionMode: Bool = false,
+        onEditPhotoInfo: @escaping (UUID) -> Void = { _ in },
         @ViewBuilder content: @escaping () -> Content
     ) {
         self.album = album
         self.contentTopSpacing = contentTopSpacing
         _isSelectionMode = State(initialValue: initialSelectionMode)
         self.detailContent = { _, _, _ in content() }
+        self.onEditPhotoInfo = onEditPhotoInfo
     }
 
     init(
         album: AlbumDetailItem,
         contentTopSpacing: CGFloat = 30,
         initialSelectionMode: Bool = false,
+        onEditPhotoInfo: @escaping (UUID) -> Void = { _ in },
         @ViewBuilder content: @escaping (Bool) -> Content
     ) {
         self.album = album
         self.contentTopSpacing = contentTopSpacing
         _isSelectionMode = State(initialValue: initialSelectionMode)
         self.detailContent = { isSelectionMode, _, _ in content(isSelectionMode) }
+        self.onEditPhotoInfo = onEditPhotoInfo
     }
 
     init(
         album: AlbumDetailItem,
         contentTopSpacing: CGFloat = 30,
         initialSelectionMode: Bool = false,
+        onEditPhotoInfo: @escaping (UUID) -> Void = { _ in },
         @ViewBuilder content: @escaping (Bool, Binding<[UUID]>) -> Content
     ) {
         self.album = album
@@ -60,12 +68,14 @@ struct AlbumDetailView<Content: View>: View {
         self.detailContent = { isSelectionMode, selectedPhotoIDs, _ in
             content(isSelectionMode, selectedPhotoIDs)
         }
+        self.onEditPhotoInfo = onEditPhotoInfo
     }
 
     init(
         album: AlbumDetailItem,
         contentTopSpacing: CGFloat = 30,
         initialSelectionMode: Bool = false,
+        onEditPhotoInfo: @escaping (UUID) -> Void = { _ in },
         @ViewBuilder content: @escaping (Bool, @escaping () -> Void) -> Content
     ) {
         self.album = album
@@ -74,18 +84,21 @@ struct AlbumDetailView<Content: View>: View {
         self.detailContent = { isSelectionMode, _, presentPhotoPicker in
             content(isSelectionMode, presentPhotoPicker)
         }
+        self.onEditPhotoInfo = onEditPhotoInfo
     }
 
     init(
         album: AlbumDetailItem,
         contentTopSpacing: CGFloat = 30,
         initialSelectionMode: Bool = false,
+        onEditPhotoInfo: @escaping (UUID) -> Void = { _ in },
         @ViewBuilder content: @escaping (Bool, Binding<[UUID]>, @escaping () -> Void) -> Content
     ) {
         self.album = album
         self.contentTopSpacing = contentTopSpacing
         _isSelectionMode = State(initialValue: initialSelectionMode)
         self.detailContent = content
+        self.onEditPhotoInfo = onEditPhotoInfo
     }
 
     var body: some View {
@@ -120,6 +133,23 @@ struct AlbumDetailView<Content: View>: View {
         .navigationDestination(isPresented: $isPhotoPickerPresented) {
             AlbumPhotoPickerView()
         }
+        .bottomSheet(isPresented: $isMoveSheetPresented, detents: [.full]) { dismiss in
+            ShareSheet(
+                albums: Album.samples,
+                sharedAlbums: Album.sharedSamples,
+                shareAlbums: ShareAlbum.samples,
+                onDismiss: { dismiss() }
+            )
+        }
+        .bottomSheetAlert(
+            isPresented: $isDeleteAlertPresented,
+            title: deleteAlertContent.title,
+            message: deleteAlertContent.message,
+            secondaryTitle: deleteAlertContent.secondaryTitle,
+            primaryTitle: deleteAlertContent.primaryTitle,
+            onSecondaryTap: dismissDeleteAlert,
+            onPrimaryTap: dismissDeleteAlert
+        )
         .navigationBarBackButtonHidden(true)
         .toolbarVisibility(.hidden, for: .navigationBar)
     }
@@ -150,10 +180,14 @@ struct AlbumDetailView<Content: View>: View {
 
         return [
             .init(icon: .settingAlbum, title: "집 관리", action: manageAlbum),
-            .init(icon: .move, title: "이동하기", isDisabled: !hasSelectedPhotos) {},
-            .init(icon: .metadata, title: "정보 수정", isDisabled: !hasSelectedPhotos) {},
-            .init(icon: .delete, title: "삭제", isDisabled: !hasSelectedPhotos) {}
+            .init(icon: .move, title: "이동하기", isDisabled: !hasSelectedPhotos, action: moveSelectedPhotos),
+            .init(icon: .metadata, title: "정보 수정", isDisabled: !hasSelectedPhotos, action: editSelectedPhotoInfo),
+            .init(icon: .delete, title: "삭제", isDisabled: !hasSelectedPhotos, action: deleteSelectedPhotos)
         ]
+    }
+
+    private var deleteAlertContent: PhotoDeleteAlertContent {
+        PhotoDeletionContext.album.alertContent
     }
 
     @ViewBuilder private var leadingActionButton: some View {
@@ -186,6 +220,34 @@ struct AlbumDetailView<Content: View>: View {
     }
 
     private func manageAlbum() {}
+
+    private func moveSelectedPhotos() {
+        guard !selectedPhotoIDs.isEmpty else {
+            return
+        }
+
+        isMoveSheetPresented = true
+    }
+
+    private func editSelectedPhotoInfo() {
+        guard let firstPhotoID = selectedPhotoIDs.first else {
+            return
+        }
+
+        onEditPhotoInfo(firstPhotoID)
+    }
+
+    private func deleteSelectedPhotos() {
+        guard !selectedPhotoIDs.isEmpty else {
+            return
+        }
+
+        isDeleteAlertPresented = true
+    }
+
+    private func dismissDeleteAlert() {
+        isDeleteAlertPresented = false
+    }
 }
 
 struct AlbumDetailEmptyView: View {

@@ -8,7 +8,7 @@
 import SwiftUI
 
 struct PhotoInfoEditView: View {
-    @Environment(Router.self) private var router
+    @Environment(\.dismiss) private var dismiss
 
     let metadata: PhotoMetadata
 
@@ -28,7 +28,7 @@ struct PhotoInfoEditView: View {
 
     private var backButton: some View {
         RoundedIconButton(items: [
-            .init(id: "back", icon: .chevronLeft) { router.pop() }
+            .init(id: "back", icon: .chevronLeft) { dismiss() }
         ])
         .opacity(0.9)
         .padding(.horizontal, 16)
@@ -38,5 +38,4 @@ struct PhotoInfoEditView: View {
 
 #Preview {
     PhotoInfoEditView(metadata: PhotoMetadata.samples[0])
-        .environment(Router())
 }

@@ -40,7 +40,10 @@ struct AlbumView: View {
                         if album.photoCount == 0 {
                             AlbumDetailEmptyView(album: album)
                         } else {
-                            AlbumDetailView(album: album) { isSelectionMode, selectedPhotoIDs in
+                            AlbumDetailView(
+                                album: album,
+                                onEditPhotoInfo: showPhotoInfoEdit
+                            ) { isSelectionMode, selectedPhotoIDs in
                                 AlbumDetailGalleryPlaceholderView(
                                     photoCount: album.photoCount,
                                     showsSelectionControls: isSelectionMode,
@@ -51,6 +54,8 @@ struct AlbumView: View {
                         }
                     case let .photoDetail(photo):
                         PhotoDetailView(photo: photo, deletionContext: .album)
+                    case let .photoInfoEdit(metadata):
+                        PhotoInfoEditView(metadata: metadata)
                     }
                 }
         }
@@ -220,6 +225,17 @@ struct AlbumView: View {
         navigationPath.append(.photoDetail(photo))
     }
 
+    private func showPhotoInfoEdit(for photoID: UUID) {
+        guard let photo = PhotoSection.sample
+            .flatMap(\.photos)
+            .first(where: { $0.id == photoID })
+        else {
+            return
+        }
+
+        navigationPath.append(.photoInfoEdit(photo.metadata))
+    }
+
     private func toggleSelection(for album: AlbumViewItem) {
         if let index = selectedAlbumIDs.firstIndex(of: album.id) {
             selectedAlbumIDs.remove(at: index)
@@ -250,6 +266,7 @@ struct AlbumView: View {
 private enum AlbumRoute: Hashable {
     case detail(AlbumDetailItem)
     case photoDetail(Photo)
+    case photoInfoEdit(PhotoMetadata)
 }
 
 private struct AlbumGridCard: View {

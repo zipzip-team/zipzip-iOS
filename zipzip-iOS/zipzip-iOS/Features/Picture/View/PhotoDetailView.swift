@@ -7,16 +7,42 @@
 
 import SwiftUI
 
-struct PhotoDetailView: View {
-    enum DeletionContext {
-        case gallery
-        case album
-    }
+struct PhotoDeleteAlertContent {
+    let title: String
+    let message: String
+    let secondaryTitle: String
+    let primaryTitle: String
+}
 
+enum PhotoDeletionContext {
+    case gallery
+    case album
+
+    var alertContent: PhotoDeleteAlertContent {
+        switch self {
+        case .gallery:
+            PhotoDeleteAlertContent(
+                title: "이 사진을 삭제하시겠어요?",
+                message: "삭제하면 집집과 사진 앱에서 모두 사라져요.",
+                secondaryTitle: "취소",
+                primaryTitle: "삭제"
+            )
+        case .album:
+            PhotoDeleteAlertContent(
+                title: "사진을 완전히 삭제할까요,\n아니면 사진집에서만 제거할까요?",
+                message: "사진집에서 제거된 사진은 갤러리에 남아있어요",
+                secondaryTitle: "삭제",
+                primaryTitle: "사진집에서 제거"
+            )
+        }
+    }
+}
+
+struct PhotoDetailView: View {
     @Environment(\.dismiss) private var dismiss
 
     let photo: Photo
-    let deletionContext: DeletionContext
+    let deletionContext: PhotoDeletionContext
 
     @State private var isEditingInfo = false
     @State private var showShareSheet = false
@@ -25,7 +51,7 @@ struct PhotoDetailView: View {
 
     private let photoPeekHeight: CGFloat = 160
 
-    init(photo: Photo, deletionContext: DeletionContext = .gallery) {
+    init(photo: Photo, deletionContext: PhotoDeletionContext = .gallery) {
         self.photo = photo
         self.deletionContext = deletionContext
     }
@@ -80,28 +106,8 @@ struct PhotoDetailView: View {
         )
     }
 
-    private var deleteAlertContent: (
-        title: String,
-        message: String,
-        secondaryTitle: String,
-        primaryTitle: String
-    ) {
-        switch deletionContext {
-        case .gallery:
-            return (
-                title: "이 사진을 삭제하시겠어요?",
-                message: "삭제하면 집집과 사진 앱에서 모두 사라져요.",
-                secondaryTitle: "취소",
-                primaryTitle: "삭제"
-            )
-        case .album:
-            return (
-                title: "사진을 완전히 삭제할까요,\n아니면 사진집에서만 제거할까요?",
-                message: "사진집에서 제거된 사진은 갤러리에 남아있어요",
-                secondaryTitle: "삭제",
-                primaryTitle: "사진집에서 제거"
-            )
-        }
+    private var deleteAlertContent: PhotoDeleteAlertContent {
+        deletionContext.alertContent
     }
 
     private var backButton: some View {
