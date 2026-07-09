@@ -49,8 +49,10 @@ struct RoundedIconButton: View {
     private func button(for item: RoundedIconButtonItem) -> some View {
         Button(action: item.action) {
             Image(item.icon)
+                .renderingMode(.template)
                 .resizable()
                 .scaledToFit()
+                .foregroundStyle(.grey1000)
                 .frame(width: 28, height: 28)
                 .padding(.horizontal, items.count == 1 ? 8 : 12)
                 .frame(height: 44)
