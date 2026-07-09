@@ -424,6 +424,7 @@ private struct AlbumShareDestinationSheet: View {
     let onComplete: () -> Void
     let onAddTap: () -> Void
 
+    @State private var isLoggedIn = false
     @State private var selectedShareAlbum: ShareAlbum?
     @State private var selectedAlbumID: Album.ID?
 
@@ -440,7 +441,11 @@ private struct AlbumShareDestinationSheet: View {
                 }
             }
         ) {
-            if selectedShareAlbum == nil {
+            if !isLoggedIn {
+                ShareLoginPrompt {
+                    isLoggedIn = true
+                }
+            } else if selectedShareAlbum == nil {
                 ShareAlbumList(albums: shareAlbums, onSelect: selectShareAlbum)
             } else {
                 AlbumSelectionGrid(

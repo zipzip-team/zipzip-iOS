@@ -45,7 +45,9 @@ struct ShareSheet: View {
             )
         case .right:
             if !isLoggedIn {
-                loginPrompt
+                ShareLoginPrompt {
+                    isLoggedIn = true
+                }
             } else if targetShareAlbum != nil {
                 AlbumSelectionGrid(
                     albums: sharedAlbums,
@@ -75,8 +77,12 @@ struct ShareSheet: View {
     private func selectAlbum(_ album: Album) {
         selectedAlbumID = album.id
     }
+}
 
-    private var loginPrompt: some View {
+struct ShareLoginPrompt: View {
+    let onLogin: () -> Void
+
+    var body: some View {
         VStack(spacing: 32) {
             VStack(spacing: 8) {
                 Color.grey200
@@ -89,10 +95,8 @@ struct ShareSheet: View {
                     .multilineTextAlignment(.center)
             }
 
-            CommonButton(title: "로그인", property1: .cta) {
-                isLoggedIn = true
-            }
-            .frame(width: 171)
+            CommonButton(title: "로그인", property1: .cta, action: onLogin)
+                .frame(width: 171)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .padding(16)
