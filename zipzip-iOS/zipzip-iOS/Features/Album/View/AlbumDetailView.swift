@@ -16,19 +16,34 @@ struct AlbumDetailItem: Hashable, Identifiable {
 
 struct AlbumDetailView<Content: View>: View {
     @Environment(\.dismiss) private var dismiss
+    @State private var isSelectionMode: Bool
 
     let album: AlbumDetailItem
     private let contentTopSpacing: CGFloat
-    private let detailContent: Content
+    private let detailContent: (Bool) -> Content
 
     init(
         album: AlbumDetailItem,
         contentTopSpacing: CGFloat = 30,
-        @ViewBuilder content: () -> Content
+        initialSelectionMode: Bool = false,
+        @ViewBuilder content: @escaping () -> Content
     ) {
         self.album = album
         self.contentTopSpacing = contentTopSpacing
-        self.detailContent = content()
+        _isSelectionMode = State(initialValue: initialSelectionMode)
+        self.detailContent = { _ in content() }
+    }
+
+    init(
+        album: AlbumDetailItem,
+        contentTopSpacing: CGFloat = 30,
+        initialSelectionMode: Bool = false,
+        @ViewBuilder content: @escaping (Bool) -> Content
+    ) {
+        self.album = album
+        self.contentTopSpacing = contentTopSpacing
+        _isSelectionMode = State(initialValue: initialSelectionMode)
+        self.detailContent = content
     }
 
     var body: some View {
@@ -39,21 +54,26 @@ struct AlbumDetailView<Content: View>: View {
             scrollContent
         }
         .overlay(alignment: .topLeading) {
-            RoundedIconButton(items: [
-                .init(id: "back", icon: .iconChevronLeft) {
-                    dismiss()
-                }
-            ])
-            .padding(.top, 19)
-            .padding(.leading, 16)
+            leadingActionButton
+                .padding(.top, 19)
+                .padding(.leading, 16)
         }
         .overlay(alignment: .topTrailing) {
             AlbumHeaderActionButton(
-                onSelectionTap: {},
+                onSelectionTap: enterSelectionMode,
                 onAddTap: {}
             )
             .padding(.top, 19)
             .padding(.trailing, 16)
+            .opacity(isSelectionMode ? 0 : 1)
+            .allowsHitTesting(!isSelectionMode)
+            .accessibilityHidden(isSelectionMode)
+        }
+        .overlay(alignment: .bottom) {
+            if isSelectionMode {
+                AlbumDetailSelectionActionBar()
+                    .padding(.bottom, 49)
+            }
         }
         .navigationBarBackButtonHidden(true)
         .toolbarVisibility(.hidden, for: .navigationBar)
@@ -64,7 +84,7 @@ struct AlbumDetailView<Content: View>: View {
             VStack(spacing: contentTopSpacing) {
                 titleSection
 
-                detailContent
+                detailContent(isSelectionMode)
             }
             .padding(.top, 168)
             .padding(.bottom, 40)
@@ -78,6 +98,30 @@ struct AlbumDetailView<Content: View>: View {
 
     private var titleSection: some View {
         AlbumDetailTitleSection(album: album)
+    }
+
+    @ViewBuilder private var leadingActionButton: some View {
+        if isSelectionMode {
+            RoundedTextButton(title: "취소", style: .cancel, action: exitSelectionMode)
+        } else {
+            RoundedIconButton(items: [
+                .init(id: "back", icon: .iconChevronLeft) {
+                    dismiss()
+                }
+            ])
+        }
+    }
+
+    private func enterSelectionMode() {
+        guard album.photoCount > 0 else {
+            return
+        }
+
+        isSelectionMode = true
+    }
+
+    private func exitSelectionMode() {
+        isSelectionMode = false
     }
 }
 
@@ -140,6 +184,7 @@ private struct AlbumDetailEmptyContent: View {
 
 struct AlbumDetailGalleryPlaceholderView: View {
     let photoCount: Int
+    var showsSelectionControls = false
 
     private let sections: [AlbumDetailGallerySection] = [
         .init(title: "오늘", itemCount: 8),
@@ -154,7 +199,10 @@ struct AlbumDetailGalleryPlaceholderView: View {
 
             LazyVStack(alignment: .leading, spacing: 20) {
                 ForEach(sections) { section in
-                    AlbumDetailGallerySectionView(section: section)
+                    AlbumDetailGallerySectionView(
+                        section: section,
+                        showsSelectionControls: showsSelectionControls
+                    )
                 }
             }
             .padding(.horizontal, 16)
@@ -186,6 +234,7 @@ private struct AlbumDetailGallerySection: Identifiable {
 
 private struct AlbumDetailGallerySectionView: View {
     let section: AlbumDetailGallerySection
+    let showsSelectionControls: Bool
 
     private let columns = Array(
         repeating: GridItem(.fixed(88), spacing: 2),
@@ -200,11 +249,124 @@ private struct AlbumDetailGallerySectionView: View {
 
             LazyVGrid(columns: columns, alignment: .leading, spacing: 2) {
                 ForEach(0 ..< section.itemCount, id: \.self) { _ in
-                    Rectangle()
-                        .fill(.grey200)
-                        .frame(width: 88, height: 88)
+                    AlbumDetailGalleryPlaceholderTile(
+                        showsSelectionControls: showsSelectionControls
+                    )
                 }
             }
+        }
+    }
+}
+
+private struct AlbumDetailGalleryPlaceholderTile: View {
+    let showsSelectionControls: Bool
+
+    var body: some View {
+        Rectangle()
+            .fill(.grey200)
+            .frame(width: 88, height: 88)
+            .overlay(alignment: .bottomTrailing) {
+                if showsSelectionControls {
+                    Circle()
+                        .fill(.grey50)
+                        .stroke(.grey900, lineWidth: 2)
+                        .frame(width: 22, height: 22)
+                        .padding(6)
+                }
+            }
+    }
+}
+
+private struct AlbumDetailSelectionActionBar: View {
+    private let items: [AlbumDetailSelectionActionItem] = [
+        .init(icon: .asset(.moveToAlbum), title: "집 관리", isEnabled: true),
+        .init(icon: .system("arrow.right"), title: "이동하기", isEnabled: false),
+        .init(icon: .asset(.metadata), title: "정보 수정", isEnabled: false),
+        .init(icon: .asset(.delete), title: "삭제", isEnabled: false)
+    ]
+
+    var body: some View {
+        HStack(spacing: 0) {
+            ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
+                actionButton(
+                    item,
+                    isLast: index == items.count - 1
+                )
+            }
+        }
+        .padding(4)
+        .background(.grey950, in: .capsule)
+        .shadow(color: .black.opacity(0.05), radius: 12, y: 1)
+    }
+
+    private func actionButton(
+        _ item: AlbumDetailSelectionActionItem,
+        isLast: Bool
+    ) -> some View {
+        Button {} label: {
+            VStack(spacing: 0) {
+                item.icon.image(color: item.foregroundColor)
+                    .frame(width: 32, height: 32)
+
+                Text(item.title)
+                    .font(.b2_md)
+                    .foregroundStyle(item.foregroundColor)
+                    .fixedSize()
+            }
+            .frame(width: 84)
+            .padding(.vertical, 2)
+            .overlay(alignment: .trailing) {
+                if !isLast {
+                    Rectangle()
+                        .fill(.grey900)
+                        .frame(width: 1)
+                }
+            }
+        }
+        .buttonStyle(.plain)
+        .disabled(!item.isEnabled)
+    }
+}
+
+private struct AlbumDetailSelectionActionItem: Identifiable {
+    let id: String
+    let icon: AlbumDetailSelectionActionIcon
+    let title: String
+    let isEnabled: Bool
+
+    init(
+        icon: AlbumDetailSelectionActionIcon,
+        title: String,
+        isEnabled: Bool
+    ) {
+        self.id = title
+        self.icon = icon
+        self.title = title
+        self.isEnabled = isEnabled
+    }
+
+    var foregroundColor: Color {
+        isEnabled ? .grey50 : .grey700
+    }
+}
+
+private enum AlbumDetailSelectionActionIcon {
+    case asset(ImageResource)
+    case system(String)
+
+    @ViewBuilder func image(color: Color) -> some View {
+        switch self {
+        case let .asset(resource):
+            Image(resource)
+                .renderingMode(.template)
+                .resizable()
+                .scaledToFit()
+                .foregroundStyle(color)
+                .frame(width: 24, height: 24)
+        case let .system(name):
+            Image(systemName: name)
+                .font(.system(size: 24, weight: .medium))
+                .foregroundStyle(color)
         }
     }
 }
@@ -299,5 +461,21 @@ private struct AlbumDetailFolderShape: Shape {
         )
     ) {
         AlbumDetailGalleryPlaceholderView(photoCount: 123)
+    }
+}
+
+#Preview("Album Detail Selection", traits: .fixedLayout(width: 390, height: 844)) {
+    AlbumDetailView(
+        album: .init(
+            title: "집집 🏠",
+            createdAt: .now,
+            photoCount: 123
+        ),
+        initialSelectionMode: true
+    ) { isSelectionMode in
+        AlbumDetailGalleryPlaceholderView(
+            photoCount: 123,
+            showsSelectionControls: isSelectionMode
+        )
     }
 }

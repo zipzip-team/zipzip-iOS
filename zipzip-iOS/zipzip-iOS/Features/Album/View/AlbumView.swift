@@ -40,8 +40,11 @@ struct AlbumView: View {
                         if album.photoCount == 0 {
                             AlbumDetailEmptyView(album: album)
                         } else {
-                            AlbumDetailView(album: album) {
-                                AlbumDetailGalleryPlaceholderView(photoCount: album.photoCount)
+                            AlbumDetailView(album: album) { isSelectionMode in
+                                AlbumDetailGalleryPlaceholderView(
+                                    photoCount: album.photoCount,
+                                    showsSelectionControls: isSelectionMode
+                                )
                             }
                         }
                     }
