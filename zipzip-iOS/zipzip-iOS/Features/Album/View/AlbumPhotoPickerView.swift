@@ -30,9 +30,11 @@ struct AlbumPhotoPickerView: View {
                 topBar
 
                 ScrollView(showsIndicators: false) {
-                    AlbumPhotoPickerGallery(
+                    PhotoGallery(
                         sections: sections,
-                        selectedPhotoIDs: $selectedPhotoIDs
+                        isSelectionMode: true,
+                        selectedPhotoIDs: selectedPhotoIDs,
+                        onTapPhoto: toggleSelection
                     )
                     .padding(.horizontal, 16)
                     .padding(.bottom, 40)
@@ -59,93 +61,13 @@ struct AlbumPhotoPickerView: View {
         .padding(.horizontal, 16)
         .padding(.vertical, 4)
     }
-}
 
-private struct AlbumPhotoPickerGallery: View {
-    let sections: [PhotoSection]
-    @Binding var selectedPhotoIDs: [UUID]
-
-    private let columns = Array(
-        repeating: GridItem(.flexible(), spacing: 2),
-        count: 4
-    )
-
-    var body: some View {
-        LazyVStack(alignment: .leading, spacing: 20) {
-            ForEach(sections) { section in
-                VStack(alignment: .leading, spacing: 8) {
-                    Text(section.title)
-                        .font(.b2_sb)
-                        .foregroundStyle(.grey1000)
-
-                    LazyVGrid(columns: columns, spacing: 2) {
-                        ForEach(section.photos) { photo in
-                            AlbumPhotoPickerCell(
-                                photo: photo,
-                                selectionNumber: selectionNumber(for: photo.id),
-                                onTap: { toggleSelection(for: photo.id) }
-                            )
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    private func toggleSelection(for id: UUID) {
+    private func toggleSelection(_ id: UUID) {
         if let index = selectedPhotoIDs.firstIndex(of: id) {
             selectedPhotoIDs.remove(at: index)
         } else {
             selectedPhotoIDs.append(id)
         }
-    }
-
-    private func selectionNumber(for id: UUID) -> Int? {
-        selectedPhotoIDs.firstIndex(of: id).map { $0 + 1 }
-    }
-}
-
-private struct AlbumPhotoPickerCell: View {
-    let photo: Photo
-    let selectionNumber: Int?
-    let onTap: () -> Void
-
-    private var isSelected: Bool {
-        selectionNumber != nil
-    }
-
-    var body: some View {
-        Button(action: onTap) {
-            Color.grey200
-                .aspectRatio(1, contentMode: .fit)
-                .overlay {
-                    if isSelected {
-                        Rectangle()
-                            .strokeBorder(.orange500, lineWidth: 2)
-                    }
-                }
-                .overlay(alignment: .bottomTrailing) {
-                    Indicator(
-                        title: selectionNumber.map(String.init),
-                        status: isSelected ? .selected : .default
-                    )
-                    .padding(6)
-                }
-                .contentShape(.rect)
-        }
-        .buttonStyle(.plain)
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel("사진")
-        .accessibilityValue(accessibilityValue)
-        .accessibilityAddTraits(isSelected ? .isSelected : [])
-    }
-
-    private var accessibilityValue: String {
-        if let selectionNumber {
-            return "\(selectionNumber)번째 선택됨"
-        }
-
-        return "선택 안 됨"
     }
 }
 
