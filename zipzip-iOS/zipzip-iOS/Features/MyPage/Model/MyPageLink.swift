@@ -12,14 +12,14 @@ enum MyPageLink {
     case privacyPolicy
     case support
 
-    var url: URL {
+    var url: URL? {
         switch self {
         case .appInfo:
-            URL(string: "https://second-clove-198.notion.site/3985127da86b8085929ec179f2d880c6")!
+            URL(string: "https://second-clove-198.notion.site/3985127da86b8085929ec179f2d880c6")
         case .privacyPolicy:
-            URL(string: "https://second-clove-198.notion.site/3985127da86b801eb16dcdac262a968f")!
+            URL(string: "https://second-clove-198.notion.site/3985127da86b801eb16dcdac262a968f")
         case .support:
-            URL(string: "https://second-clove-198.notion.site/3985127da86b808ea73bcf25ecfa535e")!
+            URL(string: "https://second-clove-198.notion.site/3985127da86b808ea73bcf25ecfa535e")
         }
     }
 }

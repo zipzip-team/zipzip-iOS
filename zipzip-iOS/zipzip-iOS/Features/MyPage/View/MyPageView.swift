@@ -11,7 +11,16 @@ import UIKit
 struct MyPageView: View {
     @Environment(Router.self) private var router
     @Environment(\.openURL) private var openURL
-    @State private var viewModel = MyPageViewModel()
+    @State private var viewModel: MyPageViewModel
+
+    @MainActor
+    init() {
+        self.init(viewModel: MyPageViewModel())
+    }
+
+    init(viewModel: MyPageViewModel) {
+        _viewModel = State(initialValue: viewModel)
+    }
 
     var body: some View {
         MyPageContainerView {
@@ -79,17 +88,23 @@ struct MyPageView: View {
             VStack(spacing: 0) {
                 MyPageMenuRow(title: "버전 정보", trailingText: viewModel.appVersion) {}
                 MyPageMenuRow(title: "앱 정보") {
-                    openURL(viewModel.url(for: .appInfo))
+                    openLink(.appInfo)
                 }
                 MyPageMenuRow(title: "개인정보 처리 방침") {
-                    openURL(viewModel.url(for: .privacyPolicy))
+                    openLink(.privacyPolicy)
                 }
                 MyPageMenuRow(title: "사용자 지원 / 문의") {
-                    openURL(viewModel.url(for: .support))
+                    openLink(.support)
                 }
             }
             .padding(.horizontal, 16)
         }
+    }
+
+    private func openLink(_ link: MyPageLink) {
+        guard let url = viewModel.url(for: link) else { return }
+
+        openURL(url)
     }
 
     private func openAppSettings() {
