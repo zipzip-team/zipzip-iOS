@@ -26,40 +26,42 @@ struct AlbumPhotoPickerView: View {
             Color.orange30
                 .ignoresSafeArea()
 
-            VStack(spacing: 8) {
-                topBar
-
-                ScrollView(showsIndicators: false) {
-                    PhotoGallery(
-                        sections: sections,
-                        isSelectionMode: true,
-                        selectedPhotoIDs: selectedPhotoIDs,
-                        onTapPhoto: toggleSelection
-                    )
-                    .padding(.horizontal, 16)
-                    .padding(.bottom, 40)
-                }
+            ScrollView(showsIndicators: false) {
+                PhotoGallery(
+                    sections: sections,
+                    isSelectionMode: true,
+                    selectedPhotoIDs: selectedPhotoIDs,
+                    onTapPhoto: toggleSelection
+                )
+                .padding(.horizontal, 16)
+                .padding(.top, 79)
+                .padding(.bottom, 40)
             }
-            .padding(.top, 19)
+        }
+        .overlay(alignment: .topLeading) {
+            cancelButton
+                .padding(.top, 19)
+                .padding(.leading, 16)
+        }
+        .overlay(alignment: .topTrailing) {
+            completionButton
+                .padding(.top, 19)
+                .padding(.trailing, 16)
         }
         .navigationBarBackButtonHidden(true)
         .toolbarVisibility(.hidden, for: .navigationBar)
     }
 
-    private var topBar: some View {
-        HStack {
-            RoundedTextButton(title: "취소", style: .cancel) {
-                dismiss()
-            }
-
-            Spacer()
-
-            RoundedTextButton(title: "완료", style: .cancel) {
-                dismiss()
-            }
+    private var cancelButton: some View {
+        RoundedTextButton(title: "취소", style: .cancel) {
+            dismiss()
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 4)
+    }
+
+    private var completionButton: some View {
+        RoundedTextButton(title: "완료", style: .cancel) {
+            dismiss()
+        }
     }
 
     private func toggleSelection(_ id: UUID) {
