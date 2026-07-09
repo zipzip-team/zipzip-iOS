@@ -28,7 +28,7 @@ struct PhotoInfoEditView: View {
 
     private var backButton: some View {
         RoundedIconButton(items: [
-            .init(id: "back", icon: .iconChevronLeft) { router.pop() }
+            .init(id: "back", icon: .chevronLeft) { router.pop() }
         ])
         .opacity(0.9)
         .padding(.horizontal, 16)

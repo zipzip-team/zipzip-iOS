@@ -98,13 +98,13 @@ struct FilteredPictureView: View {
                 }
             } else {
                 RoundedIconButton(items: [
-                    .init(id: "back", icon: .iconChevronLeft) { router.pop() }
+                    .init(id: "back", icon: .chevronLeft) { router.pop() }
                 ])
             }
             Spacer()
             if !pictureViewModel.isSelectionMode {
                 RoundedIconButton(items: [
-                    .init(id: "selection", icon: .iconSelection) { pictureViewModel.enterSelectionMode() }
+                    .init(id: "selection", icon: .select) { pictureViewModel.enterSelectionMode() }
                 ])
             }
         }

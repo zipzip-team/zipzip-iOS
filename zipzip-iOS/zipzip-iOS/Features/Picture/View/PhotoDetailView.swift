@@ -70,7 +70,7 @@ struct PhotoDetailView: View {
 
     private var backButton: some View {
         RoundedIconButton(items: [
-            .init(id: "back", icon: .iconChevronLeft) {
+            .init(id: "back", icon: .chevronLeft) {
                 if isEditingInfo {
                     withAnimation { isEditingInfo = false }
                 } else {

@@ -18,7 +18,7 @@ struct FilterView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
                 RoundedIconButton(items: [
-                    .init(id: "back", icon: .iconChevronLeft) { router.pop() }
+                    .init(id: "back", icon: .chevronLeft) { router.pop() }
                 ])
                 .padding(.vertical, 6)
 
