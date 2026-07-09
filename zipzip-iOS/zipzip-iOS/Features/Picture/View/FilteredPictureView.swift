@@ -21,9 +21,12 @@ struct FilteredPictureView: View {
     @State private var pickerLocation = ""
     @State private var showDateSheet = false
     @State private var pickerDate = Date()
+    @State private var showEtcSheet = false
+    @State private var pickerEtc = ""
 
     private let devices: [FilterDevice] = PhotoFilterOptions.sample.devices
     private let locations: [String] = PhotoFilterOptions.sample.locations
+    private let etcItems: [String] = PhotoFilterOptions.sample.etcItems
 
     init(appliedFilters: [AppliedFilter]) {
         _appliedFilters = State(initialValue: appliedFilters)
@@ -64,6 +67,12 @@ struct FilteredPictureView: View {
         .bottomSheet(isPresented: $showDateSheet, detents: [.height(dateSheetHeight)]) { dismiss in
             DateFilterSheet(date: $pickerDate) {
                 applyDate(pickerDate)
+                dismiss()
+            }
+        }
+        .bottomSheet(isPresented: $showEtcSheet, detents: [.content]) { dismiss in
+            EtcFilterSheet(items: etcItems, selected: $pickerEtc) {
+                applyEtc(pickerEtc)
                 dismiss()
             }
         }
@@ -151,7 +160,8 @@ struct FilteredPictureView: View {
             pickerDate = AppliedFilter.date(from: filter.value) ?? Date()
             showDateSheet = true
         case .etc:
-            break // TODO: 바텀시트로 기타 필터 편집
+            pickerEtc = filter.value
+            showEtcSheet = true
         }
     }
 
@@ -168,6 +178,11 @@ struct FilteredPictureView: View {
     private func applyDate(_ date: Date) {
         guard let index = appliedFilters.firstIndex(where: { $0.kind == .date }) else { return }
         appliedFilters[index] = AppliedFilter(kind: .date, value: AppliedFilter.dateText(date))
+    }
+
+    private func applyEtc(_ value: String) {
+        guard let index = appliedFilters.firstIndex(where: { $0.kind == .etc }) else { return }
+        appliedFilters[index] = AppliedFilter(kind: .etc, value: value)
     }
 
     private var dateSheetHeight: CGFloat {
