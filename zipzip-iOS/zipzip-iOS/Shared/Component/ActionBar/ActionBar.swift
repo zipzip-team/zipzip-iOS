@@ -10,8 +10,8 @@ import SwiftUI
 struct ActionBar: View {
     let items: [ActionBarItem]
 
-    private var horizontalPadding: CGFloat {
-        items.count <= 3 ? 24 : 16
+    private var itemWidth: CGFloat {
+        items.count <= 3 ? 100 : 84
     }
 
     var body: some View {
@@ -30,14 +30,13 @@ struct ActionBar: View {
             item.action()
         } label: {
             VStack(spacing: 0) {
-                iconView(item.icon)
+                iconView(item.icon, isDisabled: item.isDisabled)
                 Text(item.title)
                     .font(.b2_md)
-                    .foregroundStyle(.grey50)
+                    .foregroundStyle(item.isDisabled ? .grey700 : .grey50)
                     .fixedSize()
             }
-            .frame(minWidth: 52)
-            .padding(.horizontal, horizontalPadding)
+            .frame(width: itemWidth)
             .padding(.vertical, 2)
             .overlay(alignment: .trailing) {
                 if !isLast {
@@ -48,13 +47,16 @@ struct ActionBar: View {
             }
         }
         .buttonStyle(.plain)
+        .disabled(item.isDisabled)
     }
 
     @ViewBuilder
-    private func iconView(_ icon: ImageResource?) -> some View {
+    private func iconView(_ icon: ImageResource?, isDisabled: Bool) -> some View {
         if let icon {
             Image(icon)
                 .resizable()
+                .renderingMode(isDisabled ? .template : .original)
+                .foregroundStyle(.grey700)
                 .frame(width: 32, height: 32)
         } else {
             Rectangle()
@@ -63,4 +65,29 @@ struct ActionBar: View {
                 .frame(width: 32, height: 32)
         }
     }
+}
+
+#Preview {
+    VStack(spacing: 16) {
+        ActionBar(items: [
+            .init(icon: .delete, title: "삭제") {}
+        ])
+        ActionBar(items: [
+            .init(icon: .moveToAlbum, title: "사진집으로") {},
+            .init(icon: .delete, title: "삭제") {}
+        ])
+        ActionBar(items: [
+            .init(icon: .moveToAlbum, title: "사진집으로") {},
+            .init(icon: .metadata, title: "정보 수정") {},
+            .init(icon: .delete, title: "삭제") {}
+        ])
+        ActionBar(items: [
+            .init(icon: .starStroke, title: "즐겨찾기") {},
+            .init(icon: .moveToAlbum, title: "사진집으로", isDisabled: true) {},
+            .init(icon: .metadata, title: "정보 수정") {},
+            .init(icon: .delete, title: "삭제") {}
+        ])
+    }
+    .padding()
+    .background(.orange30)
 }
