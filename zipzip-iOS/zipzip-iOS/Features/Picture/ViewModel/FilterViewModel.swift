@@ -25,8 +25,8 @@ final class FilterViewModel {
         ].compactMap { $0 }
     }
 
-    var displayDateText: String {
-        selectedDate.map(AppliedFilter.dateText) ?? options.dateText
+    var displayDateText: String? {
+        selectedDate.map(AppliedFilter.dateText)
     }
 
     func selectDevice(_ name: String) {

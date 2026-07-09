@@ -8,7 +8,7 @@
 import SwiftUI
 
 struct DateMetadataChip: View {
-    let dateText: String
+    let dateText: String?
 
     var body: some View {
         HStack(spacing: 6) {
@@ -23,7 +23,7 @@ struct DateMetadataChip: View {
                     .frame(width: 14, height: 14)
                     .foregroundStyle(.grey950)
             }
-            Text(dateText)
+            Text(dateText ?? "날짜 선택")
                 .font(.b2_md)
                 .foregroundStyle(.grey950)
         }
@@ -34,7 +34,10 @@ struct DateMetadataChip: View {
 }
 
 #Preview {
-    DateMetadataChip(dateText: "2026년 7월 2일")
-        .padding()
-        .background(.orange30)
+    VStack(spacing: 12) {
+        DateMetadataChip(dateText: nil)
+        DateMetadataChip(dateText: "2026년 7월 2일")
+    }
+    .padding()
+    .background(.orange30)
 }
