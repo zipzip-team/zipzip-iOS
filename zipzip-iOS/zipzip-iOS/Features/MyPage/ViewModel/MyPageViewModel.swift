@@ -15,7 +15,7 @@ final class MyPageViewModel {
         Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0"
     }
 
-    func url(for link: MyPageLink) -> URL {
+    func url(for link: MyPageLink) -> URL? {
         link.url
     }
 }
