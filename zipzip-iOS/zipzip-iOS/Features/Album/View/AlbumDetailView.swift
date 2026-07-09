@@ -251,7 +251,8 @@ private struct AlbumDetailFolderBackground: View {
         GeometryReader { proxy in
             let topOffset: CGFloat = 68
             let width = proxy.size.width + 6
-            let height = width * AlbumDetailFolderShape.referenceHeight / AlbumDetailFolderShape.referenceWidth
+            let referenceHeight = width * AlbumDetailFolderShape.referenceHeight / AlbumDetailFolderShape.referenceWidth
+            let height = max(referenceHeight, proxy.size.height - topOffset + 16)
 
             AlbumDetailFolderShape()
                 .fill(.grey50)
@@ -269,14 +270,26 @@ private struct AlbumDetailFolderBackground: View {
 private struct AlbumDetailFolderShape: Shape {
     static let referenceWidth: CGFloat = 396
     static let referenceHeight: CGFloat = 797
+    private static let referenceBottomLineY: CGFloat = 794.632
+    private static let referenceSideBottomY: CGFloat = 784.632
 
     func path(in rect: CGRect) -> Path {
         func point(_ x: CGFloat, _ y: CGFloat) -> CGPoint {
-            CGPoint(
-                x: rect.minX + x / Self.referenceWidth * rect.width,
-                y: rect.minY + y / Self.referenceHeight * rect.height
+            let scale = rect.width / Self.referenceWidth
+            return CGPoint(
+                x: rect.minX + x * scale,
+                y: rect.minY + y * scale
             )
         }
+
+        func xPosition(_ x: CGFloat) -> CGFloat {
+            let scale = rect.width / Self.referenceWidth
+            return rect.minX + x * scale
+        }
+
+        let scale = rect.width / Self.referenceWidth
+        let bottomLineY = rect.maxY - (Self.referenceHeight - Self.referenceBottomLineY) * scale
+        let sideBottomY = bottomLineY - (Self.referenceBottomLineY - Self.referenceSideBottomY) * scale
 
         var path = Path()
 
@@ -292,17 +305,23 @@ private struct AlbumDetailFolderShape: Shape {
             control1: point(392.449, 90.7803),
             control2: point(394, 93.8035)
         )
-        path.addLine(to: point(394, 784.632))
+        path.addLine(to: CGPoint(x: xPosition(394), y: sideBottomY))
         path.addCurve(
-            to: point(384, 794.632),
-            control1: point(394, 790.155),
-            control2: point(389.523, 794.632)
+            to: CGPoint(x: xPosition(384), y: bottomLineY),
+            control1: CGPoint(
+                x: xPosition(394),
+                y: sideBottomY + (790.155 - Self.referenceSideBottomY) * scale
+            ),
+            control2: CGPoint(x: xPosition(389.523), y: bottomLineY)
         )
-        path.addLine(to: point(12, 794.632))
+        path.addLine(to: CGPoint(x: xPosition(12), y: bottomLineY))
         path.addCurve(
-            to: point(2, 784.632),
-            control1: point(6.47716, 794.632),
-            control2: point(2, 790.155)
+            to: CGPoint(x: xPosition(2), y: sideBottomY),
+            control1: CGPoint(x: xPosition(6.47716), y: bottomLineY),
+            control2: CGPoint(
+                x: xPosition(2),
+                y: sideBottomY + (790.155 - Self.referenceSideBottomY) * scale
+            )
         )
         path.addLine(to: point(2, 99.4243))
         path.addCurve(
