@@ -29,7 +29,7 @@ struct LocationFilterSheet: View {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 8) {
                         ForEach(locations, id: \.self) { location in
-                            LocationMetadataChip(
+                            TextMetadataChip(
                                 title: location,
                                 isSelected: selected == location
                             ) {

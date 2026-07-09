@@ -1,5 +1,5 @@
 //
-//  LocationMetadataChip.swift
+//  TextMetadataChip.swift
 //  zipzip-iOS
 //
 //  Created by 성환 on 7/7/26.
@@ -7,7 +7,7 @@
 
 import SwiftUI
 
-struct LocationMetadataChip: View {
+struct TextMetadataChip: View {
     let title: String
     let isSelected: Bool
     let action: () -> Void
@@ -21,6 +21,8 @@ struct LocationMetadataChip: View {
                     Text(title)
                         .font(isSelected ? .b2_sb : .b2_md)
                         .foregroundStyle(.grey950)
+                        .lineLimit(1)
+                        .fixedSize()
                         .contentTransition(.identity)
                 }
                 .padding(.horizontal, 16)
@@ -39,8 +41,8 @@ struct LocationMetadataChip: View {
 
 #Preview {
     HStack(spacing: 8) {
-        LocationMetadataChip(title: "오사카", isSelected: false) {}
-        LocationMetadataChip(title: "도쿄", isSelected: true) {}
+        TextMetadataChip(title: "오사카", isSelected: false) {}
+        TextMetadataChip(title: "도쿄", isSelected: true) {}
     }
     .padding()
 }

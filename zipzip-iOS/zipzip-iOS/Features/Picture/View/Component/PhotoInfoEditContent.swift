@@ -42,7 +42,7 @@ struct PhotoInfoEditContent: View {
                 pickerLocation = metadata.location
                 showLocationSheet = true
             }) {
-                LocationMetadataChip(title: metadata.location, isSelected: false) {}
+                TextMetadataChip(title: metadata.location, isSelected: false) {}
             }
 
             metadataSection(title: "날짜", onEdit: {
