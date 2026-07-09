@@ -24,33 +24,36 @@ struct PhotoInfoEditContent: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 32) {
+        VStack(alignment: .leading, spacing: 0) {
             header
 
-            metadataSection(title: "기기", onEdit: {
-                pickerDevice = metadata.deviceName
-                showDeviceSheet = true
-            }) {
-                DeviceMetadataChip(
-                    name: metadata.deviceName,
-                    type: metadata.deviceType,
-                    isSelected: false
-                ) {}
-            }
+            VStack(alignment: .leading, spacing: 0) {
+                metadataSection(title: "기기", hasDivider: true, onEdit: {
+                    pickerDevice = metadata.deviceName
+                    showDeviceSheet = true
+                }) {
+                    DeviceMetadataChip(
+                        name: metadata.deviceName,
+                        type: metadata.deviceType,
+                        isSelected: false
+                    ) {}
+                }
 
-            metadataSection(title: "장소", onEdit: {
-                pickerLocation = metadata.location
-                showLocationSheet = true
-            }) {
-                TextMetadataChip(title: metadata.location, isSelected: false) {}
-            }
+                metadataSection(title: "장소", hasDivider: true, onEdit: {
+                    pickerLocation = metadata.location
+                    showLocationSheet = true
+                }) {
+                    TextMetadataChip(title: metadata.location, isSelected: false) {}
+                }
 
-            metadataSection(title: "날짜", onEdit: {
-                pickerDate = AppliedFilter.date(from: metadata.dateText) ?? Date()
-                showDateSheet = true
-            }) {
-                DateMetadataChip(dateText: metadata.dateText)
+                metadataSection(title: "날짜", hasDivider: false, onEdit: {
+                    pickerDate = AppliedFilter.date(from: metadata.dateText) ?? Date()
+                    showDateSheet = true
+                }) {
+                    DateMetadataChip(dateText: metadata.dateText)
+                }
             }
+            .padding(.top, 40)
         }
         .bottomSheet(isPresented: $showDeviceSheet, detents: [.content]) { dismiss in
             DeviceFilterSheet(devices: devices, selected: $pickerDevice) {
@@ -86,7 +89,7 @@ struct PhotoInfoEditContent: View {
             Text("사진 정보")
                 .font(.t1_sb)
                 .foregroundStyle(.grey1000)
-            Text("선택한 사진 중 첫 번째 사진의 원본 정보가 아래에 표시됩니다.\n올바른 정보로 조정하면 모든 사진의 정보가 조정됩니다.")
+            Text("선택한 사진 중 첫 번째 사진의 정보를 기준으로 보여드려요.\n정보를 수정하면 모든 사진에 함께 적용돼요.")
                 .font(.b2_md)
                 .foregroundStyle(.grey700)
         }
@@ -96,6 +99,7 @@ struct PhotoInfoEditContent: View {
 
     private func metadataSection<Chip: View>(
         title: String,
+        hasDivider: Bool,
         onEdit: @escaping () -> Void,
         @ViewBuilder chip: () -> Chip
     ) -> some View {
@@ -114,6 +118,15 @@ struct PhotoInfoEditContent: View {
                 .buttonStyle(.plain)
             }
             chip()
+        }
+        .padding(.vertical, 16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .overlay(alignment: .bottom) {
+            if hasDivider {
+                Rectangle()
+                    .fill(.grey70)
+                    .frame(height: 1)
+            }
         }
     }
 
