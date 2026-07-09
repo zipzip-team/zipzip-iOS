@@ -41,6 +41,12 @@ struct PhotoGallery: View {
     private func photoCell(_ photo: Photo) -> some View {
         Color.grey200
             .aspectRatio(1, contentMode: .fit)
+            .overlay {
+                if isSelectionMode, selectedPhotoIDs.contains(photo.id) {
+                    Rectangle()
+                        .strokeBorder(.orange500, lineWidth: 2)
+                }
+            }
             .overlay(alignment: .bottomTrailing) {
                 if isSelectionMode {
                     Indicator(title: badgeTitle(photo.id), status: badgeStatus(photo.id))

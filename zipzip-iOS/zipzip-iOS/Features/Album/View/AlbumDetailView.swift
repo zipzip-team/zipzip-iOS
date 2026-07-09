@@ -18,10 +18,11 @@ struct AlbumDetailView<Content: View>: View {
     @Environment(\.dismiss) private var dismiss
     @State private var isSelectionMode: Bool
     @State private var isPhotoPickerPresented = false
+    @State private var selectedPhotoIDs: [UUID] = []
 
     let album: AlbumDetailItem
     private let contentTopSpacing: CGFloat
-    private let detailContent: (Bool, @escaping () -> Void) -> Content
+    private let detailContent: (Bool, Binding<[UUID]>, @escaping () -> Void) -> Content
 
     init(
         album: AlbumDetailItem,
@@ -32,7 +33,7 @@ struct AlbumDetailView<Content: View>: View {
         self.album = album
         self.contentTopSpacing = contentTopSpacing
         _isSelectionMode = State(initialValue: initialSelectionMode)
-        self.detailContent = { _, _ in content() }
+        self.detailContent = { _, _, _ in content() }
     }
 
     init(
@@ -44,7 +45,21 @@ struct AlbumDetailView<Content: View>: View {
         self.album = album
         self.contentTopSpacing = contentTopSpacing
         _isSelectionMode = State(initialValue: initialSelectionMode)
-        self.detailContent = { isSelectionMode, _ in content(isSelectionMode) }
+        self.detailContent = { isSelectionMode, _, _ in content(isSelectionMode) }
+    }
+
+    init(
+        album: AlbumDetailItem,
+        contentTopSpacing: CGFloat = 30,
+        initialSelectionMode: Bool = false,
+        @ViewBuilder content: @escaping (Bool, Binding<[UUID]>) -> Content
+    ) {
+        self.album = album
+        self.contentTopSpacing = contentTopSpacing
+        _isSelectionMode = State(initialValue: initialSelectionMode)
+        self.detailContent = { isSelectionMode, selectedPhotoIDs, _ in
+            content(isSelectionMode, selectedPhotoIDs)
+        }
     }
 
     init(
@@ -52,6 +67,20 @@ struct AlbumDetailView<Content: View>: View {
         contentTopSpacing: CGFloat = 30,
         initialSelectionMode: Bool = false,
         @ViewBuilder content: @escaping (Bool, @escaping () -> Void) -> Content
+    ) {
+        self.album = album
+        self.contentTopSpacing = contentTopSpacing
+        _isSelectionMode = State(initialValue: initialSelectionMode)
+        self.detailContent = { isSelectionMode, _, presentPhotoPicker in
+            content(isSelectionMode, presentPhotoPicker)
+        }
+    }
+
+    init(
+        album: AlbumDetailItem,
+        contentTopSpacing: CGFloat = 30,
+        initialSelectionMode: Bool = false,
+        @ViewBuilder content: @escaping (Bool, Binding<[UUID]>, @escaping () -> Void) -> Content
     ) {
         self.album = album
         self.contentTopSpacing = contentTopSpacing
@@ -100,7 +129,7 @@ struct AlbumDetailView<Content: View>: View {
             VStack(spacing: contentTopSpacing) {
                 titleSection
 
-                detailContent(isSelectionMode, presentPhotoPicker)
+                detailContent(isSelectionMode, $selectedPhotoIDs, presentPhotoPicker)
             }
             .padding(.top, 168)
             .padding(.bottom, 40)
@@ -117,11 +146,13 @@ struct AlbumDetailView<Content: View>: View {
     }
 
     private var selectionActionItems: [ActionBarItem] {
-        [
-            .init(icon: .moveToAlbum, title: "집 관리", action: manageAlbum),
-            .init(icon: .chevronRight, title: "이동하기", isDisabled: true) {},
-            .init(icon: .metadata, title: "정보 수정", isDisabled: true) {},
-            .init(icon: .delete, title: "삭제", isDisabled: true) {}
+        let hasSelectedPhotos = !selectedPhotoIDs.isEmpty
+
+        return [
+            .init(icon: .settingAlbum, title: "집 관리", action: manageAlbum),
+            .init(icon: .move, title: "이동하기", isDisabled: !hasSelectedPhotos) {},
+            .init(icon: .metadata, title: "정보 수정", isDisabled: !hasSelectedPhotos) {},
+            .init(icon: .delete, title: "삭제", isDisabled: !hasSelectedPhotos) {}
         ]
     }
 
@@ -147,6 +178,7 @@ struct AlbumDetailView<Content: View>: View {
 
     private func exitSelectionMode() {
         isSelectionMode = false
+        selectedPhotoIDs.removeAll()
     }
 
     private func presentPhotoPicker() {
@@ -227,12 +259,22 @@ private struct AlbumDetailEmptyContent: View {
 }
 
 struct AlbumDetailGalleryPlaceholderView: View {
-    @State private var selectedPhotoIDs: [UUID] = []
+    @Binding private var selectedPhotoIDs: [UUID]
 
     let photoCount: Int
     var showsSelectionControls = false
 
     private let sections = PhotoSection.sample
+
+    init(
+        photoCount: Int,
+        showsSelectionControls: Bool = false,
+        selectedPhotoIDs: Binding<[UUID]> = .constant([])
+    ) {
+        self.photoCount = photoCount
+        self.showsSelectionControls = showsSelectionControls
+        _selectedPhotoIDs = selectedPhotoIDs
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -399,10 +441,11 @@ private struct AlbumDetailFolderShape: Shape {
             photoCount: 123
         ),
         initialSelectionMode: true
-    ) { isSelectionMode in
+    ) { isSelectionMode, selectedPhotoIDs in
         AlbumDetailGalleryPlaceholderView(
             photoCount: 123,
-            showsSelectionControls: isSelectionMode
+            showsSelectionControls: isSelectionMode,
+            selectedPhotoIDs: selectedPhotoIDs
         )
     }
 }
