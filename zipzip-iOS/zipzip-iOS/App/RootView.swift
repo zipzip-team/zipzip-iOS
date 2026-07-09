@@ -43,6 +43,10 @@ struct RootView: View {
                     PhotoInfoEditView(metadata: metadata)
                 case let .photoDetail(photo):
                     PhotoDetailView(photo: photo)
+                case .myPage:
+                    MyPageView()
+                case .registeredDeviceManagement:
+                    RegisteredDeviceManagementView()
                 }
             }
         }
