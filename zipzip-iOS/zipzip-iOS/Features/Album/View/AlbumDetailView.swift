@@ -61,7 +61,7 @@ struct AlbumDetailView<Content: View>: View {
         .overlay(alignment: .topTrailing) {
             AlbumHeaderActionButton(
                 onSelectionTap: enterSelectionMode,
-                onAddTap: {}
+                onAddTap: loadAlbumDetailPhotos
             )
             .padding(.top, 19)
             .padding(.trailing, 16)
@@ -180,15 +180,26 @@ private struct AlbumDetailTitleSection: View {
 
 private struct AlbumDetailEmptyContent: View {
     var body: some View {
-        VStack(spacing: 8) {
-            Rectangle()
-                .fill(.grey100)
-                .frame(width: 80, height: 80)
+        VStack(spacing: 32) {
+            VStack(spacing: 8) {
+                Rectangle()
+                    .fill(.grey100)
+                    .frame(width: 80, height: 80)
 
-            Text("사진집에 사진을 넣어볼까요?")
-                .font(.t2_md)
-                .foregroundStyle(.grey1000)
-                .multilineTextAlignment(.center)
+                Image(.albumEmptyDescription)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 246, height: 20)
+                    .accessibilityLabel("사진집에 사진을 넣어볼까요?")
+            }
+
+            CommonButton(
+                title: "사진 불러오기",
+                property1: .default,
+                property2: .pressed,
+                action: loadAlbumDetailPhotos
+            )
+            .frame(width: 171)
         }
     }
 }
@@ -335,6 +346,8 @@ private struct AlbumDetailFolderShape: Shape {
         return path
     }
 }
+
+private func loadAlbumDetailPhotos() {}
 
 #Preview("Album Detail Empty", traits: .fixedLayout(width: 390, height: 844)) {
     AlbumDetailEmptyView(
