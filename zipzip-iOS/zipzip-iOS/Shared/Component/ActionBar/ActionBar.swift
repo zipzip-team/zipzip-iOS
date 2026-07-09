@@ -57,6 +57,7 @@ struct ActionBar: View {
                 .resizable()
                 .renderingMode(isDisabled ? .template : .original)
                 .foregroundStyle(.grey700)
+                .frame(width: 24, height: 24)
                 .frame(width: 32, height: 32)
         } else {
             Rectangle()
