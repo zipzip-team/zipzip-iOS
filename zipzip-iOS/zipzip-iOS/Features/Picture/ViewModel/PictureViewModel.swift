@@ -16,6 +16,8 @@ final class PictureViewModel {
 
     private static let logger = Logger(subsystem: "com.zipzip.zipzip-iOS", category: "PictureSections")
 
+    @ObservationIgnored private var library: [FilterablePhoto]?
+
     var isSelectionMode = false
     private(set) var selectedPhotoIDs: [UUID] = []
     var showDeleteAlert = false
@@ -45,7 +47,14 @@ final class PictureViewModel {
 
     func loadPhotos(filters: [AppliedFilter] = []) async {
         do {
-            sections = try await provider.loadSections(filters: filters)
+            let library: [FilterablePhoto]
+            if let cached = self.library {
+                library = cached
+            } else {
+                library = try await provider.loadLibrary()
+                self.library = library
+            }
+            sections = await provider.sections(from: library, filters: filters)
         } catch {
             Self.logger.error("failed to load photo sections: \(error)")
         }
