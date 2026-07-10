@@ -10,5 +10,6 @@ import SwiftUI
 struct RoundedIconButtonItem: Identifiable {
     let id: String
     let icon: ImageResource
+    let accessibilityLabel: String
     let action: () -> Void
 }

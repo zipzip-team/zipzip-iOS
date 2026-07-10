@@ -12,6 +12,7 @@ import SwiftUI
 struct zipzip_iOSApp: App {
     @State private var router = Router()
     @State private var container = DIContainer()
+    @State private var authenticationState = AuthenticationState()
 
     init() {
         prepareDependencies {
@@ -24,6 +25,7 @@ struct zipzip_iOSApp: App {
             RootView()
                 .environment(router)
                 .environment(container)
+                .environment(authenticationState)
         }
     }
 }

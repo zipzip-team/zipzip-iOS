@@ -41,6 +41,12 @@ struct PhotoGallery: View {
     private func photoCell(_ photo: Photo) -> some View {
         Color.grey200
             .aspectRatio(1, contentMode: .fit)
+            .overlay {
+                if isSelectionMode, selectedPhotoIDs.contains(photo.id) {
+                    Rectangle()
+                        .strokeBorder(.orange500, lineWidth: 2)
+                }
+            }
             .overlay(alignment: .bottomTrailing) {
                 if isSelectionMode {
                     Indicator(title: badgeTitle(photo.id), status: badgeStatus(photo.id))
@@ -48,14 +54,22 @@ struct PhotoGallery: View {
                 }
             }
             .contentShape(.rect)
-            .onTapGesture {
-                if isSelectionMode {
-                    onTapPhoto?(photo.id)
-                } else {
-                    onOpenPhoto?(photo)
-                }
-            }
+            .onTapGesture { handlePhotoTap(photo) }
             .onLongPressGesture { onLongPressPhoto?(photo.id) }
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("사진")
+            .accessibilityValue(accessibilityValue(photo.id))
+            .accessibilityAddTraits(.isButton)
+            .accessibilityAddTraits(isSelectionMode && selectedPhotoIDs.contains(photo.id) ? .isSelected : [])
+            .accessibilityAction { handlePhotoTap(photo) }
+    }
+
+    private func handlePhotoTap(_ photo: Photo) {
+        if isSelectionMode {
+            onTapPhoto?(photo.id)
+        } else {
+            onOpenPhoto?(photo)
+        }
     }
 
     private func badgeStatus(_ id: UUID) -> Indicator.Status {
@@ -64,6 +78,18 @@ struct PhotoGallery: View {
 
     private func badgeTitle(_ id: UUID) -> String? {
         selectedPhotoIDs.firstIndex(of: id).map { "\($0 + 1)" }
+    }
+
+    private func accessibilityValue(_ id: UUID) -> String {
+        guard isSelectionMode else {
+            return ""
+        }
+
+        if let index = selectedPhotoIDs.firstIndex(of: id) {
+            return "\(index + 1)번째 선택됨"
+        }
+
+        return "선택 안 됨"
     }
 }
 

@@ -8,9 +8,15 @@
 import Foundation
 
 struct Album: Identifiable, Hashable {
-    let id = UUID()
+    let id: UUID
     let name: String
     let count: Int
+
+    init(id: UUID = UUID(), name: String, count: Int) {
+        self.id = id
+        self.name = name
+        self.count = count
+    }
 }
 
 extension Album {

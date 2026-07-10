@@ -12,6 +12,7 @@ struct RootTabView: View {
     @State private var selection: NavbarTab = .main
     @State private var loaded: Set<NavbarTab> = [.main]
     @State private var pictureViewModel = PictureViewModel()
+    @State private var albumViewModel = AlbumViewModel()
     @State private var showShareSheet = false
 
     var body: some View {
@@ -19,11 +20,12 @@ struct RootTabView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .safeAreaInset(edge: .bottom, spacing: 0) {
                 bottomBar
-                    .padding(.bottom, 28)
-                    .ignoresSafeArea(.container, edges: .bottom)
             }
             .onChange(of: selection) { _, newValue in
                 loaded.insert(newValue)
+                if newValue != .album {
+                    albumViewModel.exitSelectionMode()
+                }
             }
             .bottomSheet(isPresented: $showShareSheet, detents: [.full]) { dismiss in
                 ShareSheet(
@@ -36,7 +38,7 @@ struct RootTabView: View {
     }
 
     @ViewBuilder private var bottomBar: some View {
-        if pictureViewModel.isSelectionMode {
+        if selection == .picture, pictureViewModel.isSelectionMode {
             ActionBar(items: [
                 .init(icon: .moveToAlbum, title: "집으로") { showShareSheet = true },
                 .init(icon: .metadata, title: "정보 수정") {
@@ -46,9 +48,17 @@ struct RootTabView: View {
                 },
                 .init(icon: .delete, title: "삭제") { pictureViewModel.requestDelete() }
             ])
-        } else {
+            .padding(.bottom, 28)
+            .ignoresSafeArea(.container, edges: .bottom)
+        } else if showsNavbar {
             Navbar(selection: $selection)
+                .padding(.bottom, 28)
+                .ignoresSafeArea(.container, edges: .bottom)
         }
+    }
+
+    private var showsNavbar: Bool {
+        selection != .album || (!albumViewModel.isSelectionMode && !albumViewModel.isDetailPresented)
     }
 
     private var content: some View {
@@ -68,7 +78,7 @@ struct RootTabView: View {
         switch tab {
         case .main: MainView()
         case .picture: PictureView(viewModel: pictureViewModel)
-        case .album: AlbumView()
+        case .album: AlbumView(viewModel: albumViewModel)
         case .share: ShareView()
         }
     }

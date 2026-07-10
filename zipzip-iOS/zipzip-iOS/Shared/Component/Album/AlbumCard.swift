@@ -11,6 +11,7 @@ struct AlbumCard: View {
     let name: String
     let count: Int
     var state: AlbumFolderState = .plain
+    var nameColorOverride: Color? = nil
 
     var body: some View {
         VStack(spacing: 8) {
@@ -21,7 +22,7 @@ struct AlbumCard: View {
             VStack(spacing: 0) {
                 Text(name)
                     .font(.b2_sb)
-                    .foregroundStyle(.white00)
+                    .foregroundStyle(nameColor)
                     .lineLimit(1)
                     .truncationMode(.tail)
                 Text("\(count)")
@@ -29,6 +30,20 @@ struct AlbumCard: View {
                     .foregroundStyle(.grey600)
             }
             .frame(width: 134)
+        }
+        .frame(maxWidth: 170)
+    }
+
+    private var nameColor: Color {
+        if let nameColorOverride {
+            return nameColorOverride
+        }
+
+        switch state {
+        case .selected:
+            return Color.orange500
+        default:
+            return Color.grey950
         }
     }
 }

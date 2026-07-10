@@ -7,21 +7,23 @@
 
 import SwiftUI
 
+enum ShareDestination: Hashable {
+    case album(Album.ID)
+    case sharedAlbum(shareAlbumID: ShareAlbum.ID, albumID: Album.ID)
+}
+
 struct ShareSheet: View {
+    @Environment(AuthenticationState.self) private var authenticationState
+
     let albums: [Album]
     let sharedAlbums: [Album]
     let shareAlbums: [ShareAlbum]
     let onDismiss: () -> Void
+    var onComplete: (ShareDestination) -> Void = { _ in }
 
     @State private var selection: BottomSheetTabSelection = .left
-    @State private var isLoggedIn = false
     @State private var selectedAlbumID: Album.ID?
     @State private var targetShareAlbum: ShareAlbum?
-
-    private let columns = [
-        GridItem(.flexible(), spacing: 17),
-        GridItem(.flexible(), spacing: 17)
-    ]
 
     var body: some View {
         BottomSheet(
@@ -30,64 +32,101 @@ struct ShareSheet: View {
                 headerButton("취소") { onDismiss() }
             },
             rightItem: {
-                headerButton("완료") { onDismiss() } // TODO: 실제 저장 연동
+                if showsCompletionButton {
+                    headerButton("완료", isDisabled: selectedDestination == nil, action: completeSelection)
+                }
             }
         ) {
             content
         }
         .onChange(of: selection) { _, _ in
             targetShareAlbum = nil
+            selectedAlbumID = nil
         }
     }
 
     @ViewBuilder private var content: some View {
         switch selection {
         case .left:
-            albumGrid(albums)
+            AlbumSelectionGrid(
+                albums: albums,
+                selectedAlbumID: selectedAlbumID,
+                onSelect: selectAlbum
+            )
         case .right:
-            if !isLoggedIn {
-                loginPrompt
+            if !authenticationState.isLoggedIn {
+                ShareLoginPrompt {
+                    authenticationState.logIn()
+                }
             } else if targetShareAlbum != nil {
-                albumGrid(sharedAlbums)
+                AlbumSelectionGrid(
+                    albums: sharedAlbums,
+                    selectedAlbumID: selectedAlbumID,
+                    onSelect: selectAlbum
+                )
             } else {
-                shareList
+                ShareAlbumList(albums: shareAlbums) { album in
+                    targetShareAlbum = album
+                    selectedAlbumID = nil
+                }
             }
         }
     }
 
-    private func headerButton(_ title: String, action: @escaping () -> Void) -> some View {
+    private func headerButton(
+        _ title: String,
+        isDisabled: Bool = false,
+        action: @escaping () -> Void
+    ) -> some View {
         Button(action: action) {
             Text(title)
                 .font(.b1_sb)
-                .foregroundStyle(.white00)
+                .foregroundStyle(isDisabled ? .grey700 : .white00)
                 .frame(width: 72, height: 48)
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .disabled(isDisabled)
     }
 
-    private func albumGrid(_ items: [Album]) -> some View {
-        ScrollView {
-            LazyVGrid(columns: columns, spacing: 20) {
-                ForEach(items) { album in
-                    Button {
-                        selectedAlbumID = album.id
-                    } label: {
-                        AlbumCard(
-                            name: album.name,
-                            count: album.count,
-                            state: selectedAlbumID == album.id ? .highlighted : .plain
-                        )
-                    }
-                    .buttonStyle(.plain)
-                }
+    private func selectAlbum(_ album: Album) {
+        selectedAlbumID = album.id
+    }
+
+    private var showsCompletionButton: Bool {
+        selection == .left || authenticationState.isLoggedIn
+    }
+
+    private var selectedDestination: ShareDestination? {
+        guard let selectedAlbumID else {
+            return nil
+        }
+
+        switch selection {
+        case .left:
+            return .album(selectedAlbumID)
+        case .right:
+            guard let targetShareAlbum else {
+                return nil
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 28)
+            return .sharedAlbum(shareAlbumID: targetShareAlbum.id, albumID: selectedAlbumID)
         }
     }
 
-    private var loginPrompt: some View {
+    private func completeSelection() {
+        guard let selectedDestination else {
+            return
+        }
+
+        onComplete(selectedDestination)
+        onDismiss()
+    }
+}
+
+struct ShareLoginPrompt: View {
+    let onLogin: () -> Void
+
+    var body: some View {
         VStack(spacing: 32) {
             VStack(spacing: 8) {
                 Color.grey200
@@ -100,22 +139,57 @@ struct ShareSheet: View {
                     .multilineTextAlignment(.center)
             }
 
-            CommonButton(title: "로그인", property1: .cta) {
-                isLoggedIn = true
-            }
-            .frame(width: 171)
+            CommonButton(title: "로그인", property1: .cta, action: onLogin)
+                .frame(width: 171)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .padding(16)
     }
+}
 
-    private var shareList: some View {
+struct AlbumSelectionGrid: View {
+    let albums: [Album]
+    let selectedAlbumID: Album.ID?
+    let onSelect: (Album) -> Void
+
+    private let columns = [
+        GridItem(.flexible(), spacing: 17),
+        GridItem(.flexible(), spacing: 17)
+    ]
+
+    var body: some View {
+        ScrollView {
+            LazyVGrid(columns: columns, spacing: 20) {
+                ForEach(albums) { album in
+                    Button {
+                        onSelect(album)
+                    } label: {
+                        AlbumCard(
+                            name: album.name,
+                            count: album.count,
+                            state: selectedAlbumID == album.id ? .highlighted : .plain,
+                            nameColorOverride: .white00
+                        )
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 28)
+        }
+    }
+}
+
+struct ShareAlbumList: View {
+    let albums: [ShareAlbum]
+    let onSelect: (ShareAlbum) -> Void
+
+    var body: some View {
         ScrollView {
             LazyVStack(spacing: 8) {
-                ForEach(shareAlbums) { album in
+                ForEach(albums) { album in
                     Button {
-                        targetShareAlbum = album
-                        selectedAlbumID = nil
+                        onSelect(album)
                     } label: {
                         ShareAlbumCard(
                             thumbnail: nil,
@@ -143,4 +217,5 @@ struct ShareSheet: View {
     )
     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
     .background(.black)
+    .environment(AuthenticationState())
 }

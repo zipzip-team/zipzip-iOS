@@ -7,10 +7,48 @@
 
 import SwiftUI
 
+struct PhotoDeleteAlertContent {
+    let title: String
+    let message: String
+    let secondaryTitle: String
+    let primaryTitle: String
+}
+
+enum PhotoDeletionContext {
+    case gallery
+    case album
+
+    var alertContent: PhotoDeleteAlertContent {
+        switch self {
+        case .gallery:
+            PhotoDeleteAlertContent(
+                title: "이 사진을 삭제하시겠어요?",
+                message: "삭제하면 집집과 사진 앱에서 모두 사라져요.",
+                secondaryTitle: "취소",
+                primaryTitle: "삭제"
+            )
+        case .album:
+            PhotoDeleteAlertContent(
+                title: "사진을 완전히 삭제할까요,\n아니면 사진집에서만 제거할까요?",
+                message: "사진집에서 제거된 사진은 갤러리에 남아있어요",
+                secondaryTitle: "삭제",
+                primaryTitle: "사진집에서 제거"
+            )
+        }
+    }
+}
+
+enum PhotoDeletionAction {
+    case deletePermanently
+    case removeFromAlbum
+}
+
 struct PhotoDetailView: View {
-    @Environment(Router.self) private var router
+    @Environment(\.dismiss) private var dismiss
 
     let photo: Photo
+    let deletionContext: PhotoDeletionContext
+    private let onDelete: (PhotoDeletionAction) -> Void
 
     @State private var isEditingInfo = false
     @State private var showShareSheet = false
@@ -18,6 +56,16 @@ struct PhotoDetailView: View {
     @State private var isFavorite = false
 
     private let photoPeekHeight: CGFloat = 160
+
+    init(
+        photo: Photo,
+        deletionContext: PhotoDeletionContext = .gallery,
+        onDelete: @escaping (PhotoDeletionAction) -> Void = { _ in }
+    ) {
+        self.photo = photo
+        self.deletionContext = deletionContext
+        self.onDelete = onDelete
+    }
 
     var body: some View {
         GeometryReader { geo in
@@ -60,22 +108,26 @@ struct PhotoDetailView: View {
         }
         .bottomSheetAlert(
             isPresented: $showDeleteAlert,
-            title: "이 사진을 삭제하시겠어요?",
-            message: "삭제하면 집집과 사진 앱에서 모두 사라져요.",
-            secondaryTitle: "취소",
-            primaryTitle: "삭제",
-            onSecondaryTap: { showDeleteAlert = false },
-            onPrimaryTap: { showDeleteAlert = false } // TODO: 삭제 실행 연결
+            title: deleteAlertContent.title,
+            message: deleteAlertContent.message,
+            secondaryTitle: deleteAlertContent.secondaryTitle,
+            primaryTitle: deleteAlertContent.primaryTitle,
+            onSecondaryTap: handleSecondaryDeleteAction,
+            onPrimaryTap: handlePrimaryDeleteAction
         )
+    }
+
+    private var deleteAlertContent: PhotoDeleteAlertContent {
+        deletionContext.alertContent
     }
 
     private var backButton: some View {
         RoundedIconButton(items: [
-            .init(id: "back", icon: .chevronLeft) {
+            .init(id: "back", icon: .chevronLeft, accessibilityLabel: "뒤로가기") {
                 if isEditingInfo {
                     withAnimation { isEditingInfo = false }
                 } else {
-                    router.pop()
+                    dismiss()
                 }
             }
         ])
@@ -95,9 +147,36 @@ struct PhotoDetailView: View {
         ])
         .padding(.bottom, 16)
     }
+
+    private func dismissDeleteAlert() {
+        showDeleteAlert = false
+    }
+
+    private func handleSecondaryDeleteAction() {
+        switch deletionContext {
+        case .gallery:
+            dismissDeleteAlert()
+        case .album:
+            completeDeletion(.deletePermanently)
+        }
+    }
+
+    private func handlePrimaryDeleteAction() {
+        switch deletionContext {
+        case .gallery:
+            completeDeletion(.deletePermanently)
+        case .album:
+            completeDeletion(.removeFromAlbum)
+        }
+    }
+
+    private func completeDeletion(_ action: PhotoDeletionAction) {
+        showDeleteAlert = false
+        onDelete(action)
+        dismiss()
+    }
 }
 
 #Preview {
     PhotoDetailView(photo: PhotoSection.sample[0].photos[0])
-        .environment(Router())
 }
