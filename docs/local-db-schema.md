@@ -12,7 +12,7 @@
 
 | 결정 | 내용 | 이유 |
 | --- | --- | --- |
-| PK 타입 분리 | 로컬 테이블 `Int64`, 서버 수신 테이블은 서버가 준 값(UUID/bigint) 유지 | 로컬은 조인·인덱스 성능, 서버는 동기화 일치 |
+| PK 타입 분리 | 로컬 테이블 `Int64`, 서버 수신 테이블은 서버가 준 bigint(INTEGER) 유지 | 로컬은 조인·인덱스 성능, 서버는 동기화 일치 |
 | 라벨 축 분리 | `label` 통합 대신 `device` / `place` **N:1 참조 테이블** | 두 축 모두 사진당 단일값(N:1). 필터 후보를 테이블 행으로 관리, sparse null 제거 |
 | 원본 좌표 보존 | `photo.latitude/longitude`(원본) + `place`(파생 클러스터) 공존 | 반경 클러스터링 기준을 바꿔도 재계산 가능 |
 | 로컬↔︎서버 매핑 | `content_hash`로 `photo` ↔︎ `shared_photo` 논리 연결 | 서버가 원본을 못 보는 구조에서 중복 판별·재다운로드 방지 |
@@ -116,8 +116,8 @@ SELECT DISTINCT date(taken_at, 'unixepoch', 'localtime') AS day FROM photo;
 
 | 논리명 | 물리명 | Type | 제약 | 설명 |
 | --- | --- | --- | --- | --- |
-| 그룹 ID | `id` | UUID | PK | 서버 값 |
-| 생성자 ID | `created_by_user_id` | UUID |  |  |
+| 그룹 ID | `id` | INTEGER | PK | 서버 값 |
+| 생성자 ID | `created_by_user_id` | INTEGER |  |  |
 | 이름 | `name` | TEXT |  |  |
 | 초대 코드 | `invite_code` | TEXT | UNIQUE |  |
 | 생성 일시 | `created_at` | INTEGER |  |  |
@@ -126,16 +126,16 @@ SELECT DISTINCT date(taken_at, 'unixepoch', 'localtime') AS day FROM photo;
 
 | 논리명 | 물리명 | Type | 제약 | 설명 |
 | --- | --- | --- | --- | --- |
-| 공유집 ID | `id` | UUID | PK | 서버 값 |
-| 그룹 ID | `shared_group_id` | UUID | FK→shared_group |  |
+| 공유집 ID | `id` | INTEGER | PK | 서버 값 |
+| 그룹 ID | `shared_group_id` | INTEGER | FK→shared_group |  |
 | 이름 | `name` | TEXT |  |  |
 
 #### `shared_photo` — 공유 사진
 
 | 논리명 | 물리명 | Type | 제약 | 설명 |
 | --- | --- | --- | --- | --- |
-| 공유 사진 ID | `id` | BIGINT | PK | 서버 값 |
-| 공유집 ID | `shared_album_id` | BIGINT | FK→shared_album |  |
+| 공유 사진 ID | `id` | INTEGER | PK | 서버 값 |
+| 공유집 ID | `shared_album_id` | INTEGER | FK→shared_album |  |
 | 콘텐츠 해시 | `content_hash` | TEXT |  | 로컬 `photo`와 매핑 |
 | 원본 파일명 | `original_file_name` | TEXT |  |  |
 
