@@ -8,22 +8,10 @@
 import SwiftUI
 
 struct AlbumDetailItem: Hashable, Identifiable {
-    let id: UUID
+    let id: Int
     let title: String
     let createdAt: Date
     let photoCount: Int
-
-    init(
-        id: UUID = UUID(),
-        title: String,
-        createdAt: Date,
-        photoCount: Int
-    ) {
-        self.id = id
-        self.title = title
-        self.createdAt = createdAt
-        self.photoCount = photoCount
-    }
 }
 
 struct AlbumDetailView<Content: View>: View {
@@ -494,6 +482,7 @@ private struct AlbumDetailFolderShape: Shape {
 #Preview("Album Detail Empty", traits: .fixedLayout(width: 390, height: 844)) {
     AlbumDetailEmptyView(
         album: .init(
+            id: 1,
             title: "집집 🏠",
             createdAt: .now,
             photoCount: 0
@@ -505,6 +494,7 @@ private struct AlbumDetailFolderShape: Shape {
 #Preview("Album Detail Gallery", traits: .fixedLayout(width: 390, height: 844)) {
     AlbumDetailView(
         album: .init(
+            id: 2,
             title: "집집 🏠",
             createdAt: .now,
             photoCount: 123
@@ -518,6 +508,7 @@ private struct AlbumDetailFolderShape: Shape {
 #Preview("Album Detail Selection", traits: .fixedLayout(width: 390, height: 844)) {
     AlbumDetailView(
         album: .init(
+            id: 3,
             title: "집집 🏠",
             createdAt: .now,
             photoCount: 123
