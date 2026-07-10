@@ -68,8 +68,10 @@ flowchart LR
 
 | id (PK) | local_identifier | content_hash | taken_at | added_at | is_favorite | width | height | device_id (FK) | place_id (FK) |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| 101 | ABC-123 | a1b2c3 | 2026-07-01 14:30 | 2026-07-01 14:31 | false | 4032 | 3024 | **1** | **1** |
-| 102 | ABC-124 | d4e5f6 | 2026-07-01 15:10 | 2026-07-01 15:11 | true | 4032 | 3024 | **1** | **1** |
+| 101 | ABC-123 | a1b2c3 | 1782883800 | 1782883860 | false | 4032 | 3024 | **1** | **1** |
+| 102 | ABC-124 | d4e5f6 | 1782886200 | 1782886260 | true | 4032 | 3024 | **1** | **1** |
+
+> `taken_at`·`added_at`는 **INTEGER unix epoch 초**로 저장한다 (`date(taken_at, 'unixepoch', 'localtime')`로 날짜 조회). 예: `1782883800` = 2026-07-01 14:30 (KST).
 
 > `device_id = 1` → device 표의 “iPhone 15 Pro”를 가리킨다. 사진이 늘어도 기기 이름은 device 표에 **딱 한 줄**만 있으면 된다.
 > 
@@ -142,6 +144,7 @@ flowchart LR
 1. 서버 응답을 받아 `shared_group` → `shared_album` → `shared_photo` 순서로 저장한다 (위에서 아래로 연결).
 2. 각 `shared_photo`의 `content_hash`를 내 `photo` 표와 비교한다.
 3. 같은 해시가 있으면 **내가 이미 가진 사진** → 다시 다운로드하지 않는다.
+4. **엣지 케이스**: `content_hash`가 NULL인 행(로컬·서버 어느 쪽이든)은 비교에서 **제외**한다. 같은 해시가 내 `photo`에 여러 장 있어도 **존재하면 "이미 가진 사진"** 으로 보고 skip한다(중복 허용). 해시가 없거나 매칭이 없으면 **새로 받을 사진**으로 취급하고, 내 `photo` 해시가 아직 계산 전이면 매칭을 **유보(pending)** 한다.
 
 ### 저장 결과
 
@@ -149,20 +152,20 @@ flowchart LR
 
 | id (PK) | created_by_user_id | name | invite_code | created_at |
 | --- | --- | --- | --- | --- |
-| g-001 | u-777 | 가족 | XY12AB | 2026-06-20 |
+| 9001 | 777 | 가족 | XY12AB | 2026-06-20 |
 
 **`shared_album`** (공유집 — 그룹에 소속)
 
 | id (PK) | shared_group_id (FK) | name |
 | --- | --- | --- |
-| sa-100 | **g-001** | 제주 2026 |
+| 8001 | **9001** | 제주 2026 |
 
 **`shared_photo`** (공유 사진 — 공유집에 소속)
 
 | id (PK) | shared_album_id (FK) | content_hash | original_file_name |
 | --- | --- | --- | --- |
-| 5001 | **sa-100** | **a1b2c3** | IMG_2026.HEIC |
-| 5002 | **sa-100** | z9y8x7 | IMG_2027.HEIC |
+| 5001 | **8001** | **a1b2c3** | IMG_2026.HEIC |
+| 5002 | **8001** | z9y8x7 | IMG_2027.HEIC |
 
 > `5001`의 `content_hash = a1b2c3` → 시나리오 1의 내 `photo(id=101)`와 **동일**! → “이미 내 기기에 있는 사진”으로 인식해 다시 받지 않는다.
 `5002`는 내게 없는 해시 → 새로 받아야 할 사진.
@@ -222,12 +225,17 @@ flowchart LR
     A["사용자가 하트 탭"] --> B["photo.is_favorite 뒤집기<br/>false ⇄ true"]
     B --> C["UI 즉시 갱신 (DB 기준)"]
     B --> D["사진 앱에도 반영<br/>(PhotoKit isFavorite)"]
+    D --> E{"PhotoKit 쓰기 성공?"}
+    E -- 성공 --> F["완료"]
+    E -- 실패 --> G["재시도 큐 등록<br/>DB·UI는 유지"]
+    G --> H["시나리오 4 동기화가<br/>최종 정합성 보정"]
 ```
 
 **단계**
 1. 탭한 사진의 `is_favorite` 값을 반대로 바꾼다 (`UPDATE`).
 2. DB가 바뀌었으니 화면(즐겨찾기 필터·하트 아이콘)이 바로 갱신된다.
 3. 사진 앱에도 같은 즐겨찾기를 반영한다. 이후 사진 앱에서 값이 또 바뀌면 **시나리오 4(동기화)** 가 DB를 최신으로 맞춘다.
+4. **PhotoKit 반영 실패 시**(롤백 대신 pending/retry 방식): 낙관적으로 먼저 갱신한 **DB·UI 값은 되돌리지 않고 그대로 유지**하고, 실패한 쓰기를 **재시도 큐**에 등록한다. 재시도가 끝내 실패하더라도 DB가 화면의 기준이므로 UI는 유지되며, 이후 **시나리오 4(동기화)** 가 PhotoKit의 최종 상태로 DB를 정합화한다.
 
 ### 저장 결과 (토글 전 → 후)
 

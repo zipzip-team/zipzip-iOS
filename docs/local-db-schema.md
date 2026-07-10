@@ -25,6 +25,8 @@
 ### 그리드 SQLite 구동에 따른 의무
 
 - **인덱스 필수** — `photo.taken_at`, `photo.added_at`, `photo.device_id`, `photo.place_id`, `photo.is_favorite`, `album_photo(album_id, added_at)`
+  - 서버 수신 테이블의 FK 컬럼(`shared_album.shared_group_id`, `shared_photo.shared_album_id`)도 CASCADE 삭제·조인 성능을 위해 인덱스를 둔다.
+  - `photo.content_hash` — 시나리오 3의 로컬↔︎서버 매칭(EXISTS) 조회용.
 - **DB ↔︎ PhotoKit 동기화** — DB가 화면 source of truth이므로, Photos 앱에서의 즐겨찾기·삭제·편집을 `PHPhotoLibraryChangeObserver` + `sync_state.change_token`으로 DB에 반영해야 함 (특히 `is_favorite` 최신화 책임을 DB가 짐)
 - **이미지 경로 컬럼 없음** — 로컬 `photo`에는 파일 경로/썸네일 경로를 두지 않음 (참조 방식). 경로 저장은 **서버에서 다운로드한 `shared_photo`에만** 해당(추후)
 
@@ -41,9 +43,9 @@
 | 사진 ID | `id` | INTEGER | PK | 로컬 기본키 |
 | PhotoKit 식별자 | `local_identifier` | TEXT | UNIQUE | `PHAsset.localIdentifier` |
 | 콘텐츠 해시 | `content_hash` | TEXT |  | 중복 판별·서버 매핑 키 |
-| 촬영 일시 | `taken_at` | INTEGER |  | 촬영 시각 (정렬 축) |
-| 추가 일시 | `added_at` | INTEGER |  | 라이브러리 추가 시각 (정렬·증분 동기화 축) |
-| 즐겨찾기 | `is_favorite` | INTEGER |  | 0/1 |
+| 촬영 일시 | `taken_at` | INTEGER | NULL | 촬영 시각, unix epoch 초 (정렬 축) |
+| 추가 일시 | `added_at` | INTEGER | NOT NULL | 라이브러리 추가 시각 (정렬·증분 동기화 축) |
+| 즐겨찾기 | `is_favorite` | INTEGER | NOT NULL DEFAULT 0 | 0/1 |
 | 위도 | `latitude` | REAL | NULL | 원본 좌표 (GPS 없으면 NULL) |
 | 경도 | `longitude` | REAL | NULL | 원본 좌표 |
 | 가로 | `width` | INTEGER |  | 그리드 비율 예약 |
@@ -152,6 +154,11 @@ SELECT DISTINCT date(taken_at, 'unixepoch', 'localtime') AS day FROM photo;
 | `date` ↔︎ `photo` | 논리 | 점선 | `taken_at` 일자 집계(파생) |
 | `shared_group` → `shared_album` → `shared_photo` | 1:∞ | 실선 | 서버 계층 |
 | `sync_state` | 독립 | — | 라이브러리 전체 추적 |
+
+> **`content_hash` 매칭 규칙** (`photo` ↔︎ `shared_photo`, 둘 다 nullable·non-unique)
+> - **NULL 제외**: `content_hash IS NULL`(해시 미계산·계산 불가)인 행은 양쪽 어디서든 매칭 대상에서 제외한다.
+> - **중복 허용**: 동일 콘텐츠가 여러 장일 수 있어 같은 non-null 해시가 여러 `photo`에 존재할 수 있다. 매칭은 **존재 여부(EXISTS)** 로 판정하며(있으면 "이미 가진 사진"), 단일 연결이 필요하면 결정적 규칙(예: 최소 `photo.id`)으로 대표를 고른다. `content_hash`에는 UNIQUE 제약을 걸지 않는다.
+> - **Fallback**: `shared_photo.content_hash`가 NULL이거나 로컬에 매칭이 없으면 **새로 받을 사진**으로 취급한다. 로컬 `photo.content_hash`가 아직 없으면 매칭을 **유보(pending)** 하고 해시 계산 후 재판정한다.
 
 ---
 

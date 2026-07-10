@@ -14,7 +14,7 @@
 
 **근거**
 - 기기·장소는 사진당 단일값 → 실제 관계가 **M:N이 아니라 N:1**. 조인 테이블은 과설계.
-- 두 축은 공유 컬럼이 거의 없음(기기: model/os, 장소: name/lat/lng) → 한 테이블에 담으면 **nullable 범벅(sparse table)**.
+- 두 축은 공유 컬럼이 거의 없음(기기: make/model, 장소: name/lat/lng) → 한 테이블에 담으면 **nullable 범벅(sparse table)**.
 - 사진마다 “iPhone 15 Pro” 문자열 반복 저장 대신, 참조 테이블로 정규화.
 
 ## 결정 2. 필터링 때문에 오히려 분리가 유리
