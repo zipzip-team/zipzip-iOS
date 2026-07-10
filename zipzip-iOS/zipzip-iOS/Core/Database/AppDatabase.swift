@@ -154,13 +154,31 @@ func appDatabase() throws -> any DatabaseWriter {
         try #sql(#"CREATE INDEX "idx_photo_device_id" ON "photo"("device_id")"#).execute(db)
         try #sql(#"CREATE INDEX "idx_photo_place_id" ON "photo"("place_id")"#).execute(db)
         try #sql(#"CREATE INDEX "idx_photo_is_favorite" ON "photo"("is_favorite")"#).execute(db)
+        try #sql(#"CREATE INDEX "idx_photo_content_hash" ON "photo"("content_hash")"#).execute(db)
         try #sql(
             #"CREATE INDEX "idx_album_photo_album_added" ON "album_photo"("album_id", "added_at")"#
         )
         .execute(db)
+        try #sql(#"CREATE INDEX "idx_shared_album_group_id" ON "shared_album"("shared_group_id")"#).execute(db)
+        try #sql(#"CREATE INDEX "idx_shared_photo_album_id" ON "shared_photo"("shared_album_id")"#).execute(db)
     }
 
-    try migrator.migrate(database)
-
-    return database
+    do {
+        try migrator.migrate(database)
+        return database
+    } catch {
+        guard context == .live else { throw error }
+        logger.error("migration failed: \(error). backing up store and recreating.")
+        let path = database.path
+        try? database.close()
+        let fileManager = FileManager.default
+        try? fileManager.removeItem(atPath: path + ".corrupt")
+        try? fileManager.moveItem(atPath: path, toPath: path + ".corrupt")
+        for suffix in ["-wal", "-shm"] {
+            try? fileManager.removeItem(atPath: path + suffix)
+        }
+        let recreated = try defaultDatabase(configuration: configuration)
+        try migrator.migrate(recreated)
+        return recreated
+    }
 }
