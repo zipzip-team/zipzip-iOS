@@ -13,7 +13,7 @@ final class ServiceIntroViewModel {
     private let pages: [ServiceIntroPage]
 
     var currentPage = 0
-    var showsOnboardingCompleteView = false
+    var didReachEnd = false
 
     init(pages: [ServiceIntroPage] = ServiceIntroPage.pages) {
         self.pages = pages
@@ -31,7 +31,7 @@ final class ServiceIntroViewModel {
         if currentPage < pageCount - 1 {
             currentPage += 1
         } else {
-            showsOnboardingCompleteView = true
+            didReachEnd = true
         }
     }
 }

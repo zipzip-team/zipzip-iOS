@@ -9,6 +9,7 @@ import SwiftUI
 
 struct ServiceIntroView: View {
     @Environment(Router.self) private var router
+    @Environment(PhotoSyncCoordinator.self) private var photoSync
 
     @State private var viewModel: ServiceIntroViewModel
 
@@ -51,9 +52,9 @@ struct ServiceIntroView: View {
                 }
             }
         }
-        .onChange(of: viewModel.showsOnboardingCompleteView) { _, showsOnboardingCompleteView in
-            guard showsOnboardingCompleteView else { return }
-            router.push(.onboardingComplete)
+        .onChange(of: viewModel.didReachEnd) { _, didReachEnd in
+            guard didReachEnd else { return }
+            router.push(photoSync.isFinished ? .deviceSelection : .deviceLoading)
         }
     }
 }
@@ -61,6 +62,7 @@ struct ServiceIntroView: View {
 #Preview {
     ServiceIntroView()
         .environment(Router())
+        .environment(PhotoSyncCoordinator())
 }
 
 private struct ServiceIntroPageIndicator: View {
