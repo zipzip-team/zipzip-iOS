@@ -43,7 +43,7 @@ struct DeviceSelectionView: View {
                 Spacer()
 
                 CommonButton(title: "확인", property1: .default) {
-                    router.push(.serviceIntro)
+                    router.push(.onboardingComplete)
                 }
             }
         }

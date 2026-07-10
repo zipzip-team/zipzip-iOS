@@ -10,6 +10,7 @@ import SwiftUI
 struct RootView: View {
     @Environment(Router.self) private var router
     @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
+    @State private var photoSync = PhotoSyncCoordinator()
 
     var body: some View {
         @Bindable var router = router
@@ -20,6 +21,10 @@ struct RootView: View {
                 } else {
                     SplashView()
                 }
+            }
+            .task {
+                guard hasCompletedOnboarding else { return }
+                photoSync.startIfNeeded()
             }
             .navigationDestination(for: Route.self) { route in
                 switch route {
@@ -50,5 +55,6 @@ struct RootView: View {
                 }
             }
         }
+        .environment(photoSync)
     }
 }

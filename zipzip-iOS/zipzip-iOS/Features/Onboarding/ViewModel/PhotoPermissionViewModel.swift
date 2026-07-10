@@ -13,7 +13,7 @@ import UIKit
 @MainActor
 @Observable
 final class PhotoPermissionViewModel {
-    var showsDeviceLoadingView = false
+    var didAuthorizePhotoAccess = false
     var showsPermissionAlert = false
 
     func requestPhotoPermission() {
@@ -21,7 +21,7 @@ final class PhotoPermissionViewModel {
 
         switch status {
         case .authorized:
-            showsDeviceLoadingView = true
+            didAuthorizePhotoAccess = true
         case .limited:
             presentLimitedPhotoPicker()
         case .notDetermined:
@@ -31,6 +31,10 @@ final class PhotoPermissionViewModel {
         @unknown default:
             showsPermissionAlert = true
         }
+    }
+
+    func handlePhotoAccessGranted(using coordinator: PhotoSyncCoordinator) {
+        coordinator.startIfNeeded()
     }
 
     func dismissPermissionAlert() {
@@ -56,9 +60,9 @@ final class PhotoPermissionViewModel {
     private func handleAuthorizationStatus(_ status: PHAuthorizationStatus) {
         switch status {
         case .authorized:
-            showsDeviceLoadingView = true
+            didAuthorizePhotoAccess = true
         case .limited:
-            showsDeviceLoadingView = true
+            didAuthorizePhotoAccess = true
         case .denied, .restricted:
             showsPermissionAlert = true
         case .notDetermined:
@@ -70,7 +74,7 @@ final class PhotoPermissionViewModel {
 
     private func presentLimitedPhotoPicker() {
         guard let viewController = UIApplication.shared.topMostViewController else {
-            showsDeviceLoadingView = true
+            didAuthorizePhotoAccess = true
             return
         }
 
@@ -86,7 +90,7 @@ final class PhotoPermissionViewModel {
             try? await Task.sleep(for: .milliseconds(200))
         }
 
-        showsDeviceLoadingView = true
+        didAuthorizePhotoAccess = true
     }
 }
 
