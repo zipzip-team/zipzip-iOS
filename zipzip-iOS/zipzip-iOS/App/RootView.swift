@@ -5,13 +5,12 @@
 //  Created by 성환 on 7/7/26.
 //
 
-import SQLiteData
 import SwiftUI
 
 struct RootView: View {
     @Environment(Router.self) private var router
     @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
-    @Dependency(\.photoLibrarySync) private var photoLibrarySync
+    @State private var photoSync = PhotoSyncCoordinator()
 
     var body: some View {
         @Bindable var router = router
@@ -25,9 +24,7 @@ struct RootView: View {
             }
             .task {
                 guard hasCompletedOnboarding else { return }
-                do {
-                    for try await _ in photoLibrarySync.syncIfNeeded() {}
-                } catch {}
+                photoSync.startIfNeeded()
             }
             .navigationDestination(for: Route.self) { route in
                 switch route {
@@ -54,5 +51,6 @@ struct RootView: View {
                 }
             }
         }
+        .environment(photoSync)
     }
 }

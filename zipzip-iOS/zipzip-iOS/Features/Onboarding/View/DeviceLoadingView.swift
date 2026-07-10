@@ -9,7 +9,7 @@ import SwiftUI
 
 struct DeviceLoadingView: View {
     @Environment(Router.self) private var router
-    @State private var viewModel = DeviceLoadingViewModel()
+    @Environment(PhotoSyncCoordinator.self) private var photoSync
 
     var body: some View {
         OnboardingContainerView {
@@ -35,12 +35,9 @@ struct DeviceLoadingView: View {
                 CommonButton(title: "확인", property1: .default) {
                     router.push(.deviceSelection)
                 }
-                .disabled(!viewModel.isFinished)
+                .disabled(!photoSync.isFinished)
                 .frame(alignment: .bottom)
             }
-        }
-        .task {
-            await viewModel.startSync()
         }
     }
 }
@@ -48,4 +45,5 @@ struct DeviceLoadingView: View {
 #Preview {
     DeviceLoadingView()
         .environment(Router())
+        .environment(PhotoSyncCoordinator())
 }
