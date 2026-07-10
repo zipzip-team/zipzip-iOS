@@ -60,7 +60,7 @@ struct PhotoGallery: View {
             .accessibilityLabel("사진")
             .accessibilityValue(accessibilityValue(photo.id))
             .accessibilityAddTraits(.isButton)
-            .accessibilityAddTraits(selectedPhotoIDs.contains(photo.id) ? .isSelected : [])
+            .accessibilityAddTraits(isSelectionMode && selectedPhotoIDs.contains(photo.id) ? .isSelected : [])
             .accessibilityAction { handlePhotoTap(photo) }
     }
 
