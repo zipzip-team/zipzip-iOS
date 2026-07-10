@@ -98,13 +98,15 @@ struct FilteredPictureView: View {
                 }
             } else {
                 RoundedIconButton(items: [
-                    .init(id: "back", icon: .chevronLeft) { router.pop() }
+                    .init(id: "back", icon: .chevronLeft, accessibilityLabel: "뒤로가기") { router.pop() }
                 ])
             }
             Spacer()
             if !pictureViewModel.isSelectionMode {
                 RoundedIconButton(items: [
-                    .init(id: "selection", icon: .select) { pictureViewModel.enterSelectionMode() }
+                    .init(id: "selection", icon: .select, accessibilityLabel: "사진 선택") {
+                        pictureViewModel.enterSelectionMode()
+                    }
                 ])
             }
         }

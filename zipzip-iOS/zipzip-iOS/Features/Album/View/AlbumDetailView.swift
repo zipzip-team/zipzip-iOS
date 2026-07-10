@@ -303,7 +303,7 @@ struct AlbumDetailView<Content: View>: View {
             RoundedTextButton(title: "취소", style: .cancel, action: exitSelectionMode)
         } else {
             RoundedIconButton(items: [
-                .init(id: "back", icon: .iconChevronLeft) {
+                .init(id: "back", icon: .iconChevronLeft, accessibilityLabel: "뒤로가기") {
                     dismiss()
                 }
             ])

@@ -58,8 +58,10 @@ struct PictureView: View {
 
     private var floatingButton: some View {
         RoundedIconButton(items: [
-            .init(id: "filter", icon: .filter) { router.push(.filter) },
-            .init(id: "selection", icon: .select) { viewModel.enterSelectionMode() }
+            .init(id: "filter", icon: .filter, accessibilityLabel: "필터") { router.push(.filter) },
+            .init(id: "selection", icon: .select, accessibilityLabel: "사진 선택") {
+                viewModel.enterSelectionMode()
+            }
         ])
         .padding(.horizontal, 16)
         .padding(.vertical, 4)

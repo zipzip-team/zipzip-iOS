@@ -46,8 +46,8 @@ struct RoundedIconButton: View {
         }
     }
 
-    @ViewBuilder private func button(for item: RoundedIconButtonItem) -> some View {
-        let button = Button(action: item.action) {
+    private func button(for item: RoundedIconButtonItem) -> some View {
+        Button(action: item.action) {
             Image(item.icon)
                 .renderingMode(.template)
                 .resizable()
@@ -57,35 +57,30 @@ struct RoundedIconButton: View {
                 .padding(.horizontal, items.count == 1 ? 8 : 12)
                 .frame(height: 44)
                 .contentShape(.rect)
-                .accessibilityHidden(item.accessibilityLabel != nil)
+                .accessibilityHidden(true)
         }
         .buttonStyle(.plain)
-
-        if let accessibilityLabel = item.accessibilityLabel {
-            button.accessibilityLabel(accessibilityLabel)
-        } else {
-            button
-        }
+        .accessibilityLabel(item.accessibilityLabel)
     }
 }
 
 #Preview("Rounded Icon Button") {
     VStack(spacing: 16) {
         RoundedIconButton(items: [
-            .init(id: "back", icon: .iconChevronLeft) {
+            .init(id: "back", icon: .iconChevronLeft, accessibilityLabel: "뒤로가기") {
                 print("뒤로가기 버튼 선택")
             }
         ])
 
         RoundedIconButton(items: [
-            .init(id: "filter", icon: .iconFilter) {},
-            .init(id: "selection", icon: .iconSelection) {}
+            .init(id: "filter", icon: .iconFilter, accessibilityLabel: "필터") {},
+            .init(id: "selection", icon: .iconSelection, accessibilityLabel: "사진 선택") {}
         ])
 
         RoundedIconButton(items: [
-            .init(id: "filter", icon: .iconFilter) {},
-            .init(id: "selection", icon: .iconSelection) {},
-            .init(id: "filter-secondary", icon: .iconFilter) {}
+            .init(id: "filter", icon: .iconFilter, accessibilityLabel: "필터") {},
+            .init(id: "selection", icon: .iconSelection, accessibilityLabel: "사진 선택") {},
+            .init(id: "filter-secondary", icon: .iconFilter, accessibilityLabel: "추가 필터") {}
         ])
     }
     .padding()

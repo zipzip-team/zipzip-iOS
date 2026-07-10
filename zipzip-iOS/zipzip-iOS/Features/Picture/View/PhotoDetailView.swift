@@ -123,7 +123,7 @@ struct PhotoDetailView: View {
 
     private var backButton: some View {
         RoundedIconButton(items: [
-            .init(id: "back", icon: .chevronLeft) {
+            .init(id: "back", icon: .chevronLeft, accessibilityLabel: "뒤로가기") {
                 if isEditingInfo {
                     withAnimation { isEditingInfo = false }
                 } else {
