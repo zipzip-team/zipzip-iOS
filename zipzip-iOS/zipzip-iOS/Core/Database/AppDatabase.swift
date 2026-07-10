@@ -166,19 +166,46 @@ func appDatabase() throws -> any DatabaseWriter {
     do {
         try migrator.migrate(database)
         return database
-    } catch {
-        guard context == .live else { throw error }
-        logger.error("migration failed: \(error). backing up store and recreating.")
+    } catch let migrationError {
+        guard context == .live else { throw migrationError }
+        logger.error("migration failed: \(migrationError). backing up store and recreating.")
         let path = database.path
         try? database.close()
+
         let fileManager = FileManager.default
-        try? fileManager.removeItem(atPath: path + ".corrupt")
-        try? fileManager.moveItem(atPath: path, toPath: path + ".corrupt")
-        for suffix in ["-wal", "-shm"] {
-            try? fileManager.removeItem(atPath: path + suffix)
+        let suffixes = ["", "-wal", "-shm"]
+        let backupBase = path + ".corrupt-\(UUID().uuidString)"
+
+        var moved: [(original: String, backup: String)] = []
+        for suffix in suffixes {
+            let original = path + suffix
+            guard fileManager.fileExists(atPath: original) else { continue }
+            do {
+                try fileManager.moveItem(atPath: original, toPath: backupBase + suffix)
+                moved.append((original: original, backup: backupBase + suffix))
+            } catch {
+                for entry in moved.reversed() {
+                    try? fileManager.moveItem(atPath: entry.backup, toPath: entry.original)
+                }
+                throw migrationError
+            }
         }
-        let recreated = try defaultDatabase(configuration: configuration)
-        try migrator.migrate(recreated)
-        return recreated
+
+        do {
+            let recreated = try defaultDatabase(configuration: configuration)
+            try migrator.migrate(recreated)
+            for entry in moved {
+                try? fileManager.removeItem(atPath: entry.backup)
+            }
+            return recreated
+        } catch {
+            for suffix in suffixes {
+                try? fileManager.removeItem(atPath: path + suffix)
+            }
+            for entry in moved {
+                try? fileManager.moveItem(atPath: entry.backup, toPath: entry.original)
+            }
+            throw error
+        }
     }
 }
