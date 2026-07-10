@@ -57,7 +57,7 @@ struct PhotoPermissionView: View {
         )
         .onChange(of: viewModel.didAuthorizePhotoAccess) { _, didAuthorizePhotoAccess in
             guard didAuthorizePhotoAccess else { return }
-            photoSync.startIfNeeded()
+            viewModel.handlePhotoAccessGranted(using: photoSync)
             router.push(.serviceIntro)
         }
     }

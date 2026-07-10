@@ -33,6 +33,10 @@ final class PhotoPermissionViewModel {
         }
     }
 
+    func handlePhotoAccessGranted(using coordinator: PhotoSyncCoordinator) {
+        coordinator.startIfNeeded()
+    }
+
     func dismissPermissionAlert() {
         showsPermissionAlert = false
     }
