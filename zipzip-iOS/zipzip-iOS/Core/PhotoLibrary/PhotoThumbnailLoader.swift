@@ -14,6 +14,18 @@ final class PhotoThumbnailLoader: @unchecked Sendable {
     private let manager = PHCachingImageManager()
 
     func thumbnail(for localIdentifier: String, targetSize: CGSize) async -> UIImage? {
+        await requestImage(for: localIdentifier, targetSize: targetSize, contentMode: .aspectFill)
+    }
+
+    func fullImage(for localIdentifier: String, targetSize: CGSize) async -> UIImage? {
+        await requestImage(for: localIdentifier, targetSize: targetSize, contentMode: .aspectFit)
+    }
+
+    private func requestImage(
+        for localIdentifier: String,
+        targetSize: CGSize,
+        contentMode: PHImageContentMode
+    ) async -> UIImage? {
         guard let asset = PHAsset.fetchAssets(withLocalIdentifiers: [localIdentifier], options: nil).firstObject else {
             return nil
         }
@@ -27,7 +39,7 @@ final class PhotoThumbnailLoader: @unchecked Sendable {
             manager.requestImage(
                 for: asset,
                 targetSize: targetSize,
-                contentMode: .aspectFill,
+                contentMode: contentMode,
                 options: options
             ) { image, _ in
                 continuation.resume(returning: image)
