@@ -8,6 +8,8 @@
 import SwiftUI
 
 struct MainView: View {
+    @Environment(Router.self) private var router
+
     private enum Layout {
         static let heroHeight: CGFloat = 402
         static let sectionSpacing: CGFloat = 32
@@ -91,7 +93,9 @@ struct MainView: View {
 
             Spacer()
 
-            ProfileButton {}
+            ProfileButton {
+                router.push(.myPage)
+            }
         }
         .padding(.horizontal, Layout.horizontalPadding)
     }
