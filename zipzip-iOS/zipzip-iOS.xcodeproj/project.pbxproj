@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		CA347D7C3000EE1700F47009 /* SQLiteData in Frameworks */ = {isa = PBXBuildFile; productRef = CA347D7B3000EE1700F47009 /* SQLiteData */; };
 		CA881BC72FF418B200AA3125 /* Alamofire in Frameworks */ = {isa = PBXBuildFile; productRef = CA881BC62FF418B200AA3125 /* Alamofire */; };
 /* End PBXBuildFile section */
 
@@ -43,6 +44,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				CA347D7C3000EE1700F47009 /* SQLiteData in Frameworks */,
 				CA881BC72FF418B200AA3125 /* Alamofire in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -88,6 +90,7 @@
 			name = "zipzip-iOS";
 			packageProductDependencies = (
 				CA881BC62FF418B200AA3125 /* Alamofire */,
+				CA347D7B3000EE1700F47009 /* SQLiteData */,
 			);
 			productName = "zipzip-iOS";
 			productReference = CA881AA02FF3FF9800AA3125 /* zipzip-iOS.app */;
@@ -121,6 +124,7 @@
 			packageReferences = (
 				CA881BC52FF418B200AA3125 /* XCRemoteSwiftPackageReference "Alamofire" */,
 				CA881D012FF5000000AA3125 /* XCRemoteSwiftPackageReference "SwiftLintPlugins" */,
+				CA347D7A3000EE1700F47009 /* XCRemoteSwiftPackageReference "sqlite-data" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = CA881AA12FF3FF9800AA3125 /* Products */;
@@ -404,6 +408,16 @@
 /* End XCConfigurationList section */
 
 /* Begin XCRemoteSwiftPackageReference section */
+		CA347D7A3000EE1700F47009 /* XCRemoteSwiftPackageReference "sqlite-data" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/pointfreeco/sqlite-data";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 1.6.6;
+			};
+			traits = (
+			);
+		};
 		CA881BC52FF418B200AA3125 /* XCRemoteSwiftPackageReference "Alamofire" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/Alamofire/Alamofire";
@@ -423,6 +437,11 @@
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
+		CA347D7B3000EE1700F47009 /* SQLiteData */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = CA347D7A3000EE1700F47009 /* XCRemoteSwiftPackageReference "sqlite-data" */;
+			productName = SQLiteData;
+		};
 		CA881BC62FF418B200AA3125 /* Alamofire */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = CA881BC52FF418B200AA3125 /* XCRemoteSwiftPackageReference "Alamofire" */;
