@@ -43,9 +43,9 @@ final class PictureViewModel {
         selectedPhotoIDs = []
     }
 
-    func loadPhotos() async {
+    func loadPhotos(filters: [AppliedFilter] = []) async {
         do {
-            sections = try await provider.loadSections()
+            sections = try await provider.loadSections(filters: filters)
         } catch {
             Self.logger.error("failed to load photo sections: \(error)")
         }

@@ -48,7 +48,13 @@ struct PhotoFilterOptions {
 }
 
 extension PhotoFilterOptions {
-    static let defaultEtcItems = ["최근 저장된 사진", "장소 정보 없음", "날짜 정보 없음"]
+    enum EtcItem {
+        static let recentlyAdded = "최근 저장된 사진"
+        static let noLocation = "장소 정보 없음"
+        static let noDate = "날짜 정보 없음"
+    }
+
+    static let defaultEtcItems = [EtcItem.recentlyAdded, EtcItem.noLocation, EtcItem.noDate]
 }
 
 extension PhotoFilterOptions {

@@ -5,11 +5,22 @@
 //  Created by 성환 on 7/9/26.
 //
 
+import OSLog
+import SQLiteData
 import SwiftUI
 
 @Observable
 final class FilteredPictureViewModel {
-    let options: PhotoFilterOptions = .sample
+    @ObservationIgnored
+    @Dependency(\.photoFilterOptions) private var optionsProvider
+
+    private static let logger = Logger(subsystem: "com.zipzip.zipzip-iOS", category: "FilteredOptions")
+
+    private(set) var options = PhotoFilterOptions(
+        devices: [],
+        locations: [],
+        etcItems: PhotoFilterOptions.defaultEtcItems
+    )
 
     var appliedFilters: [AppliedFilter]
 
@@ -24,6 +35,14 @@ final class FilteredPictureViewModel {
 
     init(appliedFilters: [AppliedFilter]) {
         self.appliedFilters = appliedFilters
+    }
+
+    func loadOptions() async {
+        do {
+            options = try await optionsProvider.load()
+        } catch {
+            Self.logger.error("failed to load filter options: \(error)")
+        }
     }
 
     func editFilter(_ filter: AppliedFilter) {

@@ -40,6 +40,10 @@ struct FilteredPictureView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .background(Color.orange30.ignoresSafeArea())
         .navigationBarBackButtonHidden(true)
+        .task { await viewModel.loadOptions() }
+        .task(id: viewModel.appliedFilters) {
+            await pictureViewModel.loadPhotos(filters: viewModel.appliedFilters)
+        }
         .bottomSheet(isPresented: $viewModel.showDeviceSheet, detents: [.content]) { dismiss in
             DeviceFilterSheet(devices: viewModel.options.devices, selected: $viewModel.pickerDevice) {
                 viewModel.applyDevice(viewModel.pickerDevice)
