@@ -32,7 +32,9 @@ struct ShareSheet: View {
                 headerButton("취소") { onDismiss() }
             },
             rightItem: {
-                headerButton("완료", isDisabled: selectedDestination == nil, action: completeSelection)
+                if showsCompletionButton {
+                    headerButton("완료", isDisabled: selectedDestination == nil, action: completeSelection)
+                }
             }
         ) {
             content
@@ -89,6 +91,10 @@ struct ShareSheet: View {
 
     private func selectAlbum(_ album: Album) {
         selectedAlbumID = album.id
+    }
+
+    private var showsCompletionButton: Bool {
+        selection == .left || authenticationState.isLoggedIn
     }
 
     private var selectedDestination: ShareDestination? {
