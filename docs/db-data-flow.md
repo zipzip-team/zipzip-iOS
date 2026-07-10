@@ -73,6 +73,8 @@ flowchart LR
 
 > `taken_at`·`added_at`는 **INTEGER unix epoch 초**로 저장한다 (`date(taken_at, 'unixepoch', 'localtime')`로 날짜 조회). 예: `1782883800` = 2026-07-01 14:30 (KST).
 
+> `added_at`은 **집집이 임포트한 시각**이고, 사진 앱에 실제로 추가된 시각은 별도 `added_date`(`PHAsset.addedDate`, iOS 26+) 컬럼에 저장한다 — '최근 저장된 사진' 필터의 정렬 기준.
+
 > `device_id = 1` → device 표의 “iPhone 15 Pro”를 가리킨다. 사진이 늘어도 기기 이름은 device 표에 **딱 한 줄**만 있으면 된다.
 > 
 
