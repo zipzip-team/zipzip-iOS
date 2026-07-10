@@ -91,6 +91,7 @@ nonisolated struct PhotoLibrarySyncService {
                 localIdentifier: metadata.localIdentifier,
                 takenAt: metadata.creationDate,
                 addedAt: addedAt,
+                addedDate: metadata.addedDate,
                 isFavorite: metadata.isFavorite,
                 latitude: metadata.latitude,
                 longitude: metadata.longitude,
@@ -102,6 +103,7 @@ nonisolated struct PhotoLibrarySyncService {
             $0.localIdentifier
         } doUpdate: { updates, excluded in
             updates.takenAt = excluded.takenAt
+            updates.addedDate = excluded.addedDate
             updates.isFavorite = excluded.isFavorite
             updates.latitude = excluded.latitude
             updates.longitude = excluded.longitude
