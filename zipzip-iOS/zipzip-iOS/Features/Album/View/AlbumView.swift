@@ -193,27 +193,31 @@ struct AlbumView: View {
                     movePhotos(photoIDs, from: albumID, to: destination)
                 }
             )
+            let detailViewModel = AlbumDetailViewModel(
+                actions: actions,
+                onEditPhotoInfo: showPhotoInfoEdit
+            )
 
             if !album.hasPhotos {
                 AlbumDetailEmptyView(
                     album: album.detailItem,
-                    actions: actions,
+                    viewModel: detailViewModel,
                     moveAlbums: moveDestinations(excluding: albumID),
                     photoPickerSections: availablePhotoSections(excluding: album.photoIDs)
                 )
             } else {
                 AlbumDetailView(
                     album: album.detailItem,
-                    actions: actions,
+                    viewModel: detailViewModel,
                     moveAlbums: moveDestinations(excluding: albumID),
-                    photoPickerSections: availablePhotoSections(excluding: album.photoIDs),
-                    onEditPhotoInfo: showPhotoInfoEdit
-                ) { isSelectionMode, selectedPhotoIDs in
+                    photoPickerSections: availablePhotoSections(excluding: album.photoIDs)
+                ) { viewModel in
                     AlbumDetailGalleryPlaceholderView(
                         sections: photoSections(for: album),
                         photoCount: album.count,
-                        showsSelectionControls: isSelectionMode,
-                        selectedPhotoIDs: selectedPhotoIDs,
+                        showsSelectionControls: viewModel.isSelectionMode,
+                        selectedPhotoIDs: viewModel.selectedPhotoIDs,
+                        onSelectPhoto: viewModel.togglePhotoSelection,
                         onOpenPhoto: { showPhotoDetail($0, in: albumID) }
                     )
                 }

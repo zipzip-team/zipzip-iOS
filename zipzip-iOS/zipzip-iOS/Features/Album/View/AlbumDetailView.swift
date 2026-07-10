@@ -26,149 +26,30 @@ struct AlbumDetailItem: Hashable, Identifiable {
     }
 }
 
-struct AlbumDetailActions {
-    let onRename: (String) -> Void
-    let onDelete: () -> Void
-    let onAddPhotos: ([UUID]) -> Void
-    let onDeletePhotos: ([UUID], PhotoDeletionAction) -> Void
-    let onMovePhotos: ([UUID], ShareDestination) -> Void
-
-    init(
-        onRename: @escaping (String) -> Void = { _ in },
-        onDelete: @escaping () -> Void = {},
-        onAddPhotos: @escaping ([UUID]) -> Void = { _ in },
-        onDeletePhotos: @escaping ([UUID], PhotoDeletionAction) -> Void = { _, _ in },
-        onMovePhotos: @escaping ([UUID], ShareDestination) -> Void = { _, _ in }
-    ) {
-        self.onRename = onRename
-        self.onDelete = onDelete
-        self.onAddPhotos = onAddPhotos
-        self.onDeletePhotos = onDeletePhotos
-        self.onMovePhotos = onMovePhotos
-    }
-}
-
 struct AlbumDetailView<Content: View>: View {
     @Environment(\.dismiss) private var dismiss
-    @State private var isSelectionMode: Bool
-    @State private var isPhotoPickerPresented = false
-    @State private var isAlbumManagementPresented = false
-    @State private var isAlbumDeleteAlertPresented = false
-    @State private var isMoveSheetPresented = false
-    @State private var isDeleteAlertPresented = false
-    @State private var selectedPhotoIDs: [UUID] = []
-    @State private var albumTitleDraft = ""
+    @State private var viewModel: AlbumDetailViewModel
 
     let album: AlbumDetailItem
     private let contentTopSpacing: CGFloat
-    private let detailContent: (Bool, Binding<[UUID]>, @escaping () -> Void) -> Content
-    private let actions: AlbumDetailActions
+    private let detailContent: (AlbumDetailViewModel) -> Content
     private let moveAlbums: [Album]
     private let photoPickerSections: [PhotoSection]
-    private let onEditPhotoInfo: (UUID) -> Void
 
     init(
         album: AlbumDetailItem,
+        viewModel: AlbumDetailViewModel,
         contentTopSpacing: CGFloat = 30,
-        initialSelectionMode: Bool = false,
-        actions: AlbumDetailActions = .init(),
         moveAlbums: [Album] = Album.samples,
         photoPickerSections: [PhotoSection] = PhotoSection.sample,
-        onEditPhotoInfo: @escaping (UUID) -> Void = { _ in },
-        @ViewBuilder content: @escaping () -> Content
+        @ViewBuilder content: @escaping (AlbumDetailViewModel) -> Content
     ) {
         self.album = album
+        _viewModel = State(initialValue: viewModel)
         self.contentTopSpacing = contentTopSpacing
-        _isSelectionMode = State(initialValue: initialSelectionMode)
-        self.detailContent = { _, _, _ in content() }
-        self.actions = actions
-        self.moveAlbums = moveAlbums
-        self.photoPickerSections = photoPickerSections
-        self.onEditPhotoInfo = onEditPhotoInfo
-    }
-
-    init(
-        album: AlbumDetailItem,
-        contentTopSpacing: CGFloat = 30,
-        initialSelectionMode: Bool = false,
-        actions: AlbumDetailActions = .init(),
-        moveAlbums: [Album] = Album.samples,
-        photoPickerSections: [PhotoSection] = PhotoSection.sample,
-        onEditPhotoInfo: @escaping (UUID) -> Void = { _ in },
-        @ViewBuilder content: @escaping (Bool) -> Content
-    ) {
-        self.album = album
-        self.contentTopSpacing = contentTopSpacing
-        _isSelectionMode = State(initialValue: initialSelectionMode)
-        self.detailContent = { isSelectionMode, _, _ in content(isSelectionMode) }
-        self.actions = actions
-        self.moveAlbums = moveAlbums
-        self.photoPickerSections = photoPickerSections
-        self.onEditPhotoInfo = onEditPhotoInfo
-    }
-
-    init(
-        album: AlbumDetailItem,
-        contentTopSpacing: CGFloat = 30,
-        initialSelectionMode: Bool = false,
-        actions: AlbumDetailActions = .init(),
-        moveAlbums: [Album] = Album.samples,
-        photoPickerSections: [PhotoSection] = PhotoSection.sample,
-        onEditPhotoInfo: @escaping (UUID) -> Void = { _ in },
-        @ViewBuilder content: @escaping (Bool, Binding<[UUID]>) -> Content
-    ) {
-        self.album = album
-        self.contentTopSpacing = contentTopSpacing
-        _isSelectionMode = State(initialValue: initialSelectionMode)
-        self.detailContent = { isSelectionMode, selectedPhotoIDs, _ in
-            content(isSelectionMode, selectedPhotoIDs)
-        }
-        self.actions = actions
-        self.moveAlbums = moveAlbums
-        self.photoPickerSections = photoPickerSections
-        self.onEditPhotoInfo = onEditPhotoInfo
-    }
-
-    init(
-        album: AlbumDetailItem,
-        contentTopSpacing: CGFloat = 30,
-        initialSelectionMode: Bool = false,
-        actions: AlbumDetailActions = .init(),
-        moveAlbums: [Album] = Album.samples,
-        photoPickerSections: [PhotoSection] = PhotoSection.sample,
-        onEditPhotoInfo: @escaping (UUID) -> Void = { _ in },
-        @ViewBuilder content: @escaping (Bool, @escaping () -> Void) -> Content
-    ) {
-        self.album = album
-        self.contentTopSpacing = contentTopSpacing
-        _isSelectionMode = State(initialValue: initialSelectionMode)
-        self.detailContent = { isSelectionMode, _, presentPhotoPicker in
-            content(isSelectionMode, presentPhotoPicker)
-        }
-        self.actions = actions
-        self.moveAlbums = moveAlbums
-        self.photoPickerSections = photoPickerSections
-        self.onEditPhotoInfo = onEditPhotoInfo
-    }
-
-    init(
-        album: AlbumDetailItem,
-        contentTopSpacing: CGFloat = 30,
-        initialSelectionMode: Bool = false,
-        actions: AlbumDetailActions = .init(),
-        moveAlbums: [Album] = Album.samples,
-        photoPickerSections: [PhotoSection] = PhotoSection.sample,
-        onEditPhotoInfo: @escaping (UUID) -> Void = { _ in },
-        @ViewBuilder content: @escaping (Bool, Binding<[UUID]>, @escaping () -> Void) -> Content
-    ) {
-        self.album = album
-        self.contentTopSpacing = contentTopSpacing
-        _isSelectionMode = State(initialValue: initialSelectionMode)
         self.detailContent = content
-        self.actions = actions
         self.moveAlbums = moveAlbums
         self.photoPickerSections = photoPickerSections
-        self.onEditPhotoInfo = onEditPhotoInfo
     }
 
     var body: some View {
@@ -185,31 +66,31 @@ struct AlbumDetailView<Content: View>: View {
         }
         .overlay(alignment: .topTrailing) {
             AlbumHeaderActionButton(
-                onSelectionTap: enterSelectionMode,
-                onAddTap: presentPhotoPicker
+                onSelectionTap: { viewModel.enterSelectionMode(photoCount: album.photoCount) },
+                onAddTap: viewModel.presentPhotoPicker
             )
             .padding(.top, 19)
             .padding(.trailing, 16)
-            .opacity(isSelectionMode ? 0 : 1)
-            .allowsHitTesting(!isSelectionMode)
-            .accessibilityHidden(isSelectionMode)
+            .opacity(viewModel.isSelectionMode ? 0 : 1)
+            .allowsHitTesting(!viewModel.isSelectionMode)
+            .accessibilityHidden(viewModel.isSelectionMode)
         }
         .overlay(alignment: .bottom) {
-            if isSelectionMode {
+            if viewModel.isSelectionMode {
                 ActionBar(items: selectionActionItems)
                     .padding(.bottom, 49)
             }
         }
-        .navigationDestination(isPresented: $isPhotoPickerPresented) {
+        .navigationDestination(isPresented: $viewModel.isPhotoPickerPresented) {
             AlbumPhotoPickerView(
                 viewModel: AlbumPhotoPickerViewModel(
                     sections: photoPickerSections,
-                    onComplete: actions.onAddPhotos
+                    onComplete: viewModel.addPhotos
                 )
             )
         }
         .bottomSheet(
-            isPresented: $isAlbumManagementPresented,
+            isPresented: $viewModel.isAlbumManagementPresented,
             detents: [.height(549)],
             initialDetent: .height(549),
             showsDragIndicator: .visible,
@@ -217,44 +98,44 @@ struct AlbumDetailView<Content: View>: View {
         ) { _ in
             BottomSheet(
                 leftItem: {
-                    AlbumManagementSheetHeaderButton(title: "취소", action: dismissAlbumManagement)
+                    AlbumManagementSheetHeaderButton(title: "취소", action: viewModel.dismissAlbumManagement)
                 },
                 rightItem: {
-                    AlbumManagementSheetHeaderButton(title: "삭제", action: deleteAlbum)
+                    AlbumManagementSheetHeaderButton(title: "삭제", action: viewModel.presentAlbumDeleteAlert)
                 }
             ) {
                 AlbumManagementSheetContent(
-                    albumName: $albumTitleDraft,
-                    onCompleteTap: completeAlbumManagement
+                    albumName: $viewModel.albumTitleDraft,
+                    onCompleteTap: viewModel.completeAlbumManagement
                 )
             }
             .bottomSheetAlert(
-                isPresented: $isAlbumDeleteAlertPresented,
+                isPresented: $viewModel.isAlbumDeleteAlertPresented,
                 title: "이 사진집을 삭제하시겠어요?",
                 message: "사진집에 담긴 사진들은 삭제되지 않아요.",
                 secondaryTitle: "취소",
                 primaryTitle: "삭제",
-                onSecondaryTap: dismissAlbumDeleteAlert,
-                onPrimaryTap: confirmAlbumDeletion
+                onSecondaryTap: viewModel.dismissAlbumDeleteAlert,
+                onPrimaryTap: viewModel.confirmAlbumDeletion
             )
         }
-        .bottomSheet(isPresented: $isMoveSheetPresented, detents: [.full]) { dismiss in
+        .bottomSheet(isPresented: $viewModel.isMoveSheetPresented, detents: [.full]) { sheetDismiss in
             ShareSheet(
                 albums: moveAlbums,
                 sharedAlbums: Album.sharedSamples,
                 shareAlbums: ShareAlbum.samples,
-                onDismiss: { dismiss() },
-                onComplete: completePhotoMove
+                onDismiss: { sheetDismiss() },
+                onComplete: viewModel.completePhotoMove
             )
         }
         .bottomSheetAlert(
-            isPresented: $isDeleteAlertPresented,
+            isPresented: $viewModel.isDeleteAlertPresented,
             title: deleteAlertContent.title,
             message: deleteAlertContent.message,
             secondaryTitle: deleteAlertContent.secondaryTitle,
             primaryTitle: deleteAlertContent.primaryTitle,
-            onSecondaryTap: deleteSelectedPhotosPermanently,
-            onPrimaryTap: removeSelectedPhotosFromAlbum
+            onSecondaryTap: viewModel.deleteSelectedPhotosPermanently,
+            onPrimaryTap: viewModel.removeSelectedPhotosFromAlbum
         )
         .navigationBarBackButtonHidden(true)
         .toolbarVisibility(.hidden, for: .navigationBar)
@@ -265,10 +146,10 @@ struct AlbumDetailView<Content: View>: View {
             VStack(spacing: contentTopSpacing) {
                 titleSection
 
-                detailContent(isSelectionMode, $selectedPhotoIDs, presentPhotoPicker)
+                detailContent(viewModel)
             }
             .padding(.top, 168)
-            .padding(.bottom, isSelectionMode ? 140 : 40)
+            .padding(.bottom, viewModel.isSelectionMode ? 140 : 40)
             .frame(maxWidth: .infinity, alignment: .top)
             .background(alignment: .top) {
                 AlbumDetailFolderBackground()
@@ -286,13 +167,28 @@ struct AlbumDetailView<Content: View>: View {
     }
 
     private var selectionActionItems: [ActionBarItem] {
-        let hasSelectedPhotos = !selectedPhotoIDs.isEmpty
-
         return [
-            .init(icon: .settingAlbum, title: "집 관리", action: manageAlbum),
-            .init(icon: .move, title: "이동하기", isDisabled: !hasSelectedPhotos, action: moveSelectedPhotos),
-            .init(icon: .metadata, title: "정보 수정", isDisabled: !hasSelectedPhotos, action: editSelectedPhotoInfo),
-            .init(icon: .delete, title: "삭제", isDisabled: !hasSelectedPhotos, action: deleteSelectedPhotos)
+            .init(icon: .settingAlbum, title: "집 관리") {
+                viewModel.presentAlbumManagement(albumTitle: album.title)
+            },
+            .init(
+                icon: .move,
+                title: "이동하기",
+                isDisabled: !viewModel.hasSelectedPhotos,
+                action: viewModel.presentMoveSheet
+            ),
+            .init(
+                icon: .metadata,
+                title: "정보 수정",
+                isDisabled: !viewModel.hasSelectedPhotos,
+                action: viewModel.editSelectedPhotoInfo
+            ),
+            .init(
+                icon: .delete,
+                title: "삭제",
+                isDisabled: !viewModel.hasSelectedPhotos,
+                action: viewModel.presentPhotoDeleteAlert
+            )
         ]
     }
 
@@ -301,8 +197,8 @@ struct AlbumDetailView<Content: View>: View {
     }
 
     @ViewBuilder private var leadingActionButton: some View {
-        if isSelectionMode {
-            RoundedTextButton(title: "취소", style: .cancel, action: exitSelectionMode)
+        if viewModel.isSelectionMode {
+            RoundedTextButton(title: "취소", style: .cancel, action: viewModel.exitSelectionMode)
         } else {
             RoundedIconButton(items: [
                 .init(id: "back", icon: .iconChevronLeft, accessibilityLabel: "뒤로가기") {
@@ -311,118 +207,23 @@ struct AlbumDetailView<Content: View>: View {
             ])
         }
     }
-
-    private func enterSelectionMode() {
-        guard album.photoCount > 0 else {
-            return
-        }
-
-        isSelectionMode = true
-    }
-
-    private func exitSelectionMode() {
-        isSelectionMode = false
-        selectedPhotoIDs.removeAll()
-    }
-
-    private func presentPhotoPicker() {
-        isPhotoPickerPresented = true
-    }
-
-    private func manageAlbum() {
-        exitSelectionMode()
-        albumTitleDraft = albumTitle
-        isAlbumManagementPresented = true
-    }
-
-    private func dismissAlbumManagement() {
-        isAlbumManagementPresented = false
-    }
-
-    private func completeAlbumManagement() {
-        let trimmedTitle = albumTitleDraft.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmedTitle.isEmpty else {
-            return
-        }
-
-        actions.onRename(trimmedTitle)
-        isAlbumManagementPresented = false
-    }
-
-    private func deleteAlbum() {
-        isAlbumDeleteAlertPresented = true
-    }
-
-    private func dismissAlbumDeleteAlert() {
-        isAlbumDeleteAlertPresented = false
-    }
-
-    private func confirmAlbumDeletion() {
-        isAlbumDeleteAlertPresented = false
-        isAlbumManagementPresented = false
-        actions.onDelete()
-    }
-
-    private func moveSelectedPhotos() {
-        guard !selectedPhotoIDs.isEmpty else {
-            return
-        }
-
-        isMoveSheetPresented = true
-    }
-
-    private func completePhotoMove(to destination: ShareDestination) {
-        actions.onMovePhotos(selectedPhotoIDs, destination)
-        isMoveSheetPresented = false
-        exitSelectionMode()
-    }
-
-    private func editSelectedPhotoInfo() {
-        guard let firstPhotoID = selectedPhotoIDs.first else {
-            return
-        }
-
-        onEditPhotoInfo(firstPhotoID)
-    }
-
-    private func deleteSelectedPhotos() {
-        guard !selectedPhotoIDs.isEmpty else {
-            return
-        }
-
-        isDeleteAlertPresented = true
-    }
-
-    private func deleteSelectedPhotosPermanently() {
-        completeSelectedPhotoDeletion(.deletePermanently)
-    }
-
-    private func removeSelectedPhotosFromAlbum() {
-        completeSelectedPhotoDeletion(.removeFromAlbum)
-    }
-
-    private func completeSelectedPhotoDeletion(_ action: PhotoDeletionAction) {
-        actions.onDeletePhotos(selectedPhotoIDs, action)
-        isDeleteAlertPresented = false
-        exitSelectionMode()
-    }
 }
 
 struct AlbumDetailEmptyView: View {
     let album: AlbumDetailItem
-    var actions = AlbumDetailActions()
+    let viewModel: AlbumDetailViewModel
     var moveAlbums = Album.samples
     var photoPickerSections = PhotoSection.sample
 
     var body: some View {
         AlbumDetailView(
             album: album,
+            viewModel: viewModel,
             contentTopSpacing: 125,
-            actions: actions,
             moveAlbums: moveAlbums,
             photoPickerSections: photoPickerSections
-        ) { _, presentPhotoPicker in
-            AlbumDetailEmptyContent(onLoadPhotos: presentPhotoPicker)
+        ) { viewModel in
+            AlbumDetailEmptyContent(onLoadPhotos: viewModel.presentPhotoPicker)
         }
     }
 }
@@ -544,25 +345,27 @@ private struct AlbumDetailEmptyContent: View {
 }
 
 struct AlbumDetailGalleryPlaceholderView: View {
-    @Binding private var selectedPhotoIDs: [UUID]
-
     let photoCount: Int
     var showsSelectionControls = false
 
     private let sections: [PhotoSection]
+    private let selectedPhotoIDs: [UUID]
+    private let onSelectPhoto: (UUID) -> Void
     private let onOpenPhoto: ((Photo) -> Void)?
 
     init(
         sections: [PhotoSection] = PhotoSection.sample,
         photoCount: Int,
         showsSelectionControls: Bool = false,
-        selectedPhotoIDs: Binding<[UUID]> = .constant([]),
+        selectedPhotoIDs: [UUID] = [],
+        onSelectPhoto: @escaping (UUID) -> Void = { _ in },
         onOpenPhoto: ((Photo) -> Void)? = nil
     ) {
         self.sections = sections
         self.photoCount = photoCount
         self.showsSelectionControls = showsSelectionControls
-        _selectedPhotoIDs = selectedPhotoIDs
+        self.selectedPhotoIDs = selectedPhotoIDs
+        self.onSelectPhoto = onSelectPhoto
         self.onOpenPhoto = onOpenPhoto
     }
 
@@ -574,17 +377,12 @@ struct AlbumDetailGalleryPlaceholderView: View {
                 sections: sections,
                 isSelectionMode: showsSelectionControls,
                 selectedPhotoIDs: selectedPhotoIDs,
-                onTapPhoto: toggleSelection,
+                onTapPhoto: onSelectPhoto,
                 onOpenPhoto: onOpenPhoto
             )
             .padding(.horizontal, 16)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .onChange(of: showsSelectionControls) { _, newValue in
-            if !newValue {
-                selectedPhotoIDs.removeAll()
-            }
-        }
     }
 
     private var totalCount: some View {
@@ -597,18 +395,6 @@ struct AlbumDetailGalleryPlaceholderView: View {
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
         .frame(maxWidth: .infinity, alignment: .leading)
-    }
-
-    private func toggleSelection(_ id: UUID) {
-        guard showsSelectionControls else {
-            return
-        }
-
-        if let index = selectedPhotoIDs.firstIndex(of: id) {
-            selectedPhotoIDs.remove(at: index)
-        } else {
-            selectedPhotoIDs.append(id)
-        }
     }
 }
 
@@ -708,7 +494,8 @@ private struct AlbumDetailFolderShape: Shape {
             title: "집집 🏠",
             createdAt: .now,
             photoCount: 0
-        )
+        ),
+        viewModel: AlbumDetailViewModel()
     )
 }
 
@@ -718,8 +505,9 @@ private struct AlbumDetailFolderShape: Shape {
             title: "집집 🏠",
             createdAt: .now,
             photoCount: 123
-        )
-    ) {
+        ),
+        viewModel: AlbumDetailViewModel()
+    ) { _ in
         AlbumDetailGalleryPlaceholderView(photoCount: 123)
     }
 }
@@ -731,12 +519,13 @@ private struct AlbumDetailFolderShape: Shape {
             createdAt: .now,
             photoCount: 123
         ),
-        initialSelectionMode: true
-    ) { isSelectionMode, selectedPhotoIDs in
+        viewModel: AlbumDetailViewModel(initialSelectionMode: true)
+    ) { viewModel in
         AlbumDetailGalleryPlaceholderView(
             photoCount: 123,
-            showsSelectionControls: isSelectionMode,
-            selectedPhotoIDs: selectedPhotoIDs
+            showsSelectionControls: viewModel.isSelectionMode,
+            selectedPhotoIDs: viewModel.selectedPhotoIDs,
+            onSelectPhoto: viewModel.togglePhotoSelection
         )
     }
 }
