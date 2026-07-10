@@ -5,11 +5,22 @@
 //  Created by 성환 on 7/8/26.
 //
 
+import OSLog
+import SQLiteData
 import SwiftUI
 
 @Observable
 final class FilterViewModel {
-    let options: PhotoFilterOptions = .sample
+    @ObservationIgnored
+    @Dependency(\.photoFilterOptions) private var provider
+
+    private static let logger = Logger(subsystem: "com.zipzip.zipzip-iOS", category: "FilterOptions")
+
+    private(set) var options = PhotoFilterOptions(
+        devices: [],
+        locations: [],
+        etcItems: PhotoFilterOptions.defaultEtcItems
+    )
 
     var selectedDevice: String?
     var selectedLocation: String?
@@ -50,5 +61,13 @@ final class FilterViewModel {
         selectedLocation = nil
         selectedDate = nil
         selectedEtc = nil
+    }
+
+    func loadOptions() async {
+        do {
+            options = try await provider.load()
+        } catch {
+            Self.logger.error("failed to load filter options: \(error)")
+        }
     }
 }
