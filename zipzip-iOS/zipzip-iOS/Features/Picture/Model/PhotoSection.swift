@@ -9,7 +9,13 @@ import Foundation
 
 struct Photo: Identifiable, Hashable {
     let id = UUID()
+    let localIdentifier: String
     let metadata: PhotoMetadata
+
+    init(localIdentifier: String = "", metadata: PhotoMetadata) {
+        self.localIdentifier = localIdentifier
+        self.metadata = metadata
+    }
 }
 
 extension Photo {

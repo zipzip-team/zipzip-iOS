@@ -5,15 +5,22 @@
 //  Created by 성환 on 7/8/26.
 //
 
+import OSLog
+import SQLiteData
 import SwiftUI
 
 @Observable
 final class PictureViewModel {
+    @ObservationIgnored
+    @Dependency(\.photoSections) private var provider
+
+    private static let logger = Logger(subsystem: "com.zipzip.zipzip-iOS", category: "PictureSections")
+
     var isSelectionMode = false
     private(set) var selectedPhotoIDs: [UUID] = []
     var showDeleteAlert = false
 
-    let sections: [PhotoSection] = PhotoSection.sample
+    private(set) var sections: [PhotoSection] = []
 
     var firstSelectedMetadata: PhotoMetadata? {
         guard let firstID = selectedPhotoIDs.first else { return nil }
@@ -34,6 +41,14 @@ final class PictureViewModel {
     func cancelSelection() {
         isSelectionMode = false
         selectedPhotoIDs = []
+    }
+
+    func loadPhotos() async {
+        do {
+            sections = try await provider.loadSections()
+        } catch {
+            Self.logger.error("failed to load photo sections: \(error)")
+        }
     }
 
     func handleLongPress(_ id: UUID) {
