@@ -202,8 +202,10 @@ struct AlbumDetailView<Content: View>: View {
         }
         .navigationDestination(isPresented: $isPhotoPickerPresented) {
             AlbumPhotoPickerView(
-                sections: photoPickerSections,
-                onComplete: actions.onAddPhotos
+                viewModel: AlbumPhotoPickerViewModel(
+                    sections: photoPickerSections,
+                    onComplete: actions.onAddPhotos
+                )
             )
         }
         .bottomSheet(

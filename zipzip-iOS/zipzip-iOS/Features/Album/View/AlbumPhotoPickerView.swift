@@ -9,19 +9,10 @@ import SwiftUI
 
 struct AlbumPhotoPickerView: View {
     @Environment(\.dismiss) private var dismiss
-    @State private var selectedPhotoIDs: [UUID]
+    @State private var viewModel: AlbumPhotoPickerViewModel
 
-    private let sections: [PhotoSection]
-    private let onComplete: ([UUID]) -> Void
-
-    init(
-        sections: [PhotoSection] = PhotoSection.sample,
-        selectedPhotoIDs: [UUID] = [],
-        onComplete: @escaping ([UUID]) -> Void = { _ in }
-    ) {
-        self.sections = sections
-        _selectedPhotoIDs = State(initialValue: selectedPhotoIDs)
-        self.onComplete = onComplete
+    init(viewModel: AlbumPhotoPickerViewModel) {
+        _viewModel = State(initialValue: viewModel)
     }
 
     var body: some View {
@@ -31,10 +22,10 @@ struct AlbumPhotoPickerView: View {
 
             ScrollView(showsIndicators: false) {
                 PhotoGallery(
-                    sections: sections,
+                    sections: viewModel.sections,
                     isSelectionMode: true,
-                    selectedPhotoIDs: selectedPhotoIDs,
-                    onTapPhoto: toggleSelection
+                    selectedPhotoIDs: viewModel.selectedPhotoIDs,
+                    onTapPhoto: viewModel.toggleSelection
                 )
                 .padding(.horizontal, 16)
                 .padding(.top, 79)
@@ -63,24 +54,21 @@ struct AlbumPhotoPickerView: View {
 
     private var completionButton: some View {
         RoundedTextButton(title: "완료", style: .cancel) {
-            onComplete(selectedPhotoIDs)
+            viewModel.completeSelection()
             dismiss()
         }
-        .disabled(selectedPhotoIDs.isEmpty)
-        .opacity(selectedPhotoIDs.isEmpty ? 0.4 : 1)
-    }
-
-    private func toggleSelection(_ id: UUID) {
-        if let index = selectedPhotoIDs.firstIndex(of: id) {
-            selectedPhotoIDs.remove(at: index)
-        } else {
-            selectedPhotoIDs.append(id)
-        }
+        .disabled(viewModel.isCompletionDisabled)
+        .opacity(viewModel.isCompletionDisabled ? 0.4 : 1)
     }
 }
 
 #Preview("Album Photo Picker", traits: .fixedLayout(width: 390, height: 844)) {
     NavigationStack {
-        AlbumPhotoPickerView()
+        AlbumPhotoPickerView(
+            viewModel: AlbumPhotoPickerViewModel(
+                sections: PhotoSection.sample,
+                onComplete: { _ in }
+            )
+        )
     }
 }
