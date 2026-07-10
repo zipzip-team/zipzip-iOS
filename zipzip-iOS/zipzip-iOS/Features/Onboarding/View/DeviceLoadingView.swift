@@ -9,6 +9,7 @@ import SwiftUI
 
 struct DeviceLoadingView: View {
     @Environment(Router.self) private var router
+    @State private var viewModel = DeviceLoadingViewModel()
 
     var body: some View {
         OnboardingContainerView {
@@ -34,8 +35,12 @@ struct DeviceLoadingView: View {
                 CommonButton(title: "확인", property1: .default) {
                     router.push(.deviceSelection)
                 }
+                .disabled(!viewModel.isFinished)
                 .frame(alignment: .bottom)
             }
+        }
+        .task {
+            await viewModel.startSync()
         }
     }
 }
