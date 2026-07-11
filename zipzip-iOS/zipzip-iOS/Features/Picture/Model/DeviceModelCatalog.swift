@@ -7,51 +7,121 @@
 
 import Foundation
 
-enum DeviceModelCatalog {
-    static func filterDevice(make: String?, model: String?) -> FilterDevice {
-        let make = make?.trimmingCharacters(in: .whitespaces)
-        let model = model?.trimmingCharacters(in: .whitespaces)
+enum DeviceCategory {
+    case iPhone
+    case iPad
+    case galaxy
+    case camera
+    case unknown
 
-        if make == "Apple", let identifier = model, !identifier.isEmpty {
-            let name = appleModelNames[identifier] ?? identifier
-            if identifier.hasPrefix("iPad") {
-                return FilterDevice(name: name, type: "아이패드")
-            }
-            return FilterDevice(name: name, type: "아이폰")
+    var typeLabel: String {
+        switch self {
+        case .iPhone: "아이폰"
+        case .iPad: "아이패드"
+        case .galaxy: "갤럭시"
+        case .camera: "디지털 카메라"
+        case .unknown: "알 수 없는 기기"
+        }
+    }
+}
+
+nonisolated enum DeviceModelCatalog {
+    static func category(make: String?, model: String?) -> DeviceCategory {
+        let make = normalized(make)
+        let model = normalized(model)
+
+        if make == "apple" || model.hasPrefix("iphone") || model.hasPrefix("ipad") {
+            return model.hasPrefix("ipad") ? .iPad : .iPhone
         }
 
-        let name = [make, model]
+        if isAndroidPhone(make: make, model: model) {
+            return .galaxy
+        }
+
+        if isCameraBrand(make: make) {
+            return .camera
+        }
+
+        return .unknown
+    }
+
+    static func filterDevice(make: String?, model: String?) -> FilterDevice {
+        let rawMake = make?.trimmingCharacters(in: .whitespaces)
+        let rawModel = model?.trimmingCharacters(in: .whitespaces)
+        let category = category(make: make, model: model)
+
+        switch category {
+        case .iPhone, .iPad:
+            let identifier = rawModel ?? ""
+            let name = catalog.appleModelNames[identifier] ?? identifier
+            return FilterDevice(
+                name: name.isEmpty ? category.typeLabel : name,
+                type: category.typeLabel
+            )
+        case .galaxy, .camera, .unknown:
+            let name = displayName(make: rawMake, model: rawModel)
+            return FilterDevice(
+                name: name.isEmpty ? category.typeLabel : name,
+                type: category.typeLabel
+            )
+        }
+    }
+
+    // MARK: - Classification
+
+    private static func isAndroidPhone(make: String, model: String) -> Bool {
+        if catalog.androidPhones.modelPrefixes.contains(where: { model.hasPrefix($0.lowercased()) }) {
+            return true
+        }
+        // 삼성처럼 카메라 브랜드이면서 스마트폰 제조사인 경우, 제조사명만으로는 갤럭시로 단정하지
+        // 않는다(카메라 모델은 위 modelPrefixes에 걸리지 않으므로 아래 카메라 분류로 넘어간다).
+        if catalog.androidPhones.makeKeywords.contains(where: { make.contains($0) }),
+           !isCameraBrand(make: make) {
+            return true
+        }
+        return false
+    }
+
+    private static func isCameraBrand(make: String) -> Bool {
+        guard !make.isEmpty else { return false }
+        return catalog.cameraBrands.contains { make.contains($0) }
+    }
+
+    private static func normalized(_ value: String?) -> String {
+        (value ?? "").trimmingCharacters(in: .whitespaces).lowercased()
+    }
+
+    private static func displayName(make: String?, model: String?) -> String {
+        [make, model]
             .compactMap { $0 }
             .filter { !$0.isEmpty }
             .joined(separator: " ")
-        return FilterDevice(name: name.isEmpty ? "알 수 없는 기기" : name, type: "디지털 카메라")
     }
 
-    private static let appleModelNames: [String: String] = [
-        "iPhone12,1": "iPhone 11",
-        "iPhone12,3": "iPhone 11 Pro",
-        "iPhone12,5": "iPhone 11 Pro Max",
-        "iPhone12,8": "iPhone SE (2세대)",
-        "iPhone13,1": "iPhone 12 mini",
-        "iPhone13,2": "iPhone 12",
-        "iPhone13,3": "iPhone 12 Pro",
-        "iPhone13,4": "iPhone 12 Pro Max",
-        "iPhone14,2": "iPhone 13 Pro",
-        "iPhone14,3": "iPhone 13 Pro Max",
-        "iPhone14,4": "iPhone 13 mini",
-        "iPhone14,5": "iPhone 13",
-        "iPhone14,6": "iPhone SE (3세대)",
-        "iPhone14,7": "iPhone 14",
-        "iPhone14,8": "iPhone 14 Plus",
-        "iPhone15,2": "iPhone 14 Pro",
-        "iPhone15,3": "iPhone 14 Pro Max",
-        "iPhone15,4": "iPhone 15",
-        "iPhone15,5": "iPhone 15 Plus",
-        "iPhone16,1": "iPhone 15 Pro",
-        "iPhone16,2": "iPhone 15 Pro Max",
-        "iPhone17,1": "iPhone 16 Pro",
-        "iPhone17,2": "iPhone 16 Pro Max",
-        "iPhone17,3": "iPhone 16",
-        "iPhone17,4": "iPhone 16 Plus"
-    ]
+    // MARK: - Catalog Resource
+
+    private struct Catalog: Decodable {
+        let appleModelNames: [String: String]
+        let androidPhones: AndroidPhones
+        let cameraBrands: [String]
+
+        struct AndroidPhones: Decodable {
+            let makeKeywords: [String]
+            let modelPrefixes: [String]
+        }
+
+        static let empty = Catalog(
+            appleModelNames: [:],
+            androidPhones: AndroidPhones(makeKeywords: [], modelPrefixes: []),
+            cameraBrands: []
+        )
+    }
+
+    private static let catalog: Catalog = {
+        guard let url = Bundle.main.url(forResource: "DeviceCatalog", withExtension: "json"),
+              let data = try? Data(contentsOf: url),
+              let catalog = try? JSONDecoder().decode(Catalog.self, from: data)
+        else { return .empty }
+        return catalog
+    }()
 }
