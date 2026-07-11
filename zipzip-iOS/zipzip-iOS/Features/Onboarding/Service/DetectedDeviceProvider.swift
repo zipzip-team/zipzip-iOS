@@ -10,28 +10,29 @@ import SQLiteData
 nonisolated struct DetectedDeviceProvider {
     @Dependency(\.defaultDatabase) private var database
 
-    /// device 테이블의 전체 기기(갤럭시 제외).
     func load() async throws -> [DetectedDevice] {
         try await database.read { db in
-            try DeviceRecord.all
+            let rows = try DeviceRecord
+                .group(by: \.id)
+                .join(PhotoRecord.all) { $1.deviceID.eq($0.id) }
+                .select { ($0.id, $0.make, $0.model, $1.id.count()) }
                 .fetchAll(db)
-                .sorted { $0.id < $1.id }
-                .compactMap(Self.detectedDevice)
+            return Self.mapped(rows)
         }
     }
 
-    /// 등록(is_registered)된 기기(갤럭시 제외).
     func loadRegistered() async throws -> [DetectedDevice] {
         try await database.read { db in
-            try DeviceRecord
+            let rows = try DeviceRecord
                 .where { $0.isRegistered.eq(true) }
+                .group(by: \.id)
+                .join(PhotoRecord.all) { $1.deviceID.eq($0.id) }
+                .select { ($0.id, $0.make, $0.model, $1.id.count()) }
                 .fetchAll(db)
-                .sorted { $0.id < $1.id }
-                .compactMap(Self.detectedDevice)
+            return Self.mapped(rows)
         }
     }
 
-    /// 등록된 기기 id 집합(사진 필터·사전 선택용).
     func loadRegisteredIDs() async throws -> Set<Int> {
         try await database.read { db in
             let ids = try DeviceRecord
@@ -42,7 +43,6 @@ nonisolated struct DetectedDeviceProvider {
         }
     }
 
-    /// 등록 세트를 주어진 id 집합으로 교체한다.
     func saveRegistration(deviceIDs: Set<Int>) async throws {
         try await database.write { db in
             try DeviceRecord
@@ -58,18 +58,24 @@ nonisolated struct DetectedDeviceProvider {
         }
     }
 
-    private static func detectedDevice(from record: DeviceRecord) -> DetectedDevice? {
-        let category = DeviceModelCatalog.category(make: record.make, model: record.model)
-        // 갤럭시(안드로이드 폰)는 온보딩 기기 목록에서 제외한다.
+    private static func mapped(_ rows: [(Int, String?, String?, Int)]) -> [DetectedDevice] {
+        rows
+            .sorted { $0.3 > $1.3 }
+            .compactMap { detectedDevice(id: $0.0, make: $0.1, model: $0.2) }
+    }
+
+    private static func detectedDevice(id: Int, make: String?, model: String?) -> DetectedDevice? {
+        let category = DeviceModelCatalog.category(make: make, model: model)
+
         guard category != .galaxy else { return nil }
 
-        let modelName = DeviceModelCatalog.filterDevice(make: record.make, model: record.model).name
+        let modelName = DeviceModelCatalog.filterDevice(make: make, model: model).name
         let type: DeviceType = switch category {
         case .camera, .unknown: .camera
         case .iPhone, .iPad, .galaxy: .phone
         }
         return DetectedDevice(
-            id: "\(record.id)",
+            id: "\(id)",
             name: category.typeLabel,
             modelName: modelName,
             type: type
