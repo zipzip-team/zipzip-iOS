@@ -23,7 +23,9 @@ struct PictureView: View {
                     .padding(.horizontal, 16)
                     .opacity(viewModel.isSelectionMode ? 0 : 1)
 
-                PhotoRecommendationPlaceholder()
+                if !viewModel.isSelectionMode {
+                    PhotoRecommendationPlaceholder()
+                }
 
                 PhotoGallery(
                     sections: viewModel.sections,

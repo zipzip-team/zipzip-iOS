@@ -163,9 +163,9 @@ struct FilteredPictureView: View {
             .first { $0.isKeyWindow }
         let screenHeight = window?.bounds.height ?? 0
         let topInset = window?.safeAreaInsets.top ?? 0
-        let backButtonArea: CGFloat = 48
-        let gap: CGFloat = 34
-        return max(screenHeight - topInset - backButtonArea - gap, 1)
+        let bottomInset = window?.safeAreaInsets.bottom ?? 0
+        let visibleContentBelowSafeArea: CGFloat = 169
+        return max(screenHeight - topInset - visibleContentBelowSafeArea - bottomInset, 1)
     }
 }
 
