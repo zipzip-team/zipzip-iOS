@@ -29,6 +29,8 @@ struct BottomSheetMiddleItem {
 }
 
 struct BottomSheet<Content: View>: View {
+    @Environment(\.bottomSheetDragIndicatorVisibility) private var dragIndicatorVisibility
+
     private let middleItem: BottomSheetMiddleItem?
     private let leftItem: AnyView?
     private let rightItem: AnyView?
@@ -80,6 +82,10 @@ struct BottomSheet<Content: View>: View {
 
     var body: some View {
         VStack(spacing: 0) {
+            if dragIndicatorVisibility != .hidden {
+                dragIndicator
+            }
+
             if showsHeader {
                 header
             }
@@ -96,26 +102,32 @@ struct BottomSheet<Content: View>: View {
         middleItem != nil || leftItem != nil || rightItem != nil
     }
 
+    private var dragIndicator: some View {
+        Capsule()
+            .fill(.grey600)
+            .frame(width: 100, height: 6)
+            .padding(.top, 16)
+            .frame(height: 46, alignment: .top)
+            .accessibilityHidden(true)
+    }
+
     private var header: some View {
-        ZStack {
-            HStack(spacing: 0) {
-                headerLeftItem
-                    .frame(width: 72, alignment: .leading)
+        HStack(spacing: 0) {
+            headerLeftItem
+                .frame(width: 72, alignment: .leading)
 
-                Spacer(minLength: 0)
-
-                headerRightItem
-                    .frame(width: 72, alignment: .trailing)
-            }
+            Spacer(minLength: 0)
 
             headerMiddleItem
                 .layoutPriority(1)
+
+            Spacer(minLength: 0)
+
+            headerRightItem
+                .frame(width: 72, alignment: .trailing)
         }
         .padding(.horizontal, 16)
-        .frame(maxWidth: .infinity)
-        .frame(minHeight: 48)
-        .padding(.top, 24)
-        .padding(.bottom, 12)
+        .frame(maxWidth: .infinity, minHeight: 60, alignment: .top)
     }
 
     @ViewBuilder
@@ -128,7 +140,7 @@ struct BottomSheet<Content: View>: View {
     @ViewBuilder
     private var headerMiddleItem: some View {
         if let middleItem {
-            HStack(spacing: 8) {
+            HStack(spacing: 12) {
                 SelectableButton(
                     title: middleItem.leftField,
                     isSelected: middleItem.selection.wrappedValue == .left,
@@ -174,6 +186,29 @@ struct BottomSheetCloseButton: View {
         .buttonStyle(.plain)
         .accessibilityLabel("닫기")
     }
+}
+
+struct BottomSheetBackButton: View {
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Image(.chevronLeft)
+                .renderingMode(.template)
+                .resizable()
+                .scaledToFit()
+                .foregroundStyle(.white00)
+                .frame(width: 24, height: 24)
+                .frame(width: 72, height: 48)
+                .contentShape(.rect)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("뒤로가기")
+    }
+}
+
+extension EnvironmentValues {
+    @Entry var bottomSheetDragIndicatorVisibility: Visibility = .visible
 }
 
 #Preview("BottomSheet") {

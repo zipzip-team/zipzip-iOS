@@ -130,11 +130,12 @@ private struct BottomSheetPresentationModifier<SheetContent: View>: ViewModifier
         content
             .sheet(isPresented: $isPresented) {
                 sheetView
+                    .environment(\.bottomSheetDragIndicatorVisibility, showsDragIndicator)
                     .presentationDetents(presentationDetents, selection: selectedDetent)
                     .presentationContentInteraction(
                         expandsToLargestDetentOnScroll ? .resizes : .scrolls
                     )
-                    .presentationDragIndicator(showsDragIndicator)
+                    .presentationDragIndicator(.hidden)
                     .presentationCornerRadius(32)
                     .presentationBackground(.grey950)
                     .onAppear {
