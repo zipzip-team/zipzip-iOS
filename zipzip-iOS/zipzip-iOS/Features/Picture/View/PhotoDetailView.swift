@@ -55,6 +55,7 @@ struct PhotoDetailView: View {
     @State private var showShareSheet = false
     @State private var showDeleteAlert = false
     @State private var isFavorite = false
+    @State private var photoSize: CGSize = .zero
     @State private var photoScale: CGFloat = 1
     @State private var photoOffset: CGSize = .zero
     @GestureState private var gestureScale: CGFloat = 1
@@ -64,6 +65,7 @@ struct PhotoDetailView: View {
     private static let minimumPhotoScale: CGFloat = 1
     private static let maximumPhotoScale: CGFloat = 4
     private static let doubleTapPhotoScale: CGFloat = 2
+    private static let zoomActivationThreshold: CGFloat = 1.01
     private static let infoRevealThreshold: CGFloat = 72
 
     init(
@@ -78,75 +80,92 @@ struct PhotoDetailView: View {
 
     var body: some View {
         ScrollViewReader { proxy in
-            GeometryReader { geometry in
-                let collapsedPhotoHeight = geometry.size.width * 0.5
-                let infoPanelMinHeight = max(geometry.size.height - collapsedPhotoHeight, 0)
-                let currentPhotoScale = clampedPhotoScale(photoScale * gestureScale)
-                let currentPhotoOffset = clampedPhotoOffset(
-                    adding: photoOffset,
-                    and: gestureOffset,
-                    in: geometry.size,
-                    scale: currentPhotoScale
-                )
+            ZStack {
+                GeometryReader { geometry in
+                    let collapsedPhotoHeight = geometry.size.width * 0.5
+                    let infoPanelMinHeight = max(geometry.size.height - collapsedPhotoHeight, 0)
+                    let currentPhotoScale = clampedPhotoScale(photoScale * gestureScale)
+                    let currentPhotoOffset = clampedPhotoOffset(
+                        adding: photoOffset,
+                        and: gestureOffset,
+                        in: geometry.size,
+                        scale: currentPhotoScale
+                    )
 
-                ScrollView(showsIndicators: false) {
-                    VStack(spacing: 0) {
-                        PhotoDetailImage(
-                            localIdentifier: photo.localIdentifier,
-                            contentMode: isEditingInfo ? .fill : .fit
-                        )
-                        .frame(
-                            width: geometry.size.width,
-                            height: isEditingInfo ? collapsedPhotoHeight : geometry.size.height
-                        )
-                        .scaleEffect(isEditingInfo ? Self.minimumPhotoScale : currentPhotoScale)
-                        .offset(isEditingInfo ? .zero : currentPhotoOffset)
-                        .clipped()
-                        .contentShape(Rectangle())
-                        .gesture(
-                            photoGesture(in: geometry.size),
-                            including: isEditingInfo ? .none : .all
-                        )
-                        .onTapGesture(count: 2) {
-                            guard !isEditingInfo else { return }
-                            togglePhotoZoom(in: geometry.size)
-                        }
-                        .accessibilityLabel("사진")
-                        .accessibilityHint("두 번 탭하여 확대하거나 축소할 수 있습니다.")
-                        .accessibilityAction(named: photoScale > Self.minimumPhotoScale ? "축소" : "확대") {
-                            togglePhotoZoom(in: geometry.size)
-                        }
-                        .id(Self.photoScrollAnchor)
-
-                        photoInfoEditView
-                            .frame(
-                                maxWidth: .infinity,
-                                minHeight: infoPanelMinHeight,
-                                alignment: .top
+                    ScrollView(showsIndicators: false) {
+                        VStack(spacing: 0) {
+                            PhotoDetailImage(
+                                localIdentifier: photo.localIdentifier,
+                                contentMode: isEditingInfo ? .fill : .fit,
+                                imageSize: $photoSize
                             )
-                            .allowsHitTesting(isEditingInfo)
-                            .accessibilityHidden(!isEditingInfo)
-                    }
-                    .frame(maxWidth: .infinity)
-                }
-                .scrollDisabled(!isEditingInfo)
-                .ignoresSafeArea(.container, edges: .top)
-            }
+                            .frame(
+                                width: geometry.size.width,
+                                height: isEditingInfo ? collapsedPhotoHeight : geometry.size.height
+                            )
+                            .scaleEffect(isEditingInfo ? Self.minimumPhotoScale : currentPhotoScale)
+                            .offset(isEditingInfo ? .zero : currentPhotoOffset)
+                            .clipped()
+                            .contentShape(Rectangle())
+                            .gesture(
+                                photoGesture(in: geometry.size),
+                                including: isEditingInfo ? .none : .all
+                            )
+                            .onTapGesture(count: 2) {
+                                guard !isEditingInfo else { return }
+                                togglePhotoZoom(in: geometry.size)
+                            }
+                            .accessibilityLabel("사진")
+                            .accessibilityHint("두 번 탭하여 확대하거나 축소할 수 있습니다.")
+                            .accessibilityAction(named: isCommittedPhotoZoomed ? "축소" : "확대") {
+                                togglePhotoZoom(in: geometry.size)
+                            }
+                            .id(Self.photoScrollAnchor)
 
+                            if isEditingInfo {
+                                photoInfoEditView
+                                    .frame(
+                                        maxWidth: .infinity,
+                                        minHeight: infoPanelMinHeight,
+                                        alignment: .top
+                                    )
+                                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                            }
+                        }
+                        .frame(maxWidth: .infinity)
+                    }
+                    .scrollDisabled(!isEditingInfo)
+                }
+                .ignoresSafeArea()
+            }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(Color.orange30.ignoresSafeArea())
+            .background {
+                (isPhotoZoomed ? Color.black : Color.orange30)
+                    .ignoresSafeArea()
+                    .animation(reduceMotion ? nil : .easeOut(duration: 0.16), value: isPhotoZoomed)
+            }
             .navigationBarBackButtonHidden(true)
             .overlay(alignment: .topLeading) {
                 backButton {
                     setInfoEditing(false, scrollProxy: proxy)
                 }
+                .opacity(isPhotoZoomed ? 0 : 1)
+                .allowsHitTesting(!isPhotoZoomed)
+                .accessibilityHidden(isPhotoZoomed)
+                .animation(reduceMotion ? nil : .easeOut(duration: 0.16), value: isPhotoZoomed)
             }
             .overlay(alignment: .bottom) {
                 if !isEditingInfo {
-                    actionBar.transition(.opacity)
+                    actionBar
+                        .opacity(isPhotoZoomed ? 0 : 1)
+                        .allowsHitTesting(!isPhotoZoomed)
+                        .accessibilityHidden(isPhotoZoomed)
+                        .transition(.opacity)
+                        .animation(reduceMotion ? nil : .easeOut(duration: 0.16), value: isPhotoZoomed)
                 }
             }
         }
+        .statusBarHidden(isCommittedPhotoZoomed)
         .bottomSheet(isPresented: $showShareSheet, detents: [.full]) { dismiss in
             ShareSheet(
                 albums: Album.samples,
@@ -168,6 +187,14 @@ struct PhotoDetailView: View {
 
     private var deleteAlertContent: PhotoDeleteAlertContent {
         deletionContext.alertContent
+    }
+
+    private var isPhotoZoomed: Bool {
+        clampedPhotoScale(photoScale * gestureScale) > Self.zoomActivationThreshold
+    }
+
+    private var isCommittedPhotoZoomed: Bool {
+        photoScale > Self.zoomActivationThreshold
     }
 
     private var photoInfoEditView: some View {
@@ -233,7 +260,10 @@ struct PhotoDetailView: View {
                 state = value.magnification
             }
             .onEnded { value in
-                let scale = clampedPhotoScale(photoScale * value.magnification)
+                let proposedScale = clampedPhotoScale(photoScale * value.magnification)
+                let scale = proposedScale > Self.zoomActivationThreshold
+                    ? proposedScale
+                    : Self.minimumPhotoScale
                 photoScale = scale
                 photoOffset = clampedPhotoOffset(
                     photoOffset,
@@ -247,11 +277,11 @@ struct PhotoDetailView: View {
     private func photoDragGesture(in containerSize: CGSize) -> some Gesture {
         DragGesture(minimumDistance: 8)
             .updating($gestureOffset) { value, state, _ in
-                guard photoScale * gestureScale > Self.minimumPhotoScale else { return }
+                guard photoScale * gestureScale > Self.zoomActivationThreshold else { return }
                 state = value.translation
             }
             .onEnded { value in
-                if photoScale * gestureScale > Self.minimumPhotoScale {
+                if photoScale * gestureScale > Self.zoomActivationThreshold {
                     photoOffset = clampedPhotoOffset(
                         adding: photoOffset,
                         and: value.translation,
@@ -273,7 +303,7 @@ struct PhotoDetailView: View {
 
     private func togglePhotoZoom(in containerSize: CGSize) {
         withAnimation(reduceMotion ? nil : .spring(duration: 0.32, bounce: 0)) {
-            if photoScale > Self.minimumPhotoScale {
+            if isCommittedPhotoZoomed {
                 resetPhotoTransform()
             } else {
                 photoScale = Self.doubleTapPhotoScale
@@ -302,12 +332,33 @@ struct PhotoDetailView: View {
     ) -> CGSize {
         guard scale > Self.minimumPhotoScale else { return .zero }
 
-        let maximumX = containerSize.width * (scale - Self.minimumPhotoScale) / 2
-        let maximumY = containerSize.height * (scale - Self.minimumPhotoScale) / 2
+        let scaledPhotoSize = aspectFitPhotoSize(in: containerSize, scale: scale)
+        let maximumX = max((scaledPhotoSize.width - containerSize.width) / 2, 0)
+        let maximumY = max((scaledPhotoSize.height - containerSize.height) / 2, 0)
 
         return CGSize(
             width: min(max(offset.width, -maximumX), maximumX),
             height: min(max(offset.height, -maximumY), maximumY)
+        )
+    }
+
+    private func aspectFitPhotoSize(in containerSize: CGSize, scale: CGFloat) -> CGSize {
+        guard photoSize.width > 0,
+              photoSize.height > 0,
+              containerSize.width > 0,
+              containerSize.height > 0
+        else {
+            return containerSize
+        }
+
+        let fitScale = min(
+            containerSize.width / photoSize.width,
+            containerSize.height / photoSize.height
+        )
+
+        return CGSize(
+            width: photoSize.width * fitScale * scale,
+            height: photoSize.height * fitScale * scale
         )
     }
 
