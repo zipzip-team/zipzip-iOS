@@ -35,6 +35,7 @@ struct PictureView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .background(Color.orange30.ignoresSafeArea())
+        .task { await viewModel.loadPhotos() }
         .overlay(alignment: .topTrailing) {
             if !viewModel.isSelectionMode {
                 floatingButton

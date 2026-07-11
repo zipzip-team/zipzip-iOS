@@ -15,6 +15,7 @@ struct PhotoRecord {
     @Column("content_hash") var contentHash: String?
     @Column("taken_at", as: Date.UnixTimeRepresentation?.self) var takenAt: Date?
     @Column("added_at", as: Date.UnixTimeRepresentation.self) var addedAt: Date
+    @Column("added_date", as: Date.UnixTimeRepresentation.self) var addedDate: Date
     @Column("is_favorite") var isFavorite = false
     var latitude: Double?
     var longitude: Double?

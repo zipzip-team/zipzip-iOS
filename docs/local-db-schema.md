@@ -24,7 +24,7 @@
 
 ### 그리드 SQLite 구동에 따른 의무
 
-- **인덱스 필수** — `photo.taken_at`, `photo.added_at`, `photo.device_id`, `photo.place_id`, `photo.is_favorite`, `album_photo(album_id, added_at)`
+- **인덱스 필수** — `photo.taken_at`, `photo.added_at`, `photo.added_date`, `photo.device_id`, `photo.place_id`, `photo.is_favorite`, `album_photo(album_id, added_at)`
   - 서버 수신 테이블의 FK 컬럼(`shared_album.shared_group_id`, `shared_photo.shared_album_id`)도 CASCADE 삭제·조인 성능을 위해 인덱스를 둔다.
   - `photo.content_hash` — 시나리오 3의 로컬↔︎서버 매칭(EXISTS) 조회용.
 - **DB ↔︎ PhotoKit 동기화** — DB가 화면 source of truth이므로, Photos 앱에서의 즐겨찾기·삭제·편집을 `PHPhotoLibraryChangeObserver` + `sync_state.change_token`으로 DB에 반영해야 함 (특히 `is_favorite` 최신화 책임을 DB가 짐)
@@ -44,7 +44,8 @@
 | PhotoKit 식별자 | `local_identifier` | TEXT | UNIQUE | `PHAsset.localIdentifier` |
 | 콘텐츠 해시 | `content_hash` | TEXT |  | 중복 판별·서버 매핑 키 |
 | 촬영 일시 | `taken_at` | INTEGER | NULL | 촬영 시각, unix epoch 초 (정렬 축) |
-| 추가 일시 | `added_at` | INTEGER | NOT NULL | 라이브러리 추가 시각 (정렬·증분 동기화 축) |
+| 스캔 일시 | `added_at` | INTEGER | NOT NULL | 집집이 임포트(스캔)한 시각, unix epoch 초 |
+| 라이브러리 추가일 | `added_date` | INTEGER | NOT NULL | 사진 앱 라이브러리 추가 시각 (`PHAsset.addedDate`, iOS 26+) · '최근 저장' 정렬 축 |
 | 즐겨찾기 | `is_favorite` | INTEGER | NOT NULL DEFAULT 0 | 0/1 |
 | 위도 | `latitude` | REAL | NULL | 원본 좌표 (GPS 없으면 NULL) |
 | 경도 | `longitude` | REAL | NULL | 원본 좌표 |

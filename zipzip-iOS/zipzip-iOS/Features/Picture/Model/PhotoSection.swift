@@ -5,11 +5,29 @@
 //  Created by 성환 on 7/7/26.
 //
 
+import CryptoKit
 import Foundation
 
 struct Photo: Identifiable, Hashable {
-    let id = UUID()
+    let id: UUID
+    let localIdentifier: String
     let metadata: PhotoMetadata
+
+    init(localIdentifier: String = "", metadata: PhotoMetadata) {
+        self.localIdentifier = localIdentifier
+        self.metadata = metadata
+        self.id = localIdentifier.isEmpty ? UUID() : Self.stableID(for: localIdentifier)
+    }
+
+    private static func stableID(for localIdentifier: String) -> UUID {
+        let bytes = Array(Insecure.MD5.hash(data: Data(localIdentifier.utf8)))
+        return UUID(uuid: (
+            bytes[0], bytes[1], bytes[2], bytes[3],
+            bytes[4], bytes[5], bytes[6], bytes[7],
+            bytes[8], bytes[9], bytes[10], bytes[11],
+            bytes[12], bytes[13], bytes[14], bytes[15]
+        ))
+    }
 }
 
 extension Photo {

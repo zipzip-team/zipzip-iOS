@@ -60,14 +60,15 @@ struct RegisteredDeviceManagementView: View {
         } else {
             HStack {
                 RoundedIconButton(items: [
-                    .init(id: "back", icon: .iconChevronLeft) { router.pop() }
+                    .init(id: "back", icon: .iconChevronLeft, accessibilityLabel: "") { router.pop() }
                 ])
 
                 Spacer(minLength: 0)
 
                 RoundedIconButton(items: [
-                    .init(id: "selection", icon: .select) { viewModel.enterRemovingMode() },
-                    .init(id: "add", icon: .plus) { viewModel.enterRegisteringMode() }
+                    .init(id: "selection", icon: .select, accessibilityLabel: "") { viewModel.enterRemovingMode()
+                    },
+                    .init(id: "add", icon: .plus, accessibilityLabel: "") { viewModel.enterRegisteringMode() }
                 ])
             }
         }

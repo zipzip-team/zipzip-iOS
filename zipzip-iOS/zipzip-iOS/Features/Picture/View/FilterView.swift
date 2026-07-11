@@ -34,6 +34,7 @@ struct FilterView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .background(Color.orange30.ignoresSafeArea())
         .navigationBarBackButtonHidden(true)
+        .task { await viewModel.loadOptions() }
         .bottomSheet(isPresented: $showDateSheet, detents: [.height(dateSheetHeight)]) { dismiss in
             DateFilterSheet(date: $pickerDate) {
                 viewModel.selectDate(pickerDate)

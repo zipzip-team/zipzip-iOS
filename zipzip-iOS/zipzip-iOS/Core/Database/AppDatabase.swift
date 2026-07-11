@@ -68,6 +68,7 @@ func appDatabase() throws -> any DatabaseWriter {
               "content_hash" TEXT,
               "taken_at" INTEGER,
               "added_at" INTEGER NOT NULL,
+              "added_date" INTEGER NOT NULL,
               "is_favorite" INTEGER NOT NULL DEFAULT 0,
               "latitude" REAL,
               "longitude" REAL,
@@ -151,6 +152,7 @@ func appDatabase() throws -> any DatabaseWriter {
 
         try #sql(#"CREATE INDEX "idx_photo_taken_at" ON "photo"("taken_at")"#).execute(db)
         try #sql(#"CREATE INDEX "idx_photo_added_at" ON "photo"("added_at")"#).execute(db)
+        try #sql(#"CREATE INDEX "idx_photo_added_date" ON "photo"("added_date")"#).execute(db)
         try #sql(#"CREATE INDEX "idx_photo_device_id" ON "photo"("device_id")"#).execute(db)
         try #sql(#"CREATE INDEX "idx_photo_place_id" ON "photo"("place_id")"#).execute(db)
         try #sql(#"CREATE INDEX "idx_photo_is_favorite" ON "photo"("is_favorite")"#).execute(db)

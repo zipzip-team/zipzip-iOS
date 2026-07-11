@@ -11,6 +11,7 @@ import Photos
 nonisolated struct AssetMetadata {
     let localIdentifier: String
     let creationDate: Date?
+    let addedDate: Date
     let latitude: Double?
     let longitude: Double?
     let width: Int
@@ -20,6 +21,7 @@ nonisolated struct AssetMetadata {
     init(asset: PHAsset) {
         self.localIdentifier = asset.localIdentifier
         self.creationDate = asset.creationDate
+        self.addedDate = asset.addedDate
         self.latitude = asset.location?.coordinate.latitude
         self.longitude = asset.location?.coordinate.longitude
         self.width = asset.pixelWidth

@@ -39,7 +39,7 @@ struct PhotoGallery: View {
     }
 
     private func photoCell(_ photo: Photo) -> some View {
-        Color.grey200
+        PhotoThumbnail(localIdentifier: photo.localIdentifier)
             .aspectRatio(1, contentMode: .fit)
             .overlay {
                 if isSelectionMode, selectedPhotoIDs.contains(photo.id) {

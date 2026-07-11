@@ -50,7 +50,7 @@ struct MyPageContainerView<TopBar: View, Content: View>: View {
 #Preview {
     MyPageContainerView {
         RoundedIconButton(items: [
-            .init(id: "back", icon: .iconChevronLeft) {}
+            .init(id: "back", icon: .iconChevronLeft, accessibilityLabel: "뒤로가기") {}
         ])
     } content: {
         Text("Onboarding")

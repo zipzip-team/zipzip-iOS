@@ -48,6 +48,16 @@ struct PhotoFilterOptions {
 }
 
 extension PhotoFilterOptions {
+    enum EtcItem {
+        static let recentlyAdded = "최근 저장된 사진"
+        static let noLocation = "장소 정보 없음"
+        static let noDate = "날짜 정보 없음"
+    }
+
+    static let defaultEtcItems = [EtcItem.recentlyAdded, EtcItem.noLocation, EtcItem.noDate]
+}
+
+extension PhotoFilterOptions {
     /// 실제 데이터 연동 전까지 사용하는 더미 데이터.
     static let sample = PhotoFilterOptions(
         devices: [
@@ -56,6 +66,6 @@ extension PhotoFilterOptions {
             FilterDevice(name: "Iphone 6", type: "아이폰")
         ],
         locations: ["오사카", "교토", "도쿄", "후쿠오카", "삿포로", "히로시마"],
-        etcItems: ["최근 저장된 사진", "장소 정보 없음", "날짜 정보 없음"]
+        etcItems: defaultEtcItems
     )
 }

@@ -25,7 +25,7 @@ struct MyPageView: View {
     var body: some View {
         MyPageContainerView {
             RoundedIconButton(items: [
-                .init(id: "back", icon: .iconChevronLeft) { router.pop() }
+                .init(id: "back", icon: .iconChevronLeft, accessibilityLabel: "") { router.pop() }
             ])
         } content: {
             VStack(alignment: .leading, spacing: 32) {

@@ -72,7 +72,7 @@ struct PhotoDetailView: View {
             let reveal = max(geo.size.height - photoPeekHeight, 0)
 
             VStack(spacing: 0) {
-                Color.grey200
+                PhotoDetailImage(localIdentifier: photo.localIdentifier)
                     .frame(width: geo.size.width, height: geo.size.height)
 
                 ScrollView {
