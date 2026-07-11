@@ -33,6 +33,7 @@ struct AlbumView: View {
                             deletionContext: .album,
                             onDelete: { action in
                                 viewModel.deletePhotos([photo.id], from: albumID, action: action)
+                                return true
                             }
                         )
                     case let .photoInfoEdit(metadata):

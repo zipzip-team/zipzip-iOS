@@ -48,7 +48,7 @@ struct PhotoDetailView: View {
 
     let photo: Photo
     let deletionContext: PhotoDeletionContext
-    private let onDelete: (PhotoDeletionAction) -> Void
+    private let onDelete: (PhotoDeletionAction) async -> Bool
 
     @State private var isEditingInfo = false
     @State private var showShareSheet = false
@@ -60,7 +60,7 @@ struct PhotoDetailView: View {
     init(
         photo: Photo,
         deletionContext: PhotoDeletionContext = .gallery,
-        onDelete: @escaping (PhotoDeletionAction) -> Void = { _ in }
+        onDelete: @escaping (PhotoDeletionAction) async -> Bool = { _ in true }
     ) {
         self.photo = photo
         self.deletionContext = deletionContext
@@ -172,8 +172,11 @@ struct PhotoDetailView: View {
 
     private func completeDeletion(_ action: PhotoDeletionAction) {
         showDeleteAlert = false
-        onDelete(action)
-        dismiss()
+        Task {
+            if await onDelete(action) {
+                dismiss()
+            }
+        }
     }
 }
 

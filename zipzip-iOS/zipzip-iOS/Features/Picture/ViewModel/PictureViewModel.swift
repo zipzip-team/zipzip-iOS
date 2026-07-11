@@ -14,6 +14,9 @@ final class PictureViewModel {
     @ObservationIgnored
     @Dependency(\.photoSections) private var provider
 
+    @ObservationIgnored
+    @Dependency(\.photoDeletion) private var deletion
+
     private static let logger = Logger(subsystem: "com.zipzip.zipzip-iOS", category: "PictureSections")
 
     @ObservationIgnored private var library: [FilterablePhoto]?
@@ -38,6 +41,33 @@ final class PictureViewModel {
 
     func requestDelete() {
         showDeleteAlert = true
+    }
+
+    private var selectedLocalIdentifiers: [String] {
+        let ids = Set(selectedPhotoIDs)
+        return sections
+            .flatMap(\.photos)
+            .filter { ids.contains($0.id) }
+            .map(\.localIdentifier)
+    }
+
+    func deleteSelectedPhotos() async {
+        await deletePhotos(localIdentifiers: selectedLocalIdentifiers)
+        cancelSelection()
+    }
+
+    @discardableResult
+    func deletePhotos(localIdentifiers: [String]) async -> Bool {
+        guard !localIdentifiers.isEmpty else { return false }
+        do {
+            try await deletion.delete(localIdentifiers: localIdentifiers)
+            library?.removeAll { localIdentifiers.contains($0.photo.localIdentifier) }
+            sections = await provider.sections(from: library ?? [], filters: [])
+            return true
+        } catch {
+            Self.logger.error("failed to delete photos: \(error)")
+            return false
+        }
     }
 
     func cancelSelection() {

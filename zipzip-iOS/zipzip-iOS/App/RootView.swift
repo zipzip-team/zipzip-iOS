@@ -11,13 +11,14 @@ struct RootView: View {
     @Environment(Router.self) private var router
     @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
     @State private var photoSync = PhotoSyncCoordinator()
+    @State private var pictureViewModel = PictureViewModel()
 
     var body: some View {
         @Bindable var router = router
         NavigationStack(path: $router.path) {
             Group {
                 if hasCompletedOnboarding {
-                    RootTabView()
+                    RootTabView(pictureViewModel: pictureViewModel)
                 } else {
                     SplashView()
                 }
@@ -47,7 +48,10 @@ struct RootView: View {
                 case let .photoInfoEdit(metadata):
                     PhotoInfoEditView(metadata: metadata)
                 case let .photoDetail(photo):
-                    PhotoDetailView(photo: photo)
+                    PhotoDetailView(photo: photo) { action in
+                        guard action == .deletePermanently else { return false }
+                        return await pictureViewModel.deletePhotos(localIdentifiers: [photo.localIdentifier])
+                    }
                 case .myPage:
                     MyPageView()
                 case .registeredDeviceManagement:
