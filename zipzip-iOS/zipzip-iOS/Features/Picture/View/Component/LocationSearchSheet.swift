@@ -6,14 +6,16 @@
 //
 
 import MapKit
+import SQLiteData
 import SwiftUI
 
 struct LocationSearchSheet: View {
-    let locations: [String]
     @Binding var selected: String
     let onCancel: () -> Void
     let onDone: () -> Void
 
+    @Dependency(\.photoFilterOptions) private var filterOptions
+    @State private var locations: [String] = []
     @State private var query = ""
     @State private var searchModel = LocationSearchModel()
 
@@ -40,6 +42,7 @@ struct LocationSearchSheet: View {
         .onChange(of: query) { _, newValue in
             searchModel.update(newValue)
         }
+        .task { await loadLocations() }
     }
 
     private func headerButton(title: String, action: @escaping () -> Void) -> some View {
@@ -112,11 +115,15 @@ struct LocationSearchSheet: View {
         selected = location
         query = location
     }
+
+    private func loadLocations() async {
+        guard let options = try? await filterOptions.load() else { return }
+        locations = Array(options.locations.prefix(10))
+    }
 }
 
 #Preview {
     LocationSearchSheet(
-        locations: PhotoFilterOptions.sample.locations,
         selected: .constant("오사카"),
         onCancel: {},
         onDone: {}

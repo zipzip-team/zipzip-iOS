@@ -17,7 +17,6 @@ struct PhotoInfoEditContent: View {
     @State private var pickerDate = Date()
 
     private let devices: [FilterDevice] = PhotoFilterOptions.sample.devices
-    private let locations: [String] = PhotoFilterOptions.sample.locations
 
     init(metadata: PhotoMetadata) {
         _metadata = State(initialValue: metadata)
@@ -63,7 +62,6 @@ struct PhotoInfoEditContent: View {
         }
         .bottomSheet(isPresented: $showLocationSheet, detents: [.full]) { dismiss in
             LocationSearchSheet(
-                locations: locations,
                 selected: $pickerLocation,
                 onCancel: { dismiss() },
                 onDone: {
