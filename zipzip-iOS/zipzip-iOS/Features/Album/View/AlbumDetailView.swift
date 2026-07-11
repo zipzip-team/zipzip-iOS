@@ -98,7 +98,7 @@ struct AlbumDetailView<Content: View>: View {
         ) { _ in
             BottomSheet(
                 leftItem: {
-                    AlbumManagementSheetHeaderButton(title: "취소", action: viewModel.dismissAlbumManagement)
+                    BottomSheetCloseButton(action: viewModel.dismissAlbumManagement)
                 },
                 rightItem: {
                     AlbumManagementSheetHeaderButton(title: "삭제", action: viewModel.presentAlbumDeleteAlert)

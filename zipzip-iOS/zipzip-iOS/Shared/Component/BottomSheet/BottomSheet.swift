@@ -157,19 +157,22 @@ struct BottomSheet<Content: View>: View {
     }
 }
 
-private struct BottomSheetTextButton: View {
-    let title: String
+struct BottomSheetCloseButton: View {
     let action: () -> Void
 
     var body: some View {
         Button(action: action) {
-            Text(title)
-                .font(.b1_sb)
+            Image(.cancel)
+                .renderingMode(.template)
+                .resizable()
+                .scaledToFit()
                 .foregroundStyle(.white00)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .contentShape(Rectangle())
+                .frame(width: 24, height: 24)
+                .frame(width: 72, height: 48)
+                .contentShape(.rect)
         }
         .buttonStyle(.plain)
+        .accessibilityLabel("닫기")
     }
 }
 
@@ -200,8 +203,7 @@ private struct BottomSheetPreview: View {
                 selection: $selection
             ),
             leftItem: {
-                BottomSheetTextButton(title: "취소") {}
-                    .frame(width: 72, height: 48)
+                BottomSheetCloseButton {}
             },
             rightItem: {
                 Button {} label: {

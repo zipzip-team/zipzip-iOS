@@ -19,7 +19,7 @@ struct DateTimeEditSheet: View {
     var body: some View {
         BottomSheet(
             leftItem: {
-                headerButton(title: "취소", action: onCancel)
+                BottomSheetCloseButton(action: onCancel)
             },
             rightItem: {
                 headerButton(title: "완료", action: onDone)

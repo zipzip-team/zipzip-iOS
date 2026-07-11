@@ -125,7 +125,7 @@ struct AlbumView: View {
         ) { _ in
             BottomSheet(
                 leftItem: {
-                    AlbumSheetTextButton(title: "취소", action: viewModel.dismissCreateAlbumSheet)
+                    BottomSheetCloseButton(action: viewModel.dismissCreateAlbumSheet)
                 }
             ) {
                 AlbumCreateSheetContent(
@@ -313,7 +313,7 @@ private struct AlbumShareDestinationSheet: View {
     var body: some View {
         BottomSheet(
             leftItem: {
-                AlbumSheetTextButton(title: "취소", action: onCancel)
+                BottomSheetCloseButton(action: onCancel)
             },
             rightItem: {
                 if authenticationState.isLoggedIn {

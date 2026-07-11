@@ -29,7 +29,7 @@ struct ShareSheet: View {
         BottomSheet(
             middleItem: .init(leftField: "사진집", rightField: "공유", selection: $selection),
             leftItem: {
-                headerButton("취소") { onDismiss() }
+                BottomSheetCloseButton(action: onDismiss)
             },
             rightItem: {
                 if showsCompletionButton {
