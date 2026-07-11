@@ -8,9 +8,12 @@
 import Foundation
 
 enum PhotoSectionGrouping {
-    static func sections(from items: [(date: Date?, photo: Photo)]) -> [PhotoSection] {
-        let calendar = Calendar.current
-
+    static func sections(
+        from items: [(date: Date?, photo: Photo)],
+        relativeTo referenceDate: Date = .now,
+        calendar: Calendar = .autoupdatingCurrent,
+        locale: Locale = .autoupdatingCurrent
+    ) -> [PhotoSection] {
         var order: [Date?] = []
         var groups: [Date?: [Photo]] = [:]
 
@@ -24,25 +27,45 @@ enum PhotoSectionGrouping {
         }
 
         return order.map { key in
-            let title = key.map { sectionTitle(for: $0, calendar: calendar) } ?? "날짜 정보 없음"
+            let title = key.map {
+                sectionTitle(
+                    for: $0,
+                    relativeTo: referenceDate,
+                    calendar: calendar,
+                    locale: locale
+                )
+            } ?? "날짜 정보 없음"
             return PhotoSection(title: title, photos: groups[key] ?? [])
         }
     }
 
-    private static func sectionTitle(for date: Date, calendar: Calendar) -> String {
-        if calendar.isDateInToday(date) {
+    private static func sectionTitle(
+        for date: Date,
+        relativeTo referenceDate: Date,
+        calendar: Calendar,
+        locale: Locale
+    ) -> String {
+        if calendar.isDate(date, inSameDayAs: referenceDate) {
             return "오늘"
         }
-        if calendar.isDateInYesterday(date) {
+
+        if let yesterday = calendar.date(byAdding: .day, value: -1, to: referenceDate),
+           calendar.isDate(date, inSameDayAs: yesterday) {
             return "어제"
         }
-        return dateFormatter.string(from: date)
-    }
 
-    private static let dateFormatter: DateFormatter = {
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "ko_KR")
-        formatter.dateFormat = "M월 d일"
-        return formatter
-    }()
+        let monthAndDayStyle = Date.FormatStyle(
+            locale: locale,
+            calendar: calendar,
+            timeZone: calendar.timeZone
+        )
+        .month(.abbreviated)
+        .day(.defaultDigits)
+
+        if calendar.isDate(date, equalTo: referenceDate, toGranularity: .year) {
+            return date.formatted(monthAndDayStyle)
+        }
+
+        return date.formatted(monthAndDayStyle.year(.defaultDigits))
+    }
 }

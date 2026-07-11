@@ -20,7 +20,10 @@ struct PictureView: View {
                     .foregroundStyle(.grey900)
                     .frame(height: 44)
                     .padding(.vertical, 4)
+                    .padding(.horizontal, 16)
                     .opacity(viewModel.isSelectionMode ? 0 : 1)
+
+                PhotoRecommendationPlaceholder()
 
                 PhotoGallery(
                     sections: viewModel.sections,
@@ -30,8 +33,8 @@ struct PictureView: View {
                     onLongPressPhoto: viewModel.handleLongPress,
                     onOpenPhoto: { router.push(.photoDetail($0)) }
                 )
+                .padding(.horizontal, 16)
             }
-            .padding(.horizontal, 16)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .background(Color.orange30.ignoresSafeArea())
@@ -74,6 +77,14 @@ struct PictureView: View {
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 4)
+    }
+}
+
+private struct PhotoRecommendationPlaceholder: View {
+    var body: some View {
+        Color.grey100
+            .frame(height: 207)
+            .accessibilityHidden(true)
     }
 }
 
