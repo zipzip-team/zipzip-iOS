@@ -5,9 +5,12 @@
 //  Created by 성환 on 7/8/26.
 //
 
+import SQLiteData
 import SwiftUI
 
 struct PhotoInfoEditContent: View {
+    @Dependency(\.photoFilterOptions) private var filterOptions
+
     @State private var metadata: PhotoMetadata
     @State private var showDeviceSheet = false
     @State private var pickerDevice = ""
@@ -15,8 +18,7 @@ struct PhotoInfoEditContent: View {
     @State private var pickerLocation = ""
     @State private var showDateSheet = false
     @State private var pickerDate = Date()
-
-    private let devices: [FilterDevice] = PhotoFilterOptions.sample.devices
+    @State private var devices: [FilterDevice] = []
 
     init(metadata: PhotoMetadata) {
         _metadata = State(initialValue: metadata)
@@ -80,6 +82,13 @@ struct PhotoInfoEditContent: View {
                 }
             )
         }
+        .task {
+            await loadDevices()
+        }
+    }
+
+    private func loadDevices() async {
+        devices = (try? await filterOptions.load())?.devices ?? []
     }
 
     private var header: some View {
