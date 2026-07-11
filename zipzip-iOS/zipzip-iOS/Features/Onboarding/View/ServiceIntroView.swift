@@ -35,9 +35,9 @@ struct ServiceIntroView: View {
                 }
 
                 VStack(spacing: 16) {
-                    Rectangle()
-                        .fill(.grey100)
-                        .frame(maxWidth: .infinity, maxHeight: 420)
+                    ServiceIntroArtwork(
+                        image: viewModel.currentPageContent.illustrationImage
+                    )
 
                     ServiceIntroPageIndicator(
                         currentPage: viewModel.currentPage,
@@ -65,6 +65,25 @@ struct ServiceIntroView: View {
         .environment(PhotoSyncCoordinator())
 }
 
+private struct ServiceIntroArtwork: View {
+    let image: ImageResource?
+
+    var body: some View {
+        if let image {
+            Image(image)
+                .resizable()
+                .frame(maxWidth: .infinity)
+                .frame(height: 420)
+                .padding(.horizontal, -16)
+        } else {
+            Rectangle()
+                .fill(.grey100)
+                .frame(maxWidth: .infinity)
+                .frame(height: 420)
+        }
+    }
+}
+
 private struct ServiceIntroPageIndicator: View {
     let currentPage: Int
     let pageCount: Int
@@ -72,7 +91,7 @@ private struct ServiceIntroPageIndicator: View {
     var body: some View {
         HStack(spacing: 12) {
             ForEach(0 ..< pageCount, id: \.self) { index in
-                Rectangle()
+                RoundedRectangle(cornerRadius: 1.2, style: .continuous)
                     .fill(index == currentPage ? .orange500 : .grey300)
                     .frame(
                         width: index == currentPage ? 60 : 16,

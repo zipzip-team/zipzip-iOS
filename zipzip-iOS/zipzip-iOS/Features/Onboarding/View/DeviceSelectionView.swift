@@ -27,7 +27,7 @@ struct DeviceSelectionView: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
 
-                VStack(spacing: 16) {
+                VStack(spacing: 12) {
                     ForEach(devices) { device in
                         DeviceSelectionButton(
                             title: device.name,

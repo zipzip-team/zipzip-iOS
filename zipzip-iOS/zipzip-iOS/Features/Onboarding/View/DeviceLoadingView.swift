@@ -12,32 +12,38 @@ struct DeviceLoadingView: View {
     @Environment(PhotoSyncCoordinator.self) private var photoSync
 
     var body: some View {
+        let isSyncFinished = photoSync.isFinished
+
         OnboardingContainerView {
             VStack(spacing: 38) {
                 VStack(spacing: 4) {
-                    Text("기기 목록을 불러오고 있어요.")
-                        .font(.h1_sb)
-                        .foregroundStyle(Color(.grey900))
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                    Image(.serviceIntroLoading)
+                        .accessibilityLabel("기기 목록을 불러오고 있어요.")
 
                     Text("잠시만 기다려주세요.")
                         .font(.b1_md)
                         .foregroundStyle(Color(.grey400))
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .frame(maxWidth: .infinity)
                 }
 
                 Rectangle()
                     .fill(.grey100)
-                    .frame(maxWidth: .infinity, maxHeight: 420)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 420)
 
                 Spacer()
 
-                CommonButton(title: "확인", property1: .default) {
+                CommonButton(
+                    title: "확인",
+                    property1: isSyncFinished ? .default : .disabled
+                ) {
                     router.push(.deviceSelection)
                 }
-                .disabled(!photoSync.isFinished)
                 .frame(alignment: .bottom)
             }
+        }
+        .task {
+            photoSync.startIfNeeded()
         }
     }
 }

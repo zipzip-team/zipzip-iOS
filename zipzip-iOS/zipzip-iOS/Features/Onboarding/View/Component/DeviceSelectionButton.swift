@@ -33,7 +33,7 @@ struct DeviceSelectionButton: View {
 
                 Spacer()
             }
-            .padding(.leading, 24)
+            .padding(.leading, 20)
             .padding(.trailing, 20)
             .frame(maxWidth: .infinity)
             .frame(height: 90)
@@ -47,6 +47,9 @@ struct DeviceSelectionButton: View {
             .contentShape(.rect(cornerRadius: 12))
         }
         .buttonStyle(.plain)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(title), \(subtitle)")
+        .accessibilityValue(isSelected ? "선택됨" : "선택 안 됨")
     }
 
     private var iconView: some View {
