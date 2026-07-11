@@ -12,7 +12,7 @@ struct FilterView: View {
     @Environment(Router.self) private var router
     @State private var viewModel = FilterViewModel()
     @State private var showDateSheet = false
-    @State private var pickerDate = Date()
+    @State private var pickerDate: Date?
 
     var body: some View {
         ScrollView {
@@ -36,7 +36,9 @@ struct FilterView: View {
         .navigationBarBackButtonHidden(true)
         .task { await viewModel.loadOptions() }
         .bottomSheet(isPresented: $showDateSheet, detents: [.height(dateSheetHeight)]) { dismiss in
-            DateFilterSheet(date: $pickerDate) {
+            DateFilterSheet(date: $pickerDate, onReset: {
+                pickerDate = nil
+            }) {
                 viewModel.selectDate(pickerDate)
                 dismiss()
             }

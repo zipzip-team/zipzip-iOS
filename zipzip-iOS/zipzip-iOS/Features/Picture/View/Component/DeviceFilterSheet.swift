@@ -10,19 +10,32 @@ import SwiftUI
 struct DeviceFilterSheet: View {
     let devices: [FilterDevice]
     @Binding var selected: String
+    let onReset: (() -> Void)?
     let onDone: () -> Void
 
+    init(
+        devices: [FilterDevice],
+        selected: Binding<String>,
+        onReset: (() -> Void)? = nil,
+        onDone: @escaping () -> Void
+    ) {
+        self.devices = devices
+        _selected = selected
+        self.onReset = onReset
+        self.onDone = onDone
+    }
+
     var body: some View {
-        BottomSheet(rightItem: {
-            Button(action: onDone) {
-                Text("완료")
-                    .font(.b1_sb)
-                    .foregroundStyle(.white00)
-                    .frame(width: 72, height: 48)
-                    .contentShape(Rectangle())
+        BottomSheet(
+            leftItem: {
+                if let onReset {
+                    headerButton(title: "초기화", action: onReset)
+                }
+            },
+            rightItem: {
+                headerButton(title: "완료", action: onDone)
             }
-            .buttonStyle(.plain)
-        }) {
+        ) {
             VStack(alignment: .leading, spacing: 20) {
                 titleBlock
 
@@ -45,6 +58,17 @@ struct DeviceFilterSheet: View {
         }
     }
 
+    private func headerButton(title: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(title)
+                .font(.b1_sb)
+                .foregroundStyle(.white00)
+                .frame(width: 72, height: 48)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
     private var titleBlock: some View {
         VStack(alignment: .leading, spacing: 4) {
             Text("기기")
@@ -61,6 +85,7 @@ struct DeviceFilterSheet: View {
     DeviceFilterSheet(
         devices: PhotoFilterOptions.sample.devices,
         selected: .constant("Sony Alpha a7 III"),
+        onReset: {},
         onDone: {}
     )
     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)

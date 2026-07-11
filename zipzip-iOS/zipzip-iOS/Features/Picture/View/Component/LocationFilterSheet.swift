@@ -10,19 +10,18 @@ import SwiftUI
 struct LocationFilterSheet: View {
     let locations: [String]
     @Binding var selected: String
+    let onReset: () -> Void
     let onDone: () -> Void
 
     var body: some View {
-        BottomSheet(rightItem: {
-            Button(action: onDone) {
-                Text("완료")
-                    .font(.b1_sb)
-                    .foregroundStyle(.white00)
-                    .frame(width: 72, height: 48)
-                    .contentShape(Rectangle())
+        BottomSheet(
+            leftItem: {
+                headerButton(title: "초기화", action: onReset)
+            },
+            rightItem: {
+                headerButton(title: "완료", action: onDone)
             }
-            .buttonStyle(.plain)
-        }) {
+        ) {
             VStack(alignment: .leading, spacing: 20) {
                 titleBlock
 
@@ -44,6 +43,17 @@ struct LocationFilterSheet: View {
         }
     }
 
+    private func headerButton(title: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(title)
+                .font(.b1_sb)
+                .foregroundStyle(.white00)
+                .frame(width: 72, height: 48)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
     private var titleBlock: some View {
         VStack(alignment: .leading, spacing: 4) {
             Text("장소")
@@ -60,6 +70,7 @@ struct LocationFilterSheet: View {
     LocationFilterSheet(
         locations: PhotoFilterOptions.sample.locations,
         selected: .constant("도쿄"),
+        onReset: {},
         onDone: {}
     )
     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
