@@ -9,8 +9,7 @@ import SwiftUI
 
 struct DeviceSelectionView: View {
     @Environment(Router.self) private var router
-    @State private var devices = DetectedDevice.samples
-    @State private var selectedDeviceIDs = Set<DetectedDevice.ID>()
+    @State private var viewModel = DeviceSelectionViewModel()
 
     var body: some View {
         OnboardingContainerView {
@@ -27,33 +26,29 @@ struct DeviceSelectionView: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
 
-                VStack(spacing: 12) {
-                    ForEach(devices) { device in
-                        DeviceSelectionButton(
-                            title: device.name,
-                            subtitle: device.modelName,
-                            deviceType: device.type,
-                            isSelected: selectedDeviceIDs.contains(device.id)
-                        ) {
-                            toggleSelection(for: device)
+                ScrollView(showsIndicators: false) {
+                    VStack(spacing: 12) {
+                        ForEach(viewModel.devices) { device in
+                            DeviceSelectionButton(
+                                title: device.modelName,
+                                subtitle: device.name,
+                                deviceType: device.type,
+                                isSelected: viewModel.selectedDeviceIDs.contains(device.id)
+                            ) {
+                                viewModel.toggleSelection(for: device)
+                            }
                         }
                     }
                 }
-
-                Spacer()
+                .frame(maxHeight: .infinity)
 
                 CommonButton(title: "확인", property1: .default) {
                     router.push(.onboardingComplete)
                 }
             }
         }
-    }
-
-    private func toggleSelection(for device: DetectedDevice) {
-        if selectedDeviceIDs.contains(device.id) {
-            selectedDeviceIDs.remove(device.id)
-        } else {
-            selectedDeviceIDs.insert(device.id)
+        .task {
+            await viewModel.load()
         }
     }
 }
