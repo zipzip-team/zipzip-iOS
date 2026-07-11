@@ -84,7 +84,7 @@ nonisolated struct PhotoSectionsProvider {
                 return calendar.startOfDay(for: taken) == day
             }
         case .location:
-            return photos
+            return photos.filter { $0.photo.metadata.location == filter.value }
         case .etc:
             switch filter.value {
             case PhotoFilterOptions.EtcItem.noLocation:
