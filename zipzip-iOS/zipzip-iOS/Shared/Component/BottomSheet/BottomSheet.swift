@@ -86,6 +86,7 @@ struct BottomSheet<Content: View>: View {
 
             content
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                .clipped()
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .background(.grey950, in: bottomSheetShape)
@@ -96,15 +97,19 @@ struct BottomSheet<Content: View>: View {
     }
 
     private var header: some View {
-        HStack(spacing: 8) {
-            headerLeftItem
-                .frame(maxWidth: .infinity, alignment: .leading)
+        ZStack {
+            HStack(spacing: 0) {
+                headerLeftItem
+                    .frame(width: 72, alignment: .leading)
+
+                Spacer(minLength: 0)
+
+                headerRightItem
+                    .frame(width: 72, alignment: .trailing)
+            }
 
             headerMiddleItem
                 .layoutPriority(1)
-
-            headerRightItem
-                .frame(maxWidth: .infinity, alignment: .trailing)
         }
         .padding(.horizontal, 16)
         .frame(maxWidth: .infinity)

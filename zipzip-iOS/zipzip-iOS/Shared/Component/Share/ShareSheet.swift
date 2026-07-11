@@ -38,6 +38,10 @@ struct ShareSheet: View {
             }
         ) {
             content
+                .transaction { transaction in
+                    transaction.disablesAnimations = true
+                    transaction.animation = nil
+                }
         }
         .onChange(of: selection) { _, _ in
             targetShareAlbum = nil
