@@ -55,8 +55,6 @@ struct PhotoDetailView: View {
     @State private var showDeleteAlert = false
     @State private var isFavorite = false
 
-    private let photoPeekHeight: CGFloat = 160
-
     init(
         photo: Photo,
         deletionContext: PhotoDeletionContext = .gallery,
@@ -68,26 +66,19 @@ struct PhotoDetailView: View {
     }
 
     var body: some View {
-        GeometryReader { geo in
-            let reveal = max(geo.size.height - photoPeekHeight, 0)
+        ZStack {
+            PhotoDetailImage(localIdentifier: photo.localIdentifier)
+                .opacity(isEditingInfo ? 0 : 1)
+                .allowsHitTesting(!isEditingInfo)
+                .accessibilityHidden(isEditingInfo)
 
-            VStack(spacing: 0) {
-                PhotoDetailImage(localIdentifier: photo.localIdentifier)
-                    .frame(width: geo.size.width, height: geo.size.height)
-
-                ScrollView {
-                    PhotoInfoEditContent(metadata: photo.metadata)
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 32)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                }
-                .frame(width: geo.size.width, height: reveal)
-            }
-            .offset(y: isEditingInfo ? -reveal : 0)
-            .frame(width: geo.size.width, height: geo.size.height, alignment: .top)
-            .clipped()
-            .animation(.easeInOut(duration: 0.3), value: isEditingInfo)
+            photoInfoEditView
+                .opacity(isEditingInfo ? 1 : 0)
+                .allowsHitTesting(isEditingInfo)
+                .accessibilityHidden(!isEditingInfo)
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .animation(.easeInOut(duration: 0.2), value: isEditingInfo)
         .background(Color.orange30.ignoresSafeArea())
         .navigationBarBackButtonHidden(true)
         .overlay(alignment: .topLeading) {
@@ -119,6 +110,16 @@ struct PhotoDetailView: View {
 
     private var deleteAlertContent: PhotoDeleteAlertContent {
         deletionContext.alertContent
+    }
+
+    private var photoInfoEditView: some View {
+        ScrollView {
+            PhotoInfoEditContent(metadata: photo.metadata)
+                .padding(.horizontal, 16)
+                .padding(.top, 60)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .background(Color.orange30)
     }
 
     private var backButton: some View {

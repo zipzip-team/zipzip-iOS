@@ -27,7 +27,7 @@ struct PhotoInfoEditContent: View {
             header
 
             VStack(alignment: .leading, spacing: 0) {
-                metadataSection(title: "기기", hasDivider: true, onEdit: {
+                metadataSection(title: "기기", onEdit: {
                     pickerDevice = metadata.deviceName
                     showDeviceSheet = true
                 }) {
@@ -38,14 +38,14 @@ struct PhotoInfoEditContent: View {
                     ) {}
                 }
 
-                metadataSection(title: "장소", hasDivider: true, onEdit: {
+                metadataSection(title: "장소", onEdit: {
                     pickerLocation = metadata.location
                     showLocationSheet = true
                 }) {
                     TextMetadataChip(title: metadata.location, isSelected: false) {}
                 }
 
-                metadataSection(title: "날짜", hasDivider: false, onEdit: {
+                metadataSection(title: "날짜", onEdit: {
                     pickerDate = AppliedFilter.date(from: metadata.dateText) ?? Date()
                     showDateSheet = true
                 }) {
@@ -97,7 +97,6 @@ struct PhotoInfoEditContent: View {
 
     private func metadataSection<Chip: View>(
         title: String,
-        hasDivider: Bool,
         onEdit: @escaping () -> Void,
         @ViewBuilder chip: () -> Chip
     ) -> some View {
@@ -111,7 +110,7 @@ struct PhotoInfoEditContent: View {
                     Text("수정")
                         .font(.b3_sb)
                         .foregroundStyle(.grey500)
-                        .underline()
+                        .padding(.horizontal, 4)
                 }
                 .buttonStyle(.plain)
             }
@@ -119,12 +118,10 @@ struct PhotoInfoEditContent: View {
         }
         .padding(.vertical, 16)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .overlay(alignment: .bottom) {
-            if hasDivider {
-                Rectangle()
-                    .fill(.grey70)
-                    .frame(height: 1)
-            }
+        .overlay(alignment: .top) {
+            Rectangle()
+                .fill(.grey70)
+                .frame(height: 1)
         }
     }
 
