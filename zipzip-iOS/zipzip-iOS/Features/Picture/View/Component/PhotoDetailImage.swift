@@ -10,10 +10,16 @@ import UIKit
 
 struct PhotoDetailImage: View {
     let localIdentifier: String
+    let contentMode: ContentMode
 
     @State private var image: UIImage?
 
     private static let targetSize = CGSize(width: 1600, height: 1600)
+
+    init(localIdentifier: String, contentMode: ContentMode = .fit) {
+        self.localIdentifier = localIdentifier
+        self.contentMode = contentMode
+    }
 
     var body: some View {
         Color.clear
@@ -21,7 +27,7 @@ struct PhotoDetailImage: View {
                 if let image {
                     Image(uiImage: image)
                         .resizable()
-                        .scaledToFit()
+                        .aspectRatio(contentMode: contentMode)
                 }
             }
             .task(id: localIdentifier) {

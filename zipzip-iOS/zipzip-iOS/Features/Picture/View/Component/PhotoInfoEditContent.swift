@@ -16,10 +16,15 @@ struct PhotoInfoEditContent: View {
     @State private var showDateSheet = false
     @State private var pickerDate = Date()
 
+    private let subtitle: String
     private let devices: [FilterDevice] = PhotoFilterOptions.sample.devices
 
-    init(metadata: PhotoMetadata) {
+    init(
+        metadata: PhotoMetadata,
+        subtitle: String = "선택한 사진 중 첫 번째 사진의 정보를 기준으로 보여드려요.\n정보를 수정하면 모든 사진에 함께 적용돼요."
+    ) {
         _metadata = State(initialValue: metadata)
+        self.subtitle = subtitle
     }
 
     var body: some View {
@@ -87,7 +92,7 @@ struct PhotoInfoEditContent: View {
             Text("사진 정보")
                 .font(.t1_sb)
                 .foregroundStyle(.grey1000)
-            Text("선택한 사진 중 첫 번째 사진의 정보를 기준으로 보여드려요.\n정보를 수정하면 모든 사진에 함께 적용돼요.")
+            Text(subtitle)
                 .font(.b2_md)
                 .foregroundStyle(.grey700)
         }

@@ -45,6 +45,7 @@ enum PhotoDeletionAction {
 
 struct PhotoDetailView: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     let photo: Photo
     let deletionContext: PhotoDeletionContext
@@ -54,6 +55,8 @@ struct PhotoDetailView: View {
     @State private var showShareSheet = false
     @State private var showDeleteAlert = false
     @State private var isFavorite = false
+
+    private static let photoScrollAnchor = "photo-detail-image"
 
     init(
         photo: Photo,
@@ -66,27 +69,50 @@ struct PhotoDetailView: View {
     }
 
     var body: some View {
-        ZStack {
-            PhotoDetailImage(localIdentifier: photo.localIdentifier)
-                .opacity(isEditingInfo ? 0 : 1)
-                .allowsHitTesting(!isEditingInfo)
-                .accessibilityHidden(isEditingInfo)
+        ScrollViewReader { proxy in
+            GeometryReader { geometry in
+                let collapsedPhotoHeight = geometry.size.width * 0.5
+                let infoPanelMinHeight = max(geometry.size.height - collapsedPhotoHeight, 0)
 
-            photoInfoEditView
-                .opacity(isEditingInfo ? 1 : 0)
-                .allowsHitTesting(isEditingInfo)
-                .accessibilityHidden(!isEditingInfo)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .animation(.easeInOut(duration: 0.2), value: isEditingInfo)
-        .background(Color.orange30.ignoresSafeArea())
-        .navigationBarBackButtonHidden(true)
-        .overlay(alignment: .topLeading) {
-            backButton
-        }
-        .overlay(alignment: .bottom) {
-            if !isEditingInfo {
-                actionBar.transition(.opacity)
+                ScrollView(showsIndicators: false) {
+                    VStack(spacing: 0) {
+                        PhotoDetailImage(
+                            localIdentifier: photo.localIdentifier,
+                            contentMode: isEditingInfo ? .fill : .fit
+                        )
+                        .frame(
+                            width: geometry.size.width,
+                            height: isEditingInfo ? collapsedPhotoHeight : geometry.size.height
+                        )
+                        .clipped()
+                        .id(Self.photoScrollAnchor)
+
+                        photoInfoEditView
+                            .frame(
+                                maxWidth: .infinity,
+                                minHeight: infoPanelMinHeight,
+                                alignment: .top
+                            )
+                            .allowsHitTesting(isEditingInfo)
+                            .accessibilityHidden(!isEditingInfo)
+                    }
+                    .frame(maxWidth: .infinity)
+                }
+                .scrollDisabled(!isEditingInfo)
+            }
+
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(Color.orange30.ignoresSafeArea())
+            .navigationBarBackButtonHidden(true)
+            .overlay(alignment: .topLeading) {
+                backButton {
+                    setInfoEditing(false, scrollProxy: proxy)
+                }
+            }
+            .overlay(alignment: .bottom) {
+                if !isEditingInfo {
+                    actionBar.transition(.opacity)
+                }
             }
         }
         .bottomSheet(isPresented: $showShareSheet, detents: [.full]) { dismiss in
@@ -113,20 +139,21 @@ struct PhotoDetailView: View {
     }
 
     private var photoInfoEditView: some View {
-        ScrollView {
-            PhotoInfoEditContent(metadata: photo.metadata)
-                .padding(.horizontal, 16)
-                .padding(.top, 60)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        PhotoInfoEditContent(
+            metadata: photo.metadata,
+            subtitle: "선택한 사진 중 첫 번째 사진의 원본 정보가 아래에 표시됩니다.\n올바른 정보로 조정하면 모든 사진의 정보가 조정됩니다."
+        )
+        .padding(.horizontal, 16)
+        .padding(.top, 40)
+        .frame(maxWidth: .infinity, alignment: .topLeading)
         .background(Color.orange30)
     }
 
-    private var backButton: some View {
+    private func backButton(onCloseInfo: @escaping () -> Void) -> some View {
         RoundedIconButton(items: [
             .init(id: "back", icon: .chevronLeft, accessibilityLabel: "뒤로가기") {
                 if isEditingInfo {
-                    withAnimation { isEditingInfo = false }
+                    onCloseInfo()
                 } else {
                     dismiss()
                 }
@@ -142,11 +169,24 @@ struct PhotoDetailView: View {
             .init(icon: isFavorite ? .starFilled : .starStroke, title: "즐겨찾기") { isFavorite.toggle() },
             .init(icon: .moveToAlbum, title: "집으로") { showShareSheet = true },
             .init(icon: .metadata, title: "정보 수정") {
-                withAnimation { isEditingInfo = true }
+                setInfoEditing(true)
             },
             .init(icon: .delete, title: "삭제") { showDeleteAlert = true }
         ])
         .padding(.bottom, 16)
+    }
+
+    private func setInfoEditing(_ isEditing: Bool) {
+        withAnimation(reduceMotion ? nil : .spring(duration: 0.42, bounce: 0)) {
+            isEditingInfo = isEditing
+        }
+    }
+
+    private func setInfoEditing(_ isEditing: Bool, scrollProxy: ScrollViewProxy) {
+        withAnimation(reduceMotion ? nil : .spring(duration: 0.42, bounce: 0)) {
+            scrollProxy.scrollTo(Self.photoScrollAnchor, anchor: .top)
+            isEditingInfo = isEditing
+        }
     }
 
     private func dismissDeleteAlert() {
