@@ -52,8 +52,7 @@ nonisolated enum DeviceModelCatalog {
 
         switch category {
         case .iPhone, .iPad:
-            let identifier = rawModel ?? ""
-            let name = catalog.appleModelNames[identifier] ?? identifier
+            let name = rawModel ?? ""
             return FilterDevice(
                 name: name.isEmpty ? category.typeLabel : name,
                 type: category.typeLabel
@@ -101,7 +100,6 @@ nonisolated enum DeviceModelCatalog {
     // MARK: - Catalog Resource
 
     private struct Catalog: Decodable {
-        let appleModelNames: [String: String]
         let androidPhones: AndroidPhones
         let cameraBrands: [String]
 
@@ -111,7 +109,6 @@ nonisolated enum DeviceModelCatalog {
         }
 
         static let empty = Catalog(
-            appleModelNames: [:],
             androidPhones: AndroidPhones(makeKeywords: [], modelPrefixes: []),
             cameraBrands: []
         )
