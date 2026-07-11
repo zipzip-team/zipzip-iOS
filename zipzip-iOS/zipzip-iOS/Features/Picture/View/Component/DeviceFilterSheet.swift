@@ -11,17 +11,20 @@ struct DeviceFilterSheet: View {
     let devices: [FilterDevice]
     @Binding var selected: String
     let onReset: (() -> Void)?
+    let onCancel: (() -> Void)?
     let onDone: () -> Void
 
     init(
         devices: [FilterDevice],
         selected: Binding<String>,
         onReset: (() -> Void)? = nil,
+        onCancel: (() -> Void)? = nil,
         onDone: @escaping () -> Void
     ) {
         self.devices = devices
         _selected = selected
         self.onReset = onReset
+        self.onCancel = onCancel
         self.onDone = onDone
     }
 
@@ -30,6 +33,8 @@ struct DeviceFilterSheet: View {
             leftItem: {
                 if let onReset {
                     headerButton(title: "초기화", action: onReset)
+                } else if let onCancel {
+                    BottomSheetCloseButton(action: onCancel)
                 }
             },
             rightItem: {

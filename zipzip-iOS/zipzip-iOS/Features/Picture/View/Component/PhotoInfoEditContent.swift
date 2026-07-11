@@ -62,7 +62,7 @@ struct PhotoInfoEditContent: View {
             .padding(.top, showsHeader ? 40 : 0)
         }
         .bottomSheet(isPresented: $showDeviceSheet, detents: [.content]) { dismiss in
-            DeviceFilterSheet(devices: devices, selected: $pickerDevice) {
+            DeviceFilterSheet(devices: devices, selected: $pickerDevice, onCancel: dismiss) {
                 applyDevice(pickerDevice)
                 dismiss()
             }

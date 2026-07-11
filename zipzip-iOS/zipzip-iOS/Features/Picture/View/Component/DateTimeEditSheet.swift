@@ -12,7 +12,7 @@ struct DateTimeEditSheet: View {
     let onCancel: () -> Void
     let onDone: () -> Void
 
-    @State private var showTime = false
+    @State private var showTime = true
 
     private let timeAnchor = "timePicker"
 
@@ -48,7 +48,7 @@ struct DateTimeEditSheet: View {
                         }
                     }
                     .padding(.horizontal, 16)
-                    .padding(.vertical, 8)
+                    .padding(.vertical, 4)
                 }
                 .onChange(of: showTime) { _, expanded in
                     guard expanded else { return }
