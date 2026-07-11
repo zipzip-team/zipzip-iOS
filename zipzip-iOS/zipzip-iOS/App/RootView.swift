@@ -9,6 +9,7 @@ import SwiftUI
 
 struct RootView: View {
     @Environment(Router.self) private var router
+    @Environment(DIContainer.self) private var container
     @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
     @State private var photoSync = PhotoSyncCoordinator()
 
@@ -39,7 +40,7 @@ struct RootView: View {
                 case .deviceLoading:
                     DeviceLoadingView()
                 case .deviceSelection:
-                    DeviceSelectionView()
+                    DeviceSelectionView(store: container.registeredDeviceStore)
                 case .filter:
                     FilterView()
                 case let .filterResult(filters):
@@ -51,7 +52,7 @@ struct RootView: View {
                 case .myPage:
                     MyPageView()
                 case .registeredDeviceManagement:
-                    RegisteredDeviceManagementView()
+                    RegisteredDeviceManagementView(store: container.registeredDeviceStore)
                 }
             }
         }

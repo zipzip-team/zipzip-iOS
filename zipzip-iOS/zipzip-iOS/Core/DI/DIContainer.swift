@@ -11,8 +11,13 @@ import Observation
 @Observable
 final class DIContainer {
     let networkProvider: NetworkProvider
+    let registeredDeviceStore: RegisteredDeviceStore
 
-    init(networkProvider: NetworkProvider? = nil) {
+    init(
+        networkProvider: NetworkProvider? = nil,
+        registeredDeviceStore: RegisteredDeviceStore? = nil
+    ) {
         self.networkProvider = networkProvider ?? DefaultNetworkProvider()
+        self.registeredDeviceStore = registeredDeviceStore ?? DefaultRegisteredDeviceStore()
     }
 }

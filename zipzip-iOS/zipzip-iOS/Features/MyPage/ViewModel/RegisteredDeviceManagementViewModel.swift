@@ -7,13 +7,12 @@
 
 import Observation
 import OSLog
-import SQLiteData
 
 @MainActor
 @Observable
 final class RegisteredDeviceManagementViewModel {
     @ObservationIgnored
-    @Dependency(\.detectedDevices) private var provider
+    private let store: RegisteredDeviceStore
 
     private static let logger = Logger(subsystem: "com.zipzip.zipzip-iOS", category: "RegisteredDevice")
 
@@ -25,9 +24,11 @@ final class RegisteredDeviceManagementViewModel {
     private(set) var registerableDevices: [DetectedDevice]
 
     init(
+        store: RegisteredDeviceStore,
         registeredDevices: [DetectedDevice] = DetectedDevice.registeredDeviceSamples,
         registerableDevices: [DetectedDevice] = DetectedDevice.registerableDeviceSamples
     ) {
+        self.store = store
         self.registeredDevices = registeredDevices
         self.registerableDevices = registerableDevices
     }
@@ -35,7 +36,7 @@ final class RegisteredDeviceManagementViewModel {
     /// 등록(is_registered)된 기기 목록을 불러온다.
     func load() async {
         do {
-            registeredDevices = try await provider.loadRegistered()
+            registeredDevices = try await store.loadRegisteredDevices()
         } catch {
             Self.logger.error("failed to load registered devices: \(error)")
         }
@@ -69,7 +70,7 @@ final class RegisteredDeviceManagementViewModel {
     /// device 테이블 전체 기기를 열고, 현재 등록된 기기를 미리 선택한 상태로 등록 모드에 진입한다.
     func enterRegisteringMode() async {
         do {
-            registerableDevices = try await provider.load()
+            registerableDevices = try await store.loadAllDevices()
         } catch {
             Self.logger.error("failed to load devices: \(error)")
         }
@@ -120,8 +121,8 @@ final class RegisteredDeviceManagementViewModel {
     private func save(registeredIDs: Set<DetectedDevice.ID>) async {
         let ids = Set(registeredIDs.compactMap(Int.init))
         do {
-            try await provider.saveRegistration(deviceIDs: ids)
-            registeredDevices = try await provider.loadRegistered()
+            try await store.saveRegistration(deviceIDs: ids)
+            registeredDevices = try await store.loadRegisteredDevices()
         } catch {
             Self.logger.error("failed to save registration: \(error)")
         }

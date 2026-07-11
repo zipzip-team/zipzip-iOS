@@ -6,21 +6,24 @@
 //
 
 import OSLog
-import SQLiteData
 
 @Observable
 final class DeviceSelectionViewModel {
     @ObservationIgnored
-    @Dependency(\.detectedDevices) private var provider
+    private let store: RegisteredDeviceStore
 
     private static let logger = Logger(subsystem: "com.zipzip.zipzip-iOS", category: "DeviceSelection")
 
     private(set) var devices: [DetectedDevice] = []
     var selectedDeviceIDs = Set<DetectedDevice.ID>()
 
+    init(store: RegisteredDeviceStore) {
+        self.store = store
+    }
+
     func load() async {
         do {
-            devices = try await provider.load()
+            devices = try await store.loadAllDevices()
         } catch {
             Self.logger.error("failed to load detected devices: \(error)")
         }
@@ -38,7 +41,7 @@ final class DeviceSelectionViewModel {
     func saveSelection() async {
         let ids = Set(selectedDeviceIDs.compactMap(Int.init))
         do {
-            try await provider.saveRegistration(deviceIDs: ids)
+            try await store.saveRegistration(deviceIDs: ids)
         } catch {
             Self.logger.error("failed to save selected devices: \(error)")
         }

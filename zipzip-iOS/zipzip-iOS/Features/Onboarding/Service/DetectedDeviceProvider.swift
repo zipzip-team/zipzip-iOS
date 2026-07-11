@@ -72,14 +72,3 @@ nonisolated struct DetectedDeviceProvider {
         )
     }
 }
-
-private enum DetectedDeviceProviderKey: DependencyKey {
-    static let liveValue = DetectedDeviceProvider()
-}
-
-extension DependencyValues {
-    var detectedDevices: DetectedDeviceProvider {
-        get { self[DetectedDeviceProviderKey.self] }
-        set { self[DetectedDeviceProviderKey.self] = newValue }
-    }
-}

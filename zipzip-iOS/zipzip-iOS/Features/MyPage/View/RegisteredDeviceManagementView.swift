@@ -9,7 +9,11 @@ import SwiftUI
 
 struct RegisteredDeviceManagementView: View {
     @Environment(Router.self) private var router
-    @State private var viewModel = RegisteredDeviceManagementViewModel()
+    @State private var viewModel: RegisteredDeviceManagementViewModel
+
+    init(store: RegisteredDeviceStore) {
+        _viewModel = State(initialValue: RegisteredDeviceManagementViewModel(store: store))
+    }
 
     var body: some View {
         @Bindable var viewModel = viewModel
@@ -143,6 +147,6 @@ struct RegisteredDeviceManagementView: View {
 }
 
 #Preview {
-    RegisteredDeviceManagementView()
+    RegisteredDeviceManagementView(store: DefaultRegisteredDeviceStore())
         .environment(Router())
 }

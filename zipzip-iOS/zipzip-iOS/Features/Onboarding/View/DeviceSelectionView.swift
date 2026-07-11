@@ -9,7 +9,11 @@ import SwiftUI
 
 struct DeviceSelectionView: View {
     @Environment(Router.self) private var router
-    @State private var viewModel = DeviceSelectionViewModel()
+    @State private var viewModel: DeviceSelectionViewModel
+
+    init(store: RegisteredDeviceStore) {
+        _viewModel = State(initialValue: DeviceSelectionViewModel(store: store))
+    }
 
     var body: some View {
         OnboardingContainerView {
@@ -57,6 +61,6 @@ struct DeviceSelectionView: View {
 }
 
 #Preview {
-    DeviceSelectionView()
+    DeviceSelectionView(store: DefaultRegisteredDeviceStore())
         .environment(Router())
 }
