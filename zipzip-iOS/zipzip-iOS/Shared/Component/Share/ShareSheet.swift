@@ -29,19 +29,30 @@ struct ShareSheet: View {
         BottomSheet(
             middleItem: .init(leftField: "사진집", rightField: "공유", selection: $selection),
             leftItem: {
-                headerButton("취소") { onDismiss() }
+                leadingHeaderButton
             },
             rightItem: {
-                if showsCompletionButton {
-                    headerButton("완료", isDisabled: selectedDestination == nil, action: completeSelection)
-                }
+                headerButton("완료", isDisabled: selectedDestination == nil, action: completeSelection)
             }
         ) {
             content
+                .scrollIndicators(.hidden)
+                .transaction { transaction in
+                    transaction.disablesAnimations = true
+                    transaction.animation = nil
+                }
         }
         .onChange(of: selection) { _, _ in
             targetShareAlbum = nil
             selectedAlbumID = nil
+        }
+    }
+
+    @ViewBuilder private var leadingHeaderButton: some View {
+        if targetShareAlbum != nil {
+            BottomSheetBackButton(action: returnToShareAlbumList)
+        } else {
+            BottomSheetCloseButton(action: onDismiss)
         }
     }
 
@@ -81,20 +92,16 @@ struct ShareSheet: View {
         Button(action: action) {
             Text(title)
                 .font(.b1_sb)
-                .foregroundStyle(isDisabled ? .grey700 : .white00)
+                .foregroundStyle(.white00)
                 .frame(width: 72, height: 48)
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .disabled(isDisabled)
+        .accessibilityHint(isDisabled ? "대상을 선택하면 완료할 수 있습니다." : "")
     }
 
     private func selectAlbum(_ album: Album) {
         selectedAlbumID = album.id
-    }
-
-    private var showsCompletionButton: Bool {
-        selection == .left || authenticationState.isLoggedIn
     }
 
     private var selectedDestination: ShareDestination? {
@@ -121,6 +128,11 @@ struct ShareSheet: View {
         onComplete(selectedDestination)
         onDismiss()
     }
+
+    private func returnToShareAlbumList() {
+        targetShareAlbum = nil
+        selectedAlbumID = nil
+    }
 }
 
 struct ShareLoginPrompt: View {
@@ -132,11 +144,11 @@ struct ShareLoginPrompt: View {
                 Color.grey200
                     .frame(width: 80, height: 80)
 
-                // TODO: 커스텀 폰트 텍스트를 SVG 에셋으로 교체
-                Text("공유 폴더는\n집에 대한 소개가 필요해요.")
-                    .font(.b1_md)
-                    .foregroundStyle(.white00)
-                    .multilineTextAlignment(.center)
+                Image(.shareLoginRequired)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 234, height: 54)
+                    .accessibilityLabel("공유 폴더는 집에 대한 소개가 필요해요.")
             }
 
             CommonButton(title: "로그인", property1: .cta, action: onLogin)
@@ -158,7 +170,7 @@ struct AlbumSelectionGrid: View {
     ]
 
     var body: some View {
-        ScrollView {
+        ScrollView(showsIndicators: false) {
             LazyVGrid(columns: columns, spacing: 20) {
                 ForEach(albums) { album in
                     Button {
@@ -171,11 +183,14 @@ struct AlbumSelectionGrid: View {
                             nameColorOverride: .white00
                         )
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(StaticButtonStyle())
                 }
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 28)
+            .transaction { transaction in
+                transaction.animation = nil
+            }
         }
     }
 }
@@ -185,19 +200,13 @@ struct ShareAlbumList: View {
     let onSelect: (ShareAlbum) -> Void
 
     var body: some View {
-        ScrollView {
+        ScrollView(showsIndicators: false) {
             LazyVStack(spacing: 8) {
                 ForEach(albums) { album in
                     Button {
                         onSelect(album)
                     } label: {
-                        ShareAlbumCard(
-                            thumbnail: nil,
-                            title: album.name,
-                            date: album.date,
-                            profileImages: [Image?](repeating: nil, count: 4),
-                            memberCount: album.memberCount
-                        )
+                        ShareDestinationRow(album: album)
                     }
                     .buttonStyle(.plain)
                 }
@@ -205,6 +214,48 @@ struct ShareAlbumList: View {
             .padding(.horizontal, 16)
             .padding(.vertical, 28)
         }
+    }
+}
+
+private struct ShareDestinationRow: View {
+    let album: ShareAlbum
+
+    var body: some View {
+        HStack(spacing: 10) {
+            HStack(spacing: 16) {
+                Color.grey100
+                    .frame(width: 72, height: 72)
+                    .clipShape(.rect(cornerRadius: 8))
+
+                VStack(alignment: .leading, spacing: 0) {
+                    Text(album.name)
+                        .font(.t3_sb)
+                        .foregroundStyle(.grey1000)
+                        .lineLimit(1)
+
+                    Text("\(album.memberCount)명")
+                        .font(.b2_md)
+                        .foregroundStyle(.grey700)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+            Image(.chevronRight)
+                .renderingMode(.template)
+                .resizable()
+                .scaledToFit()
+                .foregroundStyle(.grey1000)
+                .frame(width: 24, height: 24)
+                .frame(width: 40, height: 40)
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(.grey50, in: .rect(cornerRadius: 12))
+        .contentShape(.rect(cornerRadius: 12))
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(album.name), \(album.memberCount)명")
+        .accessibilityHint("공유집 선택")
     }
 }
 

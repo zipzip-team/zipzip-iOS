@@ -45,25 +45,39 @@ struct FilteredPictureView: View {
             await pictureViewModel.loadPhotos(filters: viewModel.appliedFilters)
         }
         .bottomSheet(isPresented: $viewModel.showDeviceSheet, detents: [.content]) { dismiss in
-            DeviceFilterSheet(devices: viewModel.options.devices, selected: $viewModel.pickerDevice) {
+            DeviceFilterSheet(
+                devices: viewModel.options.devices,
+                selected: $viewModel.pickerDevice,
+                onReset: { viewModel.pickerDevice = "" }
+            ) {
                 viewModel.applyDevice(viewModel.pickerDevice)
                 dismiss()
             }
         }
         .bottomSheet(isPresented: $viewModel.showLocationSheet, detents: [.content]) { dismiss in
-            LocationFilterSheet(locations: viewModel.options.locations, selected: $viewModel.pickerLocation) {
+            LocationFilterSheet(
+                locations: viewModel.options.locations,
+                selected: $viewModel.pickerLocation,
+                onReset: { viewModel.pickerLocation = "" }
+            ) {
                 viewModel.applyLocation(viewModel.pickerLocation)
                 dismiss()
             }
         }
         .bottomSheet(isPresented: $viewModel.showDateSheet, detents: [.height(dateSheetHeight)]) { dismiss in
-            DateFilterSheet(date: $viewModel.pickerDate) {
+            DateFilterSheet(date: $viewModel.pickerDate, onReset: {
+                viewModel.pickerDate = nil
+            }) {
                 viewModel.applyDate(viewModel.pickerDate)
                 dismiss()
             }
         }
         .bottomSheet(isPresented: $viewModel.showEtcSheet, detents: [.content]) { dismiss in
-            EtcFilterSheet(items: viewModel.options.etcItems, selected: $viewModel.pickerEtc) {
+            EtcFilterSheet(
+                items: viewModel.options.etcItems,
+                selected: $viewModel.pickerEtc,
+                onReset: { viewModel.pickerEtc = "" }
+            ) {
                 viewModel.applyEtc(viewModel.pickerEtc)
                 dismiss()
             }
@@ -149,9 +163,9 @@ struct FilteredPictureView: View {
             .first { $0.isKeyWindow }
         let screenHeight = window?.bounds.height ?? 0
         let topInset = window?.safeAreaInsets.top ?? 0
-        let backButtonArea: CGFloat = 48
-        let gap: CGFloat = 34
-        return max(screenHeight - topInset - backButtonArea - gap, 1)
+        let bottomInset = window?.safeAreaInsets.bottom ?? 0
+        let visibleContentBelowSafeArea: CGFloat = 169
+        return max(screenHeight - topInset - visibleContentBelowSafeArea - bottomInset, 1)
     }
 }
 

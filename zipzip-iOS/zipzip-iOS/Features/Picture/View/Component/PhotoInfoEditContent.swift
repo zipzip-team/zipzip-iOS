@@ -16,18 +16,25 @@ struct PhotoInfoEditContent: View {
     @State private var showDateSheet = false
     @State private var pickerDate = Date()
 
+    private let showsHeader: Bool
     private let devices: [FilterDevice] = PhotoFilterOptions.sample.devices
 
-    init(metadata: PhotoMetadata) {
+    init(
+        metadata: PhotoMetadata,
+        showsHeader: Bool = true
+    ) {
         _metadata = State(initialValue: metadata)
+        self.showsHeader = showsHeader
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            header
+            if showsHeader {
+                header
+            }
 
-            VStack(alignment: .leading, spacing: 0) {
-                metadataSection(title: "기기", hasDivider: true, onEdit: {
+            VStack(alignment: .leading, spacing: 16) {
+                metadataSection(title: "기기", showsTopDivider: showsHeader, onEdit: {
                     pickerDevice = metadata.deviceName
                     showDeviceSheet = true
                 }) {
@@ -38,24 +45,24 @@ struct PhotoInfoEditContent: View {
                     ) {}
                 }
 
-                metadataSection(title: "장소", hasDivider: true, onEdit: {
+                metadataSection(title: "장소", showsTopDivider: true, onEdit: {
                     pickerLocation = metadata.location
                     showLocationSheet = true
                 }) {
                     TextMetadataChip(title: metadata.location, isSelected: false) {}
                 }
 
-                metadataSection(title: "날짜", hasDivider: false, onEdit: {
+                metadataSection(title: "날짜", showsTopDivider: true, onEdit: {
                     pickerDate = AppliedFilter.date(from: metadata.dateText) ?? Date()
                     showDateSheet = true
                 }) {
                     DateMetadataChip(dateText: metadata.dateText)
                 }
             }
-            .padding(.top, 40)
+            .padding(.top, showsHeader ? 40 : 0)
         }
         .bottomSheet(isPresented: $showDeviceSheet, detents: [.content]) { dismiss in
-            DeviceFilterSheet(devices: devices, selected: $pickerDevice) {
+            DeviceFilterSheet(devices: devices, selected: $pickerDevice, onCancel: dismiss) {
                 applyDevice(pickerDevice)
                 dismiss()
             }
@@ -97,7 +104,7 @@ struct PhotoInfoEditContent: View {
 
     private func metadataSection<Chip: View>(
         title: String,
-        hasDivider: Bool,
+        showsTopDivider: Bool,
         onEdit: @escaping () -> Void,
         @ViewBuilder chip: () -> Chip
     ) -> some View {
@@ -111,7 +118,7 @@ struct PhotoInfoEditContent: View {
                     Text("수정")
                         .font(.b3_sb)
                         .foregroundStyle(.grey500)
-                        .underline()
+                        .padding(.horizontal, 4)
                 }
                 .buttonStyle(.plain)
             }
@@ -119,8 +126,8 @@ struct PhotoInfoEditContent: View {
         }
         .padding(.vertical, 16)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .overlay(alignment: .bottom) {
-            if hasDivider {
+        .overlay(alignment: .top) {
+            if showsTopDivider {
                 Rectangle()
                     .fill(.grey70)
                     .frame(height: 1)

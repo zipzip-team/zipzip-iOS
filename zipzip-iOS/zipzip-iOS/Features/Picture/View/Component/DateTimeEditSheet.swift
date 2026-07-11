@@ -12,14 +12,14 @@ struct DateTimeEditSheet: View {
     let onCancel: () -> Void
     let onDone: () -> Void
 
-    @State private var showTime = false
+    @State private var showTime = true
 
     private let timeAnchor = "timePicker"
 
     var body: some View {
         BottomSheet(
             leftItem: {
-                headerButton(title: "취소", action: onCancel)
+                BottomSheetCloseButton(action: onCancel)
             },
             rightItem: {
                 headerButton(title: "완료", action: onDone)
@@ -48,7 +48,7 @@ struct DateTimeEditSheet: View {
                         }
                     }
                     .padding(.horizontal, 16)
-                    .padding(.vertical, 8)
+                    .padding(.vertical, 4)
                 }
                 .onChange(of: showTime) { _, expanded in
                     guard expanded else { return }

@@ -125,7 +125,7 @@ struct AlbumView: View {
         ) { _ in
             BottomSheet(
                 leftItem: {
-                    AlbumSheetTextButton(title: "취소", action: viewModel.dismissCreateAlbumSheet)
+                    BottomSheetCloseButton(action: viewModel.dismissCreateAlbumSheet)
                 }
             ) {
                 AlbumCreateSheetContent(
@@ -197,9 +197,6 @@ private struct AlbumGridCard: View {
             card
         }
         .buttonStyle(StaticButtonStyle())
-        .transaction { transaction in
-            transaction.animation = nil
-        }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("\(album.name), \(album.count)장")
         .accessibilityValue(isSelectionMode ? accessibilityValue : "")
@@ -236,12 +233,6 @@ private struct AlbumGridCard: View {
         } else {
             "선택 안 됨"
         }
-    }
-}
-
-private struct StaticButtonStyle: ButtonStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
     }
 }
 
@@ -322,7 +313,7 @@ private struct AlbumShareDestinationSheet: View {
     var body: some View {
         BottomSheet(
             leftItem: {
-                AlbumSheetTextButton(title: "취소", action: onCancel)
+                BottomSheetCloseButton(action: onCancel)
             },
             rightItem: {
                 if authenticationState.isLoggedIn {

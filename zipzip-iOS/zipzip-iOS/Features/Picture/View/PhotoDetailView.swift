@@ -45,6 +45,7 @@ enum PhotoDeletionAction {
 
 struct PhotoDetailView: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     let photo: Photo
     let deletionContext: PhotoDeletionContext
@@ -54,8 +55,18 @@ struct PhotoDetailView: View {
     @State private var showShareSheet = false
     @State private var showDeleteAlert = false
     @State private var isFavorite = false
+    @State private var photoSize: CGSize = .zero
+    @State private var photoScale: CGFloat = 1
+    @State private var photoOffset: CGSize = .zero
+    @GestureState private var gestureScale: CGFloat = 1
+    @GestureState private var gestureOffset: CGSize = .zero
 
-    private let photoPeekHeight: CGFloat = 160
+    private static let photoScrollAnchor = "photo-detail-image"
+    private static let minimumPhotoScale: CGFloat = 1
+    private static let maximumPhotoScale: CGFloat = 4
+    private static let doubleTapPhotoScale: CGFloat = 2
+    private static let zoomActivationThreshold: CGFloat = 1.01
+    private static let infoRevealThreshold: CGFloat = 72
 
     init(
         photo: Photo,
@@ -68,36 +79,93 @@ struct PhotoDetailView: View {
     }
 
     var body: some View {
-        GeometryReader { geo in
-            let reveal = max(geo.size.height - photoPeekHeight, 0)
+        ScrollViewReader { proxy in
+            ZStack {
+                GeometryReader { geometry in
+                    let collapsedPhotoHeight = geometry.size.width * 0.5
+                    let infoPanelMinHeight = max(geometry.size.height - collapsedPhotoHeight, 0)
+                    let currentPhotoScale = clampedPhotoScale(photoScale * gestureScale)
+                    let currentPhotoOffset = clampedPhotoOffset(
+                        adding: photoOffset,
+                        and: gestureOffset,
+                        in: geometry.size,
+                        scale: currentPhotoScale
+                    )
 
-            VStack(spacing: 0) {
-                PhotoDetailImage(localIdentifier: photo.localIdentifier)
-                    .frame(width: geo.size.width, height: geo.size.height)
+                    ScrollView(showsIndicators: false) {
+                        VStack(spacing: 0) {
+                            PhotoDetailImage(
+                                localIdentifier: photo.localIdentifier,
+                                contentMode: isEditingInfo ? .fill : .fit,
+                                imageSize: $photoSize
+                            )
+                            .frame(
+                                width: geometry.size.width,
+                                height: isEditingInfo ? collapsedPhotoHeight : geometry.size.height
+                            )
+                            .scaleEffect(isEditingInfo ? Self.minimumPhotoScale : currentPhotoScale)
+                            .offset(isEditingInfo ? .zero : currentPhotoOffset)
+                            .clipped()
+                            .contentShape(Rectangle())
+                            .gesture(
+                                photoGesture(in: geometry.size),
+                                including: isEditingInfo ? .none : .all
+                            )
+                            .onTapGesture(count: 2) {
+                                guard !isEditingInfo else { return }
+                                togglePhotoZoom(in: geometry.size)
+                            }
+                            .accessibilityLabel("사진")
+                            .accessibilityHint("두 번 탭하여 확대하거나 축소할 수 있습니다.")
+                            .accessibilityAction(named: isCommittedPhotoZoomed ? "축소" : "확대") {
+                                togglePhotoZoom(in: geometry.size)
+                            }
+                            .id(Self.photoScrollAnchor)
 
-                ScrollView {
-                    PhotoInfoEditContent(metadata: photo.metadata)
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 32)
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                            if isEditingInfo {
+                                photoInfoEditView
+                                    .frame(
+                                        maxWidth: .infinity,
+                                        minHeight: infoPanelMinHeight,
+                                        alignment: .top
+                                    )
+                                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                            }
+                        }
+                        .frame(maxWidth: .infinity)
+                    }
+                    .scrollDisabled(!isEditingInfo)
                 }
-                .frame(width: geo.size.width, height: reveal)
+                .ignoresSafeArea()
             }
-            .offset(y: isEditingInfo ? -reveal : 0)
-            .frame(width: geo.size.width, height: geo.size.height, alignment: .top)
-            .clipped()
-            .animation(.easeInOut(duration: 0.3), value: isEditingInfo)
-        }
-        .background(Color.orange30.ignoresSafeArea())
-        .navigationBarBackButtonHidden(true)
-        .overlay(alignment: .topLeading) {
-            backButton
-        }
-        .overlay(alignment: .bottom) {
-            if !isEditingInfo {
-                actionBar.transition(.opacity)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background {
+                (isPhotoZoomed ? Color.black : Color.orange30)
+                    .ignoresSafeArea()
+                    .animation(reduceMotion ? nil : .easeOut(duration: 0.16), value: isPhotoZoomed)
+            }
+            .navigationBarBackButtonHidden(true)
+            .overlay(alignment: .topLeading) {
+                backButton {
+                    setInfoEditing(false, scrollProxy: proxy)
+                }
+                .opacity(isPhotoZoomed ? 0 : 1)
+                .allowsHitTesting(!isPhotoZoomed)
+                .accessibilityHidden(isPhotoZoomed)
+                .animation(reduceMotion ? nil : .easeOut(duration: 0.16), value: isPhotoZoomed)
+            }
+            .overlay(alignment: .bottom) {
+                if !isEditingInfo {
+                    actionBar
+                        .opacity(isPhotoZoomed ? 0 : 1)
+                        .allowsHitTesting(!isPhotoZoomed)
+                        .accessibilityHidden(isPhotoZoomed)
+                        .transition(.opacity)
+                        .animation(reduceMotion ? nil : .easeOut(duration: 0.16), value: isPhotoZoomed)
+                }
             }
         }
+        .statusBarHidden(isCommittedPhotoZoomed)
         .bottomSheet(isPresented: $showShareSheet, detents: [.full]) { dismiss in
             ShareSheet(
                 albums: Album.samples,
@@ -121,11 +189,30 @@ struct PhotoDetailView: View {
         deletionContext.alertContent
     }
 
-    private var backButton: some View {
+    private var isPhotoZoomed: Bool {
+        clampedPhotoScale(photoScale * gestureScale) > Self.zoomActivationThreshold
+    }
+
+    private var isCommittedPhotoZoomed: Bool {
+        photoScale > Self.zoomActivationThreshold
+    }
+
+    private var photoInfoEditView: some View {
+        PhotoInfoEditContent(
+            metadata: photo.metadata,
+            showsHeader: false
+        )
+        .padding(.horizontal, 16)
+        .padding(.top, 24)
+        .frame(maxWidth: .infinity, alignment: .topLeading)
+        .background(Color.orange30)
+    }
+
+    private func backButton(onCloseInfo: @escaping () -> Void) -> some View {
         RoundedIconButton(items: [
             .init(id: "back", icon: .chevronLeft, accessibilityLabel: "뒤로가기") {
                 if isEditingInfo {
-                    withAnimation { isEditingInfo = false }
+                    onCloseInfo()
                 } else {
                     dismiss()
                 }
@@ -141,11 +228,151 @@ struct PhotoDetailView: View {
             .init(icon: isFavorite ? .starFilled : .starStroke, title: "즐겨찾기") { isFavorite.toggle() },
             .init(icon: .moveToAlbum, title: "집으로") { showShareSheet = true },
             .init(icon: .metadata, title: "정보 수정") {
-                withAnimation { isEditingInfo = true }
+                setInfoEditing(true)
             },
             .init(icon: .delete, title: "삭제") { showDeleteAlert = true }
         ])
         .padding(.bottom, 16)
+    }
+
+    private func setInfoEditing(_ isEditing: Bool) {
+        withAnimation(reduceMotion ? nil : .spring(duration: 0.42, bounce: 0)) {
+            if isEditing {
+                resetPhotoTransform()
+            }
+            isEditingInfo = isEditing
+        }
+    }
+
+    private func setInfoEditing(_ isEditing: Bool, scrollProxy: ScrollViewProxy) {
+        withAnimation(reduceMotion ? nil : .spring(duration: 0.42, bounce: 0)) {
+            scrollProxy.scrollTo(Self.photoScrollAnchor, anchor: .top)
+            if isEditing {
+                resetPhotoTransform()
+            }
+            isEditingInfo = isEditing
+        }
+    }
+
+    private func photoGesture(in containerSize: CGSize) -> some Gesture {
+        MagnifyGesture()
+            .updating($gestureScale) { value, state, _ in
+                state = value.magnification
+            }
+            .onEnded { value in
+                let proposedScale = clampedPhotoScale(photoScale * value.magnification)
+                let scale = proposedScale > Self.zoomActivationThreshold
+                    ? proposedScale
+                    : Self.minimumPhotoScale
+                photoScale = scale
+                photoOffset = clampedPhotoOffset(
+                    photoOffset,
+                    in: containerSize,
+                    scale: scale
+                )
+            }
+            .simultaneously(with: photoDragGesture(in: containerSize))
+    }
+
+    private func photoDragGesture(in containerSize: CGSize) -> some Gesture {
+        DragGesture(minimumDistance: 8)
+            .updating($gestureOffset) { value, state, _ in
+                guard photoScale * gestureScale > Self.zoomActivationThreshold else { return }
+                state = value.translation
+            }
+            .onEnded { value in
+                if photoScale * gestureScale > Self.zoomActivationThreshold {
+                    photoOffset = clampedPhotoOffset(
+                        adding: photoOffset,
+                        and: value.translation,
+                        in: containerSize,
+                        scale: photoScale
+                    )
+                    return
+                }
+
+                let isVerticalSwipe = abs(value.translation.height) > abs(value.translation.width)
+                let passedThreshold = value.translation.height < -Self.infoRevealThreshold
+                    || value.predictedEndTranslation.height < -(Self.infoRevealThreshold * 1.5)
+
+                if isVerticalSwipe, passedThreshold {
+                    setInfoEditing(true)
+                }
+            }
+    }
+
+    private func togglePhotoZoom(in containerSize: CGSize) {
+        withAnimation(reduceMotion ? nil : .spring(duration: 0.32, bounce: 0)) {
+            if isCommittedPhotoZoomed {
+                resetPhotoTransform()
+            } else {
+                photoScale = Self.doubleTapPhotoScale
+                photoOffset = clampedPhotoOffset(
+                    photoOffset,
+                    in: containerSize,
+                    scale: Self.doubleTapPhotoScale
+                )
+            }
+        }
+    }
+
+    private func resetPhotoTransform() {
+        photoScale = Self.minimumPhotoScale
+        photoOffset = .zero
+    }
+
+    private func clampedPhotoScale(_ scale: CGFloat) -> CGFloat {
+        min(max(scale, Self.minimumPhotoScale), Self.maximumPhotoScale)
+    }
+
+    private func clampedPhotoOffset(
+        _ offset: CGSize,
+        in containerSize: CGSize,
+        scale: CGFloat
+    ) -> CGSize {
+        guard scale > Self.minimumPhotoScale else { return .zero }
+
+        let scaledPhotoSize = aspectFitPhotoSize(in: containerSize, scale: scale)
+        let maximumX = max((scaledPhotoSize.width - containerSize.width) / 2, 0)
+        let maximumY = max((scaledPhotoSize.height - containerSize.height) / 2, 0)
+
+        return CGSize(
+            width: min(max(offset.width, -maximumX), maximumX),
+            height: min(max(offset.height, -maximumY), maximumY)
+        )
+    }
+
+    private func aspectFitPhotoSize(in containerSize: CGSize, scale: CGFloat) -> CGSize {
+        guard photoSize.width > 0,
+              photoSize.height > 0,
+              containerSize.width > 0,
+              containerSize.height > 0
+        else {
+            return containerSize
+        }
+
+        let fitScale = min(
+            containerSize.width / photoSize.width,
+            containerSize.height / photoSize.height
+        )
+
+        return CGSize(
+            width: photoSize.width * fitScale * scale,
+            height: photoSize.height * fitScale * scale
+        )
+    }
+
+    private func clampedPhotoOffset(
+        adding lhs: CGSize,
+        and rhs: CGSize,
+        in containerSize: CGSize,
+        scale: CGFloat
+    ) -> CGSize {
+        clampedPhotoOffset(
+            CGSize(width: lhs.width + rhs.width, height: lhs.height + rhs.height),
+            in: containerSize,
+            scale: scale
+        )
     }
 
     private func dismissDeleteAlert() {
