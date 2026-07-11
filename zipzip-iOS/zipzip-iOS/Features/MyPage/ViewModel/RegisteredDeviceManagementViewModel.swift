@@ -32,10 +32,10 @@ final class RegisteredDeviceManagementViewModel {
         self.registerableDevices = registerableDevices
     }
 
-    /// 로컬 DB(device 테이블)의 탐지된 기기 전체를 등록 기기 목록으로 불러온다.
+    /// 등록(is_registered)된 기기 목록을 불러온다.
     func load() async {
         do {
-            registeredDevices = try await provider.load()
+            registeredDevices = try await provider.loadRegistered()
         } catch {
             Self.logger.error("failed to load registered devices: \(error)")
         }
@@ -66,8 +66,15 @@ final class RegisteredDeviceManagementViewModel {
         enterMode(.removing)
     }
 
-    func enterRegisteringMode() {
-        enterMode(.registering)
+    /// device 테이블 전체 기기를 열고, 현재 등록된 기기를 미리 선택한 상태로 등록 모드에 진입한다.
+    func enterRegisteringMode() async {
+        do {
+            registerableDevices = try await provider.load()
+        } catch {
+            Self.logger.error("failed to load devices: \(error)")
+        }
+        selectedDeviceIDs = Set(registeredDevices.map(\.id))
+        mode = .registering
     }
 
     func cancelSelection() {
@@ -96,19 +103,28 @@ final class RegisteredDeviceManagementViewModel {
         showsDeleteAlert = false
     }
 
-    func confirmDelete() {
-        registeredDevices.removeAll { selectedDeviceIDs.contains($0.id) }
+    /// 선택된 기기를 등록 세트에서 제거한다.
+    func confirmDelete() async {
+        let remaining = Set(registeredDevices.map(\.id)).subtracting(selectedDeviceIDs)
+        await save(registeredIDs: remaining)
         dismissDeleteAlert()
         cancelSelection()
     }
 
-    func registerSelectedDevices() {
-        let selectedDevices = registerableDevices.filter { selectedDeviceIDs.contains($0.id) }
-        let registeredIDs = Set(registeredDevices.map(\.id))
-        let newDevices = selectedDevices.filter { !registeredIDs.contains($0.id) }
-
-        registeredDevices.append(contentsOf: newDevices)
+    /// 등록 모드에서 선택한 기기로 등록 세트를 교체한다.
+    func registerSelectedDevices() async {
+        await save(registeredIDs: selectedDeviceIDs)
         cancelSelection()
+    }
+
+    private func save(registeredIDs: Set<DetectedDevice.ID>) async {
+        let ids = Set(registeredIDs.compactMap(Int.init))
+        do {
+            try await provider.saveRegistration(deviceIDs: ids)
+            registeredDevices = try await provider.loadRegistered()
+        } catch {
+            Self.logger.error("failed to save registration: \(error)")
+        }
     }
 
     private func enterMode(_ mode: RegisteredDeviceManagementMode) {

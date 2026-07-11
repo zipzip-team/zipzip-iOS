@@ -33,4 +33,14 @@ final class DeviceSelectionViewModel {
             selectedDeviceIDs.insert(device.id)
         }
     }
+
+    /// 선택한 기기를 등록 세트로 저장한다.
+    func saveSelection() async {
+        let ids = Set(selectedDeviceIDs.compactMap(Int.init))
+        do {
+            try await provider.saveRegistration(deviceIDs: ids)
+        } catch {
+            Self.logger.error("failed to save selected devices: \(error)")
+        }
+    }
 }

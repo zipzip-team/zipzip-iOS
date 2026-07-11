@@ -10,6 +10,7 @@ import SQLiteData
 
 struct FilterablePhoto {
     let photo: Photo
+    let deviceID: Int?
     let takenAt: Date?
     let addedAt: Date
     let addedDate: Date
@@ -41,6 +42,7 @@ nonisolated struct PhotoSectionsProvider {
                 )
                 return FilterablePhoto(
                     photo: Photo(localIdentifier: record.localIdentifier, metadata: metadata),
+                    deviceID: record.deviceID,
                     takenAt: record.takenAt,
                     addedAt: record.addedAt,
                     addedDate: record.addedDate,
@@ -51,7 +53,15 @@ nonisolated struct PhotoSectionsProvider {
     }
 
     func sections(from library: [FilterablePhoto], filters: [AppliedFilter]) async -> [PhotoSection] {
-        var filtered = library
+        // 등록된 기기의 사진만 노출한다.
+        let registeredIDs = (try? await database.read { db in
+            try DeviceRecord.where { $0.isRegistered.eq(true) }.select(\.id).fetchAll(db)
+        }).map(Set.init) ?? []
+
+        var filtered = library.filter { photo in
+            guard let deviceID = photo.deviceID else { return false }
+            return registeredIDs.contains(deviceID)
+        }
         for filter in filters {
             filtered = Self.apply(filter, to: filtered)
         }

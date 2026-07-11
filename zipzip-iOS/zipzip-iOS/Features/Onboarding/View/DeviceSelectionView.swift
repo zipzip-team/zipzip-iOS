@@ -43,7 +43,10 @@ struct DeviceSelectionView: View {
                 .frame(maxHeight: .infinity)
 
                 CommonButton(title: "확인", property1: .default) {
-                    router.push(.onboardingComplete)
+                    Task {
+                        await viewModel.saveSelection()
+                        router.push(.onboardingComplete)
+                    }
                 }
             }
         }

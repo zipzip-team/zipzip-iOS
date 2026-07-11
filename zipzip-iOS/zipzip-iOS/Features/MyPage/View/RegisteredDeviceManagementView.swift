@@ -42,7 +42,7 @@ struct RegisteredDeviceManagementView: View {
                 viewModel.dismissDeleteAlert()
             },
             onPrimaryTap: {
-                viewModel.confirmDelete()
+                Task { await viewModel.confirmDelete() }
             }
         )
         .task {
@@ -71,7 +71,9 @@ struct RegisteredDeviceManagementView: View {
                 RoundedIconButton(items: [
                     .init(id: "selection", icon: .select, accessibilityLabel: "") { viewModel.enterRemovingMode()
                     },
-                    .init(id: "add", icon: .plus, accessibilityLabel: "") { viewModel.enterRegisteringMode() }
+                    .init(id: "add", icon: .plus, accessibilityLabel: "") {
+                        Task { await viewModel.enterRegisteringMode() }
+                    }
                 ])
             }
         }
@@ -134,7 +136,7 @@ struct RegisteredDeviceManagementView: View {
     private var registrationActionBar: some View {
         ActionBar(items: [
             .init(icon: .plus, title: "등록", isDisabled: viewModel.isRegistrationDisabled) {
-                viewModel.registerSelectedDevices()
+                Task { await viewModel.registerSelectedDevices() }
             }
         ])
     }
