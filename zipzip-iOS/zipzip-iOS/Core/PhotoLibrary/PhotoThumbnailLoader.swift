@@ -35,15 +35,52 @@ final class PhotoThumbnailLoader: @unchecked Sendable {
         options.resizeMode = .fast
         options.isNetworkAccessAllowed = true
 
-        return await withCheckedContinuation { continuation in
-            manager.requestImage(
-                for: asset,
-                targetSize: targetSize,
-                contentMode: contentMode,
-                options: options
-            ) { image, _ in
-                continuation.resume(returning: image)
+        let box = ImageRequestBox()
+        return await withTaskCancellationHandler {
+            await withCheckedContinuation { (continuation: CheckedContinuation<UIImage?, Never>) in
+                let requestID = manager.requestImage(
+                    for: asset,
+                    targetSize: targetSize,
+                    contentMode: contentMode,
+                    options: options
+                ) { image, _ in
+                    box.finish { continuation.resume(returning: image) }
+                }
+                box.store(requestID)
+            }
+        } onCancel: {
+            if let requestID = box.requestID() {
+                manager.cancelImageRequest(requestID)
             }
         }
+    }
+}
+
+private final class ImageRequestBox: @unchecked Sendable {
+    private let lock = NSLock()
+    private var storedRequestID: PHImageRequestID?
+    private var isFinished = false
+
+    func store(_ id: PHImageRequestID) {
+        lock.lock()
+        defer { lock.unlock() }
+        storedRequestID = id
+    }
+
+    func requestID() -> PHImageRequestID? {
+        lock.lock()
+        defer { lock.unlock() }
+        return storedRequestID
+    }
+
+    func finish(_ resume: () -> Void) {
+        lock.lock()
+        if isFinished {
+            lock.unlock()
+            return
+        }
+        isFinished = true
+        lock.unlock()
+        resume()
     }
 }
