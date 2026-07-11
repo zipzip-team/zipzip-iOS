@@ -16,23 +16,25 @@ struct PhotoInfoEditContent: View {
     @State private var showDateSheet = false
     @State private var pickerDate = Date()
 
-    private let subtitle: String
+    private let showsHeader: Bool
     private let devices: [FilterDevice] = PhotoFilterOptions.sample.devices
 
     init(
         metadata: PhotoMetadata,
-        subtitle: String = "선택한 사진 중 첫 번째 사진의 정보를 기준으로 보여드려요.\n정보를 수정하면 모든 사진에 함께 적용돼요."
+        showsHeader: Bool = true
     ) {
         _metadata = State(initialValue: metadata)
-        self.subtitle = subtitle
+        self.showsHeader = showsHeader
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            header
+            if showsHeader {
+                header
+            }
 
-            VStack(alignment: .leading, spacing: 0) {
-                metadataSection(title: "기기", onEdit: {
+            VStack(alignment: .leading, spacing: 16) {
+                metadataSection(title: "기기", showsTopDivider: showsHeader, onEdit: {
                     pickerDevice = metadata.deviceName
                     showDeviceSheet = true
                 }) {
@@ -43,21 +45,21 @@ struct PhotoInfoEditContent: View {
                     ) {}
                 }
 
-                metadataSection(title: "장소", onEdit: {
+                metadataSection(title: "장소", showsTopDivider: true, onEdit: {
                     pickerLocation = metadata.location
                     showLocationSheet = true
                 }) {
                     TextMetadataChip(title: metadata.location, isSelected: false) {}
                 }
 
-                metadataSection(title: "날짜", onEdit: {
+                metadataSection(title: "날짜", showsTopDivider: true, onEdit: {
                     pickerDate = AppliedFilter.date(from: metadata.dateText) ?? Date()
                     showDateSheet = true
                 }) {
                     DateMetadataChip(dateText: metadata.dateText)
                 }
             }
-            .padding(.top, 40)
+            .padding(.top, showsHeader ? 40 : 0)
         }
         .bottomSheet(isPresented: $showDeviceSheet, detents: [.content]) { dismiss in
             DeviceFilterSheet(devices: devices, selected: $pickerDevice) {
@@ -92,7 +94,7 @@ struct PhotoInfoEditContent: View {
             Text("사진 정보")
                 .font(.t1_sb)
                 .foregroundStyle(.grey1000)
-            Text(subtitle)
+            Text("선택한 사진 중 첫 번째 사진의 정보를 기준으로 보여드려요.\n정보를 수정하면 모든 사진에 함께 적용돼요.")
                 .font(.b2_md)
                 .foregroundStyle(.grey700)
         }
@@ -102,6 +104,7 @@ struct PhotoInfoEditContent: View {
 
     private func metadataSection<Chip: View>(
         title: String,
+        showsTopDivider: Bool,
         onEdit: @escaping () -> Void,
         @ViewBuilder chip: () -> Chip
     ) -> some View {
@@ -124,9 +127,11 @@ struct PhotoInfoEditContent: View {
         .padding(.vertical, 16)
         .frame(maxWidth: .infinity, alignment: .leading)
         .overlay(alignment: .top) {
-            Rectangle()
-                .fill(.grey70)
-                .frame(height: 1)
+            if showsTopDivider {
+                Rectangle()
+                    .fill(.grey70)
+                    .frame(height: 1)
+            }
         }
     }
 

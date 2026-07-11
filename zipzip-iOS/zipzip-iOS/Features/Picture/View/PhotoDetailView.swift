@@ -99,6 +99,7 @@ struct PhotoDetailView: View {
                     .frame(maxWidth: .infinity)
                 }
                 .scrollDisabled(!isEditingInfo)
+                .ignoresSafeArea(.container, edges: .top)
             }
 
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -141,10 +142,10 @@ struct PhotoDetailView: View {
     private var photoInfoEditView: some View {
         PhotoInfoEditContent(
             metadata: photo.metadata,
-            subtitle: "선택한 사진 중 첫 번째 사진의 원본 정보가 아래에 표시됩니다.\n올바른 정보로 조정하면 모든 사진의 정보가 조정됩니다."
+            showsHeader: false
         )
         .padding(.horizontal, 16)
-        .padding(.top, 40)
+        .padding(.top, 24)
         .frame(maxWidth: .infinity, alignment: .topLeading)
         .background(Color.orange30)
     }
