@@ -5,18 +5,16 @@
 //  Created by 성환 on 7/11/26.
 //
 
-import CoreLocation
 import Foundation
-import MapKit
+import OSLog
 import SQLiteData
+
+private let logger = Logger(subsystem: "com.zipzip.zipzip-iOS", category: "PlaceLabeling")
 
 nonisolated struct PlaceLabelingService {
     @Dependency(\.defaultDatabase) private var database
 
-    private static let coordinatePrecision = 1000.0
-    private static let requestInterval: Duration = .milliseconds(150)
-    private static let maxRetries = 3
-    private static let koreanLocale = Locale(identifier: "ko_KR")
+    private static let coordinateStep = 0.005
 
     @concurrent
     func labelPendingPhotos() async throws {
@@ -32,6 +30,12 @@ nonisolated struct PlaceLabelingService {
         }
         guard !located.isEmpty else { return }
 
+        let geocoder = LocalReverseGeocoder()
+        guard !geocoder.isEmpty else {
+            logger.error("place labeling skipped: geocoding data unavailable")
+            return
+        }
+
         let clusters = Dictionary(grouping: located) { photo in
             ClusterKey(
                 latitude: Self.rounded(photo.latitude),
@@ -39,48 +43,39 @@ nonisolated struct PlaceLabelingService {
             )
         }
 
+        let totalPhotos = located.count
+        logger.info("place labeling started: \(totalPhotos) photos, \(clusters.count) clusters")
+
+        var processedPhotos = 0
         for (key, photos) in clusters {
             try Task.checkCancellation()
-            guard let label = try await reverseGeocode(key) else { continue }
-            let photoIDs = photos.map(\.id)
-            try await database.write { db in
-                let placeID = try Self.findOrCreatePlace(
-                    name: label,
-                    latitude: key.latitude,
-                    longitude: key.longitude,
-                    db: db
-                )
-                try PhotoRecord
-                    .update { $0.placeID = #bind(placeID) }
-                    .where { $0.id.in(photoIDs) }
-                    .execute(db)
+            if let label = geocoder.label(latitude: key.latitude, longitude: key.longitude) {
+                do {
+                    try await persist(label: label, key: key, photoIDs: photos.map(\.id))
+                } catch is CancellationError {
+                    throw CancellationError()
+                } catch {
+                    logger.error("place labeling skipped a cluster: \(error)")
+                }
             }
-            try? await Task.sleep(for: Self.requestInterval)
+            processedPhotos += photos.count
+            logger.info("place labeling progress: \(processedPhotos)/\(totalPhotos)")
         }
+        logger.info("place labeling finished: \(processedPhotos)/\(totalPhotos)")
     }
 
-    @MainActor
-    private func reverseGeocode(_ key: ClusterKey) async throws -> String? {
-        let location = CLLocation(latitude: key.latitude, longitude: key.longitude)
-        guard let request = MKReverseGeocodingRequest(location: location) else { return nil }
-        request.preferredLocale = Self.koreanLocale
-
-        var attempt = 0
-        while true {
-            do {
-                guard let mapItem = try await request.mapItems.first else { return nil }
-                return PlaceLabelCatalog.label(
-                    regionCode: mapItem.addressRepresentations?.__regionCode,
-                    regionName: mapItem.addressRepresentations?.regionName,
-                    fullAddress: mapItem.address?.fullAddress
-                )
-            } catch let error as MKError where error.code == .placemarkNotFound {
-                return nil
-            } catch {
-                attempt += 1
-                guard attempt <= Self.maxRetries else { throw error }
-                try await Task.sleep(for: .seconds(Double(attempt) * 2))
-            }
+    private func persist(label: String, key: ClusterKey, photoIDs: [Int]) async throws {
+        try await database.write { db in
+            let placeID = try Self.findOrCreatePlace(
+                name: label,
+                latitude: key.latitude,
+                longitude: key.longitude,
+                db: db
+            )
+            try PhotoRecord
+                .update { $0.placeID = #bind(placeID) }
+                .where { $0.id.in(photoIDs) }
+                .execute(db)
         }
     }
 
@@ -101,7 +96,7 @@ nonisolated struct PlaceLabelingService {
     }
 
     private static func rounded(_ coordinate: Double) -> Double {
-        (coordinate * coordinatePrecision).rounded() / coordinatePrecision
+        (coordinate / coordinateStep).rounded() * coordinateStep
     }
 }
 
