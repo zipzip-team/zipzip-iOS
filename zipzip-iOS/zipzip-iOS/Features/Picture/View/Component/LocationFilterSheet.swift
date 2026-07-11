@@ -22,18 +22,14 @@ struct LocationFilterSheet: View {
                 headerButton(title: "완료", action: onDone)
             }
         ) {
-            VStack(alignment: .leading, spacing: 20) {
-                titleBlock
-
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 8) {
-                        ForEach(locations, id: \.self) { location in
-                            TextMetadataChip(
-                                title: location,
-                                isSelected: selected == location
-                            ) {
-                                selected = location
-                            }
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    ForEach(locations, id: \.self) { location in
+                        TextMetadataChip(
+                            title: location,
+                            isSelected: selected == location
+                        ) {
+                            selected = location
                         }
                     }
                 }
@@ -52,17 +48,6 @@ struct LocationFilterSheet: View {
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-    }
-
-    private var titleBlock: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text("장소")
-                .font(.t3_sb)
-                .foregroundStyle(.white00)
-            Text("사진을 많이 찍은 장소를 기준으로 추천해요.")
-                .font(.b2_md)
-                .foregroundStyle(.grey300)
-        }
     }
 }
 

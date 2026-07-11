@@ -22,8 +22,6 @@ struct DateFilterSheet: View {
             }
         ) {
             VStack(alignment: .leading, spacing: 20) {
-                titleBlock
-
                 MultiDatePicker("", selection: dateSelection)
                     .labelsHidden()
                     .environment(\.locale, Locale(identifier: "ko_KR"))
@@ -61,17 +59,6 @@ struct DateFilterSheet: View {
 
     private func dateComponents(from date: Date) -> DateComponents {
         Calendar.autoupdatingCurrent.dateComponents([.year, .month, .day], from: date)
-    }
-
-    private var titleBlock: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text("날짜")
-                .font(.t3_sb)
-                .foregroundStyle(.white00)
-            Text("사진을 찍은 날짜를 선택해 주세요.")
-                .font(.b2_md)
-                .foregroundStyle(.grey300)
-        }
     }
 
     private var photosBlock: some View {

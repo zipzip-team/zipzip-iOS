@@ -22,18 +22,14 @@ struct EtcFilterSheet: View {
                 headerButton(title: "완료", action: onDone)
             }
         ) {
-            VStack(alignment: .leading, spacing: 20) {
-                titleBlock
-
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 8) {
-                        ForEach(items, id: \.self) { item in
-                            TextMetadataChip(
-                                title: item,
-                                isSelected: selected == item
-                            ) {
-                                selected = item
-                            }
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    ForEach(items, id: \.self) { item in
+                        TextMetadataChip(
+                            title: item,
+                            isSelected: selected == item
+                        ) {
+                            selected = item
                         }
                     }
                 }
@@ -52,12 +48,6 @@ struct EtcFilterSheet: View {
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-    }
-
-    private var titleBlock: some View {
-        Text("기타")
-            .font(.t3_sb)
-            .foregroundStyle(.white00)
     }
 }
 
