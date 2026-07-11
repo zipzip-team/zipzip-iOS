@@ -35,15 +35,11 @@ struct AlbumCard: View {
     }
 
     private var nameColor: Color {
-        if let nameColorOverride {
-            return nameColorOverride
-        }
-
         switch state {
-        case .selected:
+        case .highlighted, .selected:
             return Color.orange500
         default:
-            return Color.grey950
+            return nameColorOverride ?? Color.grey950
         }
     }
 }

@@ -197,9 +197,6 @@ private struct AlbumGridCard: View {
             card
         }
         .buttonStyle(StaticButtonStyle())
-        .transaction { transaction in
-            transaction.animation = nil
-        }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("\(album.name), \(album.count)장")
         .accessibilityValue(isSelectionMode ? accessibilityValue : "")
@@ -236,12 +233,6 @@ private struct AlbumGridCard: View {
         } else {
             "선택 안 됨"
         }
-    }
-}
-
-private struct StaticButtonStyle: ButtonStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
     }
 }
 

@@ -171,11 +171,14 @@ struct AlbumSelectionGrid: View {
                             nameColorOverride: .white00
                         )
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(StaticButtonStyle())
                 }
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 28)
+            .transaction { transaction in
+                transaction.animation = nil
+            }
         }
     }
 }
