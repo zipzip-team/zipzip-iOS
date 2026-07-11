@@ -10,10 +10,10 @@ import SwiftUI
 struct RootTabView: View {
     @Environment(Router.self) private var router
     @State private var selection: NavbarTab = .main
-    @State private var loaded: Set<NavbarTab> = [.main]
     @State private var pictureViewModel = PictureViewModel()
-    @State private var albumViewModel = AlbumViewModel()
     @State private var showShareSheet = false
+
+    let albumViewModel: AlbumViewModel
 
     var body: some View {
         content
@@ -22,9 +22,9 @@ struct RootTabView: View {
                 bottomBar
             }
             .onChange(of: selection) { _, newValue in
-                loaded.insert(newValue)
                 if newValue != .album {
-                    albumViewModel.exitSelectionMode()
+                    albumViewModel.resetForTabChange()
+                    router.removeAlbumRoutes()
                 }
             }
             .bottomSheet(isPresented: $showShareSheet, detents: [.full]) { dismiss in
@@ -32,7 +32,8 @@ struct RootTabView: View {
                     albums: Album.samples,
                     sharedAlbums: Album.sharedSamples,
                     shareAlbums: ShareAlbum.samples,
-                    onDismiss: { dismiss() }
+                    onDismiss: { dismiss() },
+                    loadsAlbumsFromDatabase: true
                 )
             }
     }
@@ -58,26 +59,22 @@ struct RootTabView: View {
     }
 
     private var showsNavbar: Bool {
-        selection != .album || (!albumViewModel.isSelectionMode && !albumViewModel.isDetailPresented)
+        selection != .album || (!albumViewModel.isSelectionMode && !router.path.contains(where: \.isAlbumRoute))
     }
 
     private var content: some View {
-        ZStack {
-            ForEach(NavbarTab.allCases, id: \.self) { tab in
-                if loaded.contains(tab) {
-                    page(for: tab)
-                        .opacity(selection == tab ? 1 : 0)
-                        .allowsHitTesting(selection == tab)
-                        .accessibilityHidden(selection != tab)
-                }
-            }
-        }
+        page(for: selection)
     }
 
     @ViewBuilder private func page(for tab: NavbarTab) -> some View {
         switch tab {
         case .main: MainView()
-        case .picture: PictureView(viewModel: pictureViewModel)
+        case .picture:
+            PictureView(
+                viewModel: pictureViewModel,
+                onOpenFilter: { router.push(.filter) },
+                onOpenPhoto: { router.push(.photoDetail($0)) }
+            )
         case .album: AlbumView(viewModel: albumViewModel)
         case .share: ShareView()
         }
