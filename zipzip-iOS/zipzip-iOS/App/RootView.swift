@@ -16,12 +16,11 @@ struct RootView: View {
         @Bindable var router = router
         NavigationStack(path: $router.path) {
             Group {
-                // DEBUG: 온보딩 Figma UI를 점검하는 동안 완료 여부 분기를 잠시 비활성화합니다.
-                // if hasCompletedOnboarding {
-                //     RootTabView()
-                // } else {
-                SplashView()
-                // }
+                if hasCompletedOnboarding {
+                    RootTabView()
+                } else {
+                    SplashView()
+                }
             }
             .task {
                 guard hasCompletedOnboarding else { return }
