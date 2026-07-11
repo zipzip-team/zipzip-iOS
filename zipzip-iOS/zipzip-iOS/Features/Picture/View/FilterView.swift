@@ -84,7 +84,7 @@ struct FilterView: View {
     private var locationSection: some View {
         section(title: "장소", subtitle: "사진을 많이 찍은 장소를 기준으로 추천해요.") {
             chipRow {
-                ForEach(viewModel.options.locations, id: \.self) { location in
+                ForEach(viewModel.options.locations.prefix(10), id: \.self) { location in
                     TextMetadataChip(
                         title: location,
                         isSelected: viewModel.selectedLocation == location

@@ -18,6 +18,9 @@ final class PhotoSyncCoordinator {
     @Dependency(\.photoLibrarySync) private var photoLibrarySync
 
     @ObservationIgnored
+    @Dependency(\.placeLabeling) private var placeLabeling
+
+    @ObservationIgnored
     private var task: Task<Void, Never>?
 
     var progress: SyncProgress?
@@ -31,6 +34,7 @@ final class PhotoSyncCoordinator {
                 for try await progress in photoLibrarySync.syncIfNeeded() {
                     self.progress = progress
                 }
+                try await placeLabeling.labelPendingPhotos()
             } catch {
                 logger.error("photo library sync failed: \(error)")
             }
