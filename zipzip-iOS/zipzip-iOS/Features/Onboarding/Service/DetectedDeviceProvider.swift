@@ -33,16 +33,6 @@ nonisolated struct DetectedDeviceProvider {
         }
     }
 
-    func loadRegisteredIDs() async throws -> Set<Int> {
-        try await database.read { db in
-            let ids = try DeviceRecord
-                .where { $0.isRegistered.eq(true) }
-                .select(\.id)
-                .fetchAll(db)
-            return Set(ids)
-        }
-    }
-
     func saveRegistration(deviceIDs: Set<Int>) async throws {
         try await database.write { db in
             try DeviceRecord
