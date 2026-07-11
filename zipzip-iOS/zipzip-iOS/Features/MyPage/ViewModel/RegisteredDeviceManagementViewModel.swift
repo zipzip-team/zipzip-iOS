@@ -6,10 +6,17 @@
 //
 
 import Observation
+import OSLog
+import SQLiteData
 
 @MainActor
 @Observable
 final class RegisteredDeviceManagementViewModel {
+    @ObservationIgnored
+    @Dependency(\.detectedDevices) private var provider
+
+    private static let logger = Logger(subsystem: "com.zipzip.zipzip-iOS", category: "RegisteredDevice")
+
     private(set) var mode: RegisteredDeviceManagementMode = .normal
     private(set) var selectedDeviceIDs = Set<DetectedDevice.ID>()
     var showsDeleteAlert = false
@@ -23,6 +30,15 @@ final class RegisteredDeviceManagementViewModel {
     ) {
         self.registeredDevices = registeredDevices
         self.registerableDevices = registerableDevices
+    }
+
+    /// 로컬 DB(device 테이블)의 탐지된 기기 전체를 등록 기기 목록으로 불러온다.
+    func load() async {
+        do {
+            registeredDevices = try await provider.load()
+        } catch {
+            Self.logger.error("failed to load registered devices: \(error)")
+        }
     }
 
     var displayedDevices: [DetectedDevice] {

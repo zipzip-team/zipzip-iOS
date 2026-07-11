@@ -45,6 +45,9 @@ struct RegisteredDeviceManagementView: View {
                 viewModel.confirmDelete()
             }
         )
+        .task {
+            await viewModel.load()
+        }
     }
 
     @ViewBuilder
