@@ -54,9 +54,11 @@ flowchart LR
 
 **`device`** (기기 — 한 번만 저장)
 
-| id (PK) | make | model |
-| --- | --- | --- |
-| 1 | Apple | iPhone 15 Pro |
+| id (PK) | make | model | is_registered |
+| --- | --- | --- | --- |
+| 1 | Apple | iPhone 15 Pro | 1 |
+
+> 기기는 사진의 **EXIF Make/Model**로 판별한다. EXIF에 기기 정보가 없는 사진(스크린샷 등)은 `device`에 넣지 않고 `photo`로도 저장하지 않는다. `is_registered`는 사용자가 온보딩·마이페이지에서 등록한 기기 표시로, 사진뷰·필터는 등록 기기(=1)만 노출한다.
 
 **`place`** (장소 — 한 번만 저장)
 
