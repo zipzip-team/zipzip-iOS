@@ -22,7 +22,7 @@ struct LocationSearchSheet: View {
     var body: some View {
         BottomSheet(
             leftItem: {
-                headerButton(title: "취소", action: onCancel)
+                BottomSheetCloseButton(action: onCancel)
             },
             rightItem: {
                 headerButton(title: "완료", action: onDone)
@@ -38,6 +38,7 @@ struct LocationSearchSheet: View {
                 }
             }
             .padding(.horizontal, 16)
+            .padding(.vertical, 4)
         }
         .onChange(of: query) { _, newValue in
             searchModel.update(newValue)

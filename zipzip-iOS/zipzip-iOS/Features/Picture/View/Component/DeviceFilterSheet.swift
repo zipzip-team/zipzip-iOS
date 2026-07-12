@@ -10,32 +10,46 @@ import SwiftUI
 struct DeviceFilterSheet: View {
     let devices: [FilterDevice]
     @Binding var selected: String
+    let onReset: (() -> Void)?
+    let onCancel: (() -> Void)?
     let onDone: () -> Void
 
-    var body: some View {
-        BottomSheet(rightItem: {
-            Button(action: onDone) {
-                Text("완료")
-                    .font(.b1_sb)
-                    .foregroundStyle(.white00)
-                    .frame(width: 72, height: 48)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-        }) {
-            VStack(alignment: .leading, spacing: 20) {
-                titleBlock
+    init(
+        devices: [FilterDevice],
+        selected: Binding<String>,
+        onReset: (() -> Void)? = nil,
+        onCancel: (() -> Void)? = nil,
+        onDone: @escaping () -> Void
+    ) {
+        self.devices = devices
+        _selected = selected
+        self.onReset = onReset
+        self.onCancel = onCancel
+        self.onDone = onDone
+    }
 
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 8) {
-                        ForEach(devices, id: \.name) { device in
-                            DeviceMetadataChip(
-                                name: device.name,
-                                type: device.type,
-                                isSelected: selected == device.name
-                            ) {
-                                selected = device.name
-                            }
+    var body: some View {
+        BottomSheet(
+            leftItem: {
+                if let onReset {
+                    headerButton(title: "초기화", action: onReset)
+                } else if let onCancel {
+                    BottomSheetCloseButton(action: onCancel)
+                }
+            },
+            rightItem: {
+                headerButton(title: "완료", action: onDone)
+            }
+        ) {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    ForEach(devices, id: \.name) { device in
+                        DeviceMetadataChip(
+                            name: device.name,
+                            type: device.type,
+                            isSelected: selected == device.name
+                        ) {
+                            selected = device.name
                         }
                     }
                 }
@@ -45,15 +59,15 @@ struct DeviceFilterSheet: View {
         }
     }
 
-    private var titleBlock: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text("기기")
-                .font(.t3_sb)
+    private func headerButton(title: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(title)
+                .font(.b1_sb)
                 .foregroundStyle(.white00)
-            Text("불러온 기기 중 많이 쓴 기기를 기준으로 추천해요.")
-                .font(.b2_md)
-                .foregroundStyle(.grey300)
+                .frame(width: 72, height: 48)
+                .contentShape(Rectangle())
         }
+        .buttonStyle(.plain)
     }
 }
 
@@ -61,6 +75,7 @@ struct DeviceFilterSheet: View {
     DeviceFilterSheet(
         devices: PhotoFilterOptions.sample.devices,
         selected: .constant("Sony Alpha a7 III"),
+        onReset: {},
         onDone: {}
     )
     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)

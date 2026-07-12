@@ -114,11 +114,7 @@ final class AlbumViewModel {
         isShareAlbumSheetPresented = false
     }
 
-    func presentShareAlbumCreation() {
-        // 공유집 생성 화면이 구현되면 이 진입점을 연결한다.
-    }
-
-    func completeShareAlbumMove(to _: ShareAlbum, album _: Album) {
+    func completeShareAlbumMove(to _: ShareAlbum) {
         let movedAlbumIDs = Set(selectedAlbumIDs)
         albums.removeAll { movedAlbumIDs.contains($0.id) }
         exitSelectionMode()

@@ -16,7 +16,7 @@ struct PhotoInfoEditView: View {
         ScrollView {
             PhotoInfoEditContent(metadata: metadata)
                 .padding(.horizontal, 16)
-                .padding(.top, 60)
+                .padding(.top, 78)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .background(Color.orange30.ignoresSafeArea())

@@ -10,31 +10,26 @@ import SwiftUI
 struct LocationFilterSheet: View {
     let locations: [String]
     @Binding var selected: String
+    let onReset: () -> Void
     let onDone: () -> Void
 
     var body: some View {
-        BottomSheet(rightItem: {
-            Button(action: onDone) {
-                Text("완료")
-                    .font(.b1_sb)
-                    .foregroundStyle(.white00)
-                    .frame(width: 72, height: 48)
-                    .contentShape(Rectangle())
+        BottomSheet(
+            leftItem: {
+                headerButton(title: "초기화", action: onReset)
+            },
+            rightItem: {
+                headerButton(title: "완료", action: onDone)
             }
-            .buttonStyle(.plain)
-        }) {
-            VStack(alignment: .leading, spacing: 20) {
-                titleBlock
-
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 8) {
-                        ForEach(locations, id: \.self) { location in
-                            TextMetadataChip(
-                                title: location,
-                                isSelected: selected == location
-                            ) {
-                                selected = location
-                            }
+        ) {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    ForEach(locations, id: \.self) { location in
+                        TextMetadataChip(
+                            title: location,
+                            isSelected: selected == location
+                        ) {
+                            selected = location
                         }
                     }
                 }
@@ -44,15 +39,15 @@ struct LocationFilterSheet: View {
         }
     }
 
-    private var titleBlock: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text("장소")
-                .font(.t3_sb)
+    private func headerButton(title: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(title)
+                .font(.b1_sb)
                 .foregroundStyle(.white00)
-            Text("사진을 많이 찍은 장소를 기준으로 추천해요.")
-                .font(.b2_md)
-                .foregroundStyle(.grey300)
+                .frame(width: 72, height: 48)
+                .contentShape(Rectangle())
         }
+        .buttonStyle(.plain)
     }
 }
 
@@ -60,6 +55,7 @@ struct LocationFilterSheet: View {
     LocationFilterSheet(
         locations: PhotoFilterOptions.sample.locations,
         selected: .constant("도쿄"),
+        onReset: {},
         onDone: {}
     )
     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
