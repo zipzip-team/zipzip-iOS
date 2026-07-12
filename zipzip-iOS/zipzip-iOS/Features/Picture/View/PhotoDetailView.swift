@@ -196,6 +196,7 @@ struct PhotoDetailView: View {
                     case .gallery:
                         onAddToAlbums([photo.localIdentifier], destinations)
                     }
+                    dismiss()
                 },
                 loadsAlbumsFromDatabase: true
             )

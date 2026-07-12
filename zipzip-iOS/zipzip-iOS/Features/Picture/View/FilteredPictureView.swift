@@ -100,6 +100,7 @@ struct FilteredPictureView: View {
                             return
                         }
 
+                        dismiss()
                         pictureViewModel.cancelSelection()
                         guard let albumID = destinations.firstPersonalAlbumID else {
                             return

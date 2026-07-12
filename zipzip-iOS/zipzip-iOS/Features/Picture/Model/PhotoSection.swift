@@ -63,3 +63,17 @@ extension PhotoSection {
         PhotoSection(title: "6월 30일", photos: Photo.make(8))
     ]
 }
+
+extension Array where Element == PhotoSection {
+    func localIdentifiers(for photoIDs: [UUID]) -> [String] {
+        let photosByID = Dictionary(uniqueKeysWithValues: flatMap(\.photos).map { ($0.id, $0) })
+        return photoIDs.compactMap { photoID in
+            guard let localIdentifier = photosByID[photoID]?.localIdentifier,
+                  !localIdentifier.isEmpty
+            else {
+                return nil
+            }
+            return localIdentifier
+        }
+    }
+}
