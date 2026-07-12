@@ -19,9 +19,9 @@ nonisolated struct AssetMetadata {
     let isFavorite: Bool
     let make: String?
     let model: String?
-    let deviceUnavailable: Bool
+    let devicePending: Bool
 
-    private init(asset: PHAsset, make: String?, model: String?, deviceUnavailable: Bool) {
+    private init(asset: PHAsset, make: String?, model: String?, devicePending: Bool) {
         self.localIdentifier = asset.localIdentifier
         self.creationDate = asset.creationDate
         self.addedDate = asset.addedDate
@@ -32,16 +32,16 @@ nonisolated struct AssetMetadata {
         self.isFavorite = asset.isFavorite
         self.make = make
         self.model = model
-        self.deviceUnavailable = deviceUnavailable
+        self.devicePending = devicePending
     }
 
-    /// PHAsset의 기본 메타데이터에 원본 EXIF 촬영 기기 정보(make/model)를 더해 생성한다.
+    /// 임포트 단계에서는 로컬 원본만 읽는다. iCloud 전용 사진은 devicePending으로 표시해 백필로 미룬다.
     static func load(from asset: PHAsset) async -> AssetMetadata {
-        switch await AssetEXIFReader.deviceInfo(for: asset) {
+        switch await AssetEXIFReader.deviceInfo(for: asset, allowsNetwork: false) {
         case let .resolved(make, model):
-            return AssetMetadata(asset: asset, make: make, model: model, deviceUnavailable: false)
-        case .unavailable:
-            return AssetMetadata(asset: asset, make: nil, model: nil, deviceUnavailable: true)
+            return AssetMetadata(asset: asset, make: make, model: model, devicePending: false)
+        case .pending:
+            return AssetMetadata(asset: asset, make: nil, model: nil, devicePending: true)
         }
     }
 }

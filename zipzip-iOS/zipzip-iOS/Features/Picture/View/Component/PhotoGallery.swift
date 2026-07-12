@@ -6,9 +6,12 @@
 //
 
 import SwiftUI
+import UIKit
 
 struct PhotoGallery: View {
     let sections: [PhotoSection]
+    var thumbnailImages: [String: UIImage] = [:]
+    var loadThumbnail: (String) async -> Void = { _ in }
     var isSelectionMode: Bool = false
     var selectedPhotoIDs: [UUID] = []
     var onTapPhoto: ((UUID) -> Void)? = nil
@@ -39,8 +42,11 @@ struct PhotoGallery: View {
     }
 
     private func photoCell(_ photo: Photo) -> some View {
-        PhotoThumbnail(localIdentifier: photo.localIdentifier)
+        PhotoThumbnail(image: thumbnailImages[photo.localIdentifier])
             .aspectRatio(1, contentMode: .fit)
+            .task(id: photo.localIdentifier) {
+                await loadThumbnail(photo.localIdentifier)
+            }
             .overlay {
                 if isSelectionMode, selectedPhotoIDs.contains(photo.id) {
                     Rectangle()

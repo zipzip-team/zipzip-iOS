@@ -10,6 +10,7 @@ import SQLiteData
 
 @Table("album_photo")
 struct AlbumPhotoRecord {
+    let id: Int
     @Column("album_id") var albumID: Int
     @Column("photo_id") var photoID: Int
     @Column("added_at", as: Date.UnixTimeRepresentation.self) var addedAt: Date

@@ -8,22 +8,10 @@
 import SwiftUI
 
 struct AlbumDetailItem: Hashable, Identifiable {
-    let id: UUID
+    let id: Int
     let title: String
     let createdAt: Date
     let photoCount: Int
-
-    init(
-        id: UUID = UUID(),
-        title: String,
-        createdAt: Date,
-        photoCount: Int
-    ) {
-        self.id = id
-        self.title = title
-        self.createdAt = createdAt
-        self.photoCount = photoCount
-    }
 }
 
 struct AlbumDetailView<Content: View>: View {
@@ -34,14 +22,12 @@ struct AlbumDetailView<Content: View>: View {
     private let contentTopSpacing: CGFloat
     private let detailContent: (AlbumDetailViewModel) -> Content
     private let moveAlbums: [Album]
-    private let photoPickerSections: [PhotoSection]
 
     init(
         album: AlbumDetailItem,
         viewModel: AlbumDetailViewModel,
         contentTopSpacing: CGFloat = 30,
         moveAlbums: [Album] = Album.samples,
-        photoPickerSections: [PhotoSection] = PhotoSection.sample,
         @ViewBuilder content: @escaping (AlbumDetailViewModel) -> Content
     ) {
         self.album = album
@@ -49,7 +35,6 @@ struct AlbumDetailView<Content: View>: View {
         self.contentTopSpacing = contentTopSpacing
         self.detailContent = content
         self.moveAlbums = moveAlbums
-        self.photoPickerSections = photoPickerSections
     }
 
     var body: some View {
@@ -85,7 +70,6 @@ struct AlbumDetailView<Content: View>: View {
         .navigationDestination(isPresented: $viewModel.isPhotoPickerPresented) {
             AlbumPhotoPickerView(
                 viewModel: AlbumPhotoPickerViewModel(
-                    sections: photoPickerSections,
                     onComplete: viewModel.addPhotos
                 )
             )
@@ -95,7 +79,8 @@ struct AlbumDetailView<Content: View>: View {
             detents: [.height(549)],
             initialDetent: .height(549),
             showsDragIndicator: .visible,
-            expandsToLargestDetentOnScroll: false
+            expandsToLargestDetentOnScroll: false,
+            onDismiss: viewModel.completeAlbumManagementDismissal
         ) { _ in
             BottomSheet(
                 leftItem: {
@@ -110,22 +95,23 @@ struct AlbumDetailView<Content: View>: View {
                     onCompleteTap: viewModel.completeAlbumManagement
                 )
             }
-            .bottomSheetAlert(
-                isPresented: $viewModel.isAlbumDeleteAlertPresented,
-                title: "이 사진집을 삭제하시겠어요?",
-                message: "사진집에 담긴 사진들은 삭제되지 않아요.",
-                secondaryTitle: "취소",
-                primaryTitle: "삭제",
-                onSecondaryTap: viewModel.dismissAlbumDeleteAlert,
-                onPrimaryTap: viewModel.confirmAlbumDeletion
-            )
         }
+        .bottomSheetAlert(
+            isPresented: $viewModel.isAlbumDeleteAlertPresented,
+            title: "이 사진집을 삭제하시겠어요?",
+            message: "사진집에 담긴 사진들은 삭제되지 않아요.",
+            secondaryTitle: "취소",
+            primaryTitle: "삭제",
+            onSecondaryTap: viewModel.dismissAlbumDeleteAlert,
+            onPrimaryTap: viewModel.confirmAlbumDeletion
+        )
         .bottomSheet(isPresented: $viewModel.isMoveSheetPresented, detents: [.full]) { sheetDismiss in
             ShareSheet(
                 albums: moveAlbums,
                 sharedAlbums: Album.sharedSamples,
                 shareAlbums: ShareAlbum.samples,
                 onDismiss: { sheetDismiss() },
+                excludedAlbumIDs: [album.id],
                 onComplete: viewModel.completePhotoMove
             )
         }
@@ -214,15 +200,13 @@ struct AlbumDetailEmptyView: View {
     let album: AlbumDetailItem
     let viewModel: AlbumDetailViewModel
     var moveAlbums = Album.samples
-    var photoPickerSections = PhotoSection.sample
 
     var body: some View {
         AlbumDetailView(
             album: album,
             viewModel: viewModel,
             contentTopSpacing: 125,
-            moveAlbums: moveAlbums,
-            photoPickerSections: photoPickerSections
+            moveAlbums: moveAlbums
         ) { viewModel in
             AlbumDetailEmptyContent(onLoadPhotos: viewModel.presentPhotoPicker)
         }
@@ -494,6 +478,7 @@ private struct AlbumDetailFolderShape: Shape {
 #Preview("Album Detail Empty", traits: .fixedLayout(width: 390, height: 844)) {
     AlbumDetailEmptyView(
         album: .init(
+            id: 1,
             title: "집집 🏠",
             createdAt: .now,
             photoCount: 0
@@ -505,6 +490,7 @@ private struct AlbumDetailFolderShape: Shape {
 #Preview("Album Detail Gallery", traits: .fixedLayout(width: 390, height: 844)) {
     AlbumDetailView(
         album: .init(
+            id: 2,
             title: "집집 🏠",
             createdAt: .now,
             photoCount: 123
@@ -518,6 +504,7 @@ private struct AlbumDetailFolderShape: Shape {
 #Preview("Album Detail Selection", traits: .fixedLayout(width: 390, height: 844)) {
     AlbumDetailView(
         album: .init(
+            id: 3,
             title: "집집 🏠",
             createdAt: .now,
             photoCount: 123
