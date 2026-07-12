@@ -33,6 +33,26 @@ struct RootTabView: View {
                     sharedAlbums: Album.sharedSamples,
                     shareAlbums: ShareAlbum.samples,
                     onDismiss: { dismiss() },
+                    onComplete: { destinations in
+                        let localIdentifiers = pictureViewModel.selectedPhotoLocalIdentifiers
+                        Task {
+                            guard await albumViewModel.addPhotos(
+                                localIdentifiers: localIdentifiers,
+                                to: destinations
+                            ) else {
+                                return
+                            }
+
+                            pictureViewModel.cancelSelection()
+                            guard let albumID = destinations.firstPersonalAlbumID else {
+                                return
+                            }
+
+                            selection = .album
+                            router.removeAlbumRoutes()
+                            router.push(.albumDetail(albumID))
+                        }
+                    },
                     loadsAlbumsFromDatabase: true
                 )
             }
@@ -41,7 +61,11 @@ struct RootTabView: View {
     @ViewBuilder private var bottomBar: some View {
         if selection == .picture, pictureViewModel.isSelectionMode {
             ActionBar(items: [
-                .init(icon: .moveToAlbum, title: "집으로") { showShareSheet = true },
+                .init(
+                    icon: .moveToAlbum,
+                    title: "집으로",
+                    isDisabled: pictureViewModel.selectedPhotoIDs.isEmpty
+                ) { showShareSheet = true },
                 .init(icon: .metadata, title: "정보 수정") {
                     if let metadata = pictureViewModel.firstSelectedMetadata {
                         router.push(.photoInfoEdit(metadata))
