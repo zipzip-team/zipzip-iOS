@@ -201,6 +201,18 @@ func appDatabase() throws -> any DatabaseWriter {
         .execute(db)
     }
 
+    migrator.registerMigration("Seed favorites album") { db in
+        try #sql(
+            #"ALTER TABLE "album" ADD COLUMN "is_favorite" INTEGER NOT NULL DEFAULT 0"#
+        )
+        .execute(db)
+
+        try AlbumRecord.insert {
+            AlbumRecord.Draft(name: "즐겨찾기", createdAt: .now, isFavorite: true)
+        }
+        .execute(db)
+    }
+
     do {
         try migrator.migrate(database)
         return database
