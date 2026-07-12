@@ -261,11 +261,16 @@ private struct ShareGroupEmptyContent: View {
     var body: some View {
         VStack(spacing: 32) {
             VStack(spacing: 8) {
-                ShareAssetPlaceholder(width: 80, height: 80)
-                Text("친구와 함께\n집을 만들어 사진을 공유해보세요!")
-                    .font(.t2_md)
-                    .foregroundStyle(.grey1000)
-                    .multilineTextAlignment(.center)
+                Image(.shareGroupEmptyArtwork)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 80, height: 80)
+                    .accessibilityHidden(true)
+                Image(.shareGroupEmptyText)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 259, height: 54)
+                    .accessibilityLabel("친구와 함께 집을 만들어 사진을 공유해보세요")
             }
             CommonButton(title: "집 만들기", action: onCreate)
                 .frame(width: 171)
