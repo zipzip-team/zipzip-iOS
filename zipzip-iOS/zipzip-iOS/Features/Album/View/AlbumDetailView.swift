@@ -58,10 +58,11 @@ struct AlbumDetailView<Content: View>: View {
                 .ignoresSafeArea()
 
             scrollContent
+                .ignoresSafeArea(edges: .top)
         }
         .overlay(alignment: .topLeading) {
             leadingActionButton
-                .padding(.top, 19)
+                .padding(.top, 14)
                 .padding(.leading, 16)
         }
         .overlay(alignment: .topTrailing) {
@@ -69,7 +70,7 @@ struct AlbumDetailView<Content: View>: View {
                 onSelectionTap: { viewModel.enterSelectionMode(photoCount: album.photoCount) },
                 onAddTap: viewModel.presentPhotoPicker
             )
-            .padding(.top, 19)
+            .padding(.top, 14)
             .padding(.trailing, 16)
             .opacity(viewModel.isSelectionMode ? 0 : 1)
             .allowsHitTesting(!viewModel.isSelectionMode)
@@ -148,7 +149,7 @@ struct AlbumDetailView<Content: View>: View {
 
                 detailContent(viewModel)
             }
-            .padding(.top, 168)
+            .padding(.top, 166)
             .padding(.bottom, viewModel.isSelectionMode ? 140 : 40)
             .frame(maxWidth: .infinity, alignment: .top)
             .background(alignment: .top) {
@@ -322,9 +323,11 @@ private struct AlbumDetailEmptyContent: View {
     var body: some View {
         VStack(spacing: 32) {
             VStack(spacing: 8) {
-                Rectangle()
-                    .fill(.grey100)
+                Image(.albumDetailEmptyArtwork)
+                    .resizable()
+                    .scaledToFit()
                     .frame(width: 80, height: 80)
+                    .accessibilityHidden(true)
 
                 Image(.albumEmptyDescription)
                     .resizable()
