@@ -9,16 +9,17 @@ import SwiftUI
 
 struct RootTabView: View {
     @Environment(Router.self) private var router
+    let pictureViewModel: PictureViewModel
     @State private var selection: NavbarTab = .main
     @State private var loaded: Set<NavbarTab> = [.main]
-    @State private var pictureViewModel = PictureViewModel()
     @State private var shareViewModel = ShareViewModel()
     @State private var showShareSheet = false
 
     let albumViewModel: AlbumViewModel
 
-    init(albumViewModel: AlbumViewModel) {
+    init(albumViewModel: AlbumViewModel, pictureViewModel: PictureViewModel) {
         self.albumViewModel = albumViewModel
+        self.pictureViewModel = pictureViewModel
     }
 
     var body: some View {

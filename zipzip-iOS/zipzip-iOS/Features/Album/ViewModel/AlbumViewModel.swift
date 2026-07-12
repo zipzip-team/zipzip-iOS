@@ -27,16 +27,19 @@ final class AlbumViewModel {
     private(set) var albums: [AlbumViewItem]
     @ObservationIgnored private let albumStore: AlbumStore
     @ObservationIgnored private let photoSectionsProvider: PhotoSectionsProvider
+    @ObservationIgnored private let photoDeletion: PhotoDeletionService
     @ObservationIgnored private let loadsAlbumsFromDatabase: Bool
 
     init(
         albums: [AlbumViewItem]? = nil,
         albumStore: AlbumStore = AlbumStore(),
-        photoSectionsProvider: PhotoSectionsProvider = PhotoSectionsProvider()
+        photoSectionsProvider: PhotoSectionsProvider = PhotoSectionsProvider(),
+        photoDeletion: PhotoDeletionService = PhotoDeletionService()
     ) {
         self.albums = albums ?? []
         self.albumStore = albumStore
         self.photoSectionsProvider = photoSectionsProvider
+        self.photoDeletion = photoDeletion
         self.loadsAlbumsFromDatabase = albums == nil
     }
 
@@ -196,7 +199,7 @@ final class AlbumViewModel {
                     }
                 },
                 onDeletePhotos: { [weak self] photoIDs, action in
-                    self?.deletePhotos(photoIDs, from: albumID, action: action)
+                    Task { await self?.deletePhotos(photoIDs, from: albumID, action: action) }
                 },
                 onMovePhotos: { [weak self] photoIDs, destination in
                     Task {
@@ -215,37 +218,37 @@ final class AlbumViewModel {
         )
     }
 
+    @discardableResult
     func deletePhotos(
         _ photoIDs: [UUID],
         from albumID: AlbumViewItem.ID,
         action: PhotoDeletionAction
-    ) {
-        Task {
-            guard let sections = try? await photoSectionsProvider.loadAlbumSections(albumID: albumID) else {
-                return
-            }
-
-            let selectedPhotos = sections
-                .flatMap(\.photos)
-                .filter { photoIDs.contains($0.id) }
-
-            do {
-                switch action {
-                case .deletePermanently:
-                    try await albumStore.deletePhotos(
-                        localIdentifiers: selectedPhotos.map(\.localIdentifier)
-                    )
-                case .removeFromAlbum:
-                    try await albumStore.removeAlbumPhotos(
-                        ids: selectedPhotos.compactMap(\.albumPhotoID)
-                    )
-                }
-            } catch {
-                return
-            }
-
-            await loadAlbums()
+    ) async -> Bool {
+        guard let sections = try? await photoSectionsProvider.loadAlbumSections(albumID: albumID) else {
+            return false
         }
+
+        let selectedPhotos = sections
+            .flatMap(\.photos)
+            .filter { photoIDs.contains($0.id) }
+
+        do {
+            switch action {
+            case .deletePermanently:
+                try await photoDeletion.delete(
+                    localIdentifiers: selectedPhotos.map(\.localIdentifier)
+                )
+            case .removeFromAlbum:
+                try await albumStore.removeAlbumPhotos(
+                    ids: selectedPhotos.compactMap(\.albumPhotoID)
+                )
+            }
+        } catch {
+            return false
+        }
+
+        await loadAlbums()
+        return true
     }
 
     func moveDestinations(excluding albumID: AlbumViewItem.ID) -> [Album] {

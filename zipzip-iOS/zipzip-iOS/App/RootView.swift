@@ -16,6 +16,7 @@ struct RootView: View {
     @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
     @State private var photoSync = PhotoSyncCoordinator()
     @State private var albumViewModel = AlbumViewModel()
+    @State private var pictureViewModel = PictureViewModel()
 
     var body: some View {
         @Bindable var router = router
@@ -25,7 +26,7 @@ struct RootView: View {
                 if authenticationState.isRestoring, hasCompletedOnboarding {
                     SplashView(continuesOnboarding: false)
                 } else if hasCompletedOnboarding {
-                    RootTabView(albumViewModel: albumViewModel)
+                    RootTabView(albumViewModel: albumViewModel, pictureViewModel: pictureViewModel)
                 } else {
                     SplashView()
                 }
@@ -66,6 +67,12 @@ struct RootView: View {
                     PhotoDetailView(
                         photo: photo,
                         albums: albumViewModel.shareDestinations,
+                        onDelete: { action in
+                            guard action == .deletePermanently else { return false }
+                            return await pictureViewModel.deletePhotos(
+                                localIdentifiers: [photo.localIdentifier]
+                            )
+                        },
                         onAddToAlbums: addPhotosToAlbums
                     )
                 case let .albumDetail(albumID):
@@ -80,7 +87,7 @@ struct RootView: View {
                         deletionContext: .album,
                         excludedAlbumIDs: [albumID],
                         onDelete: { action in
-                            albumViewModel.deletePhotos([photo.id], from: albumID, action: action)
+                            await albumViewModel.deletePhotos([photo.id], from: albumID, action: action)
                         },
                         onAddToAlbums: addPhotosToAlbums,
                         onMoveToAlbums: { albumPhotoIDs, destinations in

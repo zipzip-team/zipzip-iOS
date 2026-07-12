@@ -51,7 +51,7 @@ struct PhotoDetailView: View {
     private let albums: [Album]
     let deletionContext: PhotoDeletionContext
     private let excludedAlbumIDs: Set<Album.ID>
-    private let onDelete: (PhotoDeletionAction) -> Void
+    private let onDelete: (PhotoDeletionAction) async -> Bool
     private let onAddToAlbums: ([String], [ShareDestination]) -> Void
     private let onMoveToAlbums: ([Int], [ShareDestination]) -> Void
 
@@ -77,7 +77,7 @@ struct PhotoDetailView: View {
         albums: [Album] = Album.samples,
         deletionContext: PhotoDeletionContext = .gallery,
         excludedAlbumIDs: Set<Album.ID> = [],
-        onDelete: @escaping (PhotoDeletionAction) -> Void = { _ in },
+        onDelete: @escaping (PhotoDeletionAction) async -> Bool = { _ in true },
         onAddToAlbums: @escaping ([String], [ShareDestination]) -> Void = { _, _ in },
         onMoveToAlbums: @escaping ([Int], [ShareDestination]) -> Void = { _, _ in }
     ) {
@@ -434,8 +434,11 @@ struct PhotoDetailView: View {
 
     private func completeDeletion(_ action: PhotoDeletionAction) {
         showDeleteAlert = false
-        onDelete(action)
-        dismiss()
+        Task {
+            if await onDelete(action) {
+                dismiss()
+            }
+        }
     }
 }
 
