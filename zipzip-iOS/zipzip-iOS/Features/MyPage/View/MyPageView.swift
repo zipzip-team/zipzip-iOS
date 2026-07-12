@@ -10,8 +10,12 @@ import UIKit
 
 struct MyPageView: View {
     @Environment(Router.self) private var router
+    @Environment(AuthenticationState.self) private var authenticationState
     @Environment(\.openURL) private var openURL
     @State private var viewModel: MyPageViewModel
+    @State private var showsLogoutConfirmation = false
+    @State private var showsWithdrawWarning = false
+    @State private var showsWithdrawFinalConfirmation = false
 
     @MainActor
     init() {
@@ -31,7 +35,34 @@ struct MyPageView: View {
             VStack(alignment: .leading, spacing: 32) {
                 loginSection
                 menuSection
+                if authenticationState.isLoggedIn {
+                    accountSection
+                }
             }
+        }
+        .alert("로그아웃할까요?", isPresented: $showsLogoutConfirmation) {
+            Button("취소", role: .cancel) {}
+            Button("로그아웃", role: .destructive) {
+                Task { await authenticationState.logout() }
+            }
+        } message: {
+            Text("이 기기에 저장된 사진과 사진집은 그대로 유지돼요.")
+        }
+        .alert("회원 탈퇴", isPresented: $showsWithdrawWarning) {
+            Button("취소", role: .cancel) {}
+            Button("계속", role: .destructive) {
+                showsWithdrawFinalConfirmation = true
+            }
+        } message: {
+            Text("서버 계정과 공유 데이터가 삭제될 수 있으며 이 작업은 되돌릴 수 없어요. 로컬 사진과 사진집은 유지돼요.")
+        }
+        .alert("정말 탈퇴하시겠어요?", isPresented: $showsWithdrawFinalConfirmation) {
+            Button("취소", role: .cancel) {}
+            Button("탈퇴", role: .destructive) {
+                Task { _ = await authenticationState.withdraw() }
+            }
+        } message: {
+            Text("탈퇴가 완료된 뒤 이 기기의 로그인 정보가 삭제돼요.")
         }
     }
 
@@ -43,17 +74,17 @@ struct MyPageView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.horizontal, 16)
 
-            VStack(spacing: 8) {
+            if let user = authenticationState.currentUser {
                 HStack(spacing: 14) {
                     ProfileImage(size: 44, isStroke: false)
 
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("로그인이 필요해요")
+                        Text(user.displayName)
                             .font(.t2_sb)
                             .foregroundStyle(.grey1000)
                             .lineLimit(1)
 
-                        Text("로그인하고 집집의 모든 기능을 이용해보세요.")
+                        Text("Apple 계정으로 로그인했어요.")
                             .font(.b2_md)
                             .foregroundStyle(.grey600)
                             .lineLimit(1)
@@ -62,9 +93,32 @@ struct MyPageView: View {
                 }
                 .padding(.horizontal, 16)
                 .padding(.vertical, 10)
+            } else {
+                VStack(spacing: 8) {
+                    HStack(spacing: 14) {
+                        ProfileImage(size: 44, isStroke: false)
 
-                CommonButton(title: "로그인", property1: .cta) {}
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("로그인이 필요해요")
+                                .font(.t2_sb)
+                                .foregroundStyle(.grey1000)
+                                .lineLimit(1)
+
+                            Text("로그인하고 집집의 모든 기능을 이용해보세요.")
+                                .font(.b2_md)
+                                .foregroundStyle(.grey600)
+                                .lineLimit(1)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    }
                     .padding(.horizontal, 16)
+                    .padding(.vertical, 10)
+
+                    CommonButton(title: "로그인", property1: .cta) {
+                        authenticationState.requestLogin(.myPage)
+                    }
+                    .padding(.horizontal, 16)
+                }
             }
         }
     }
@@ -101,6 +155,62 @@ struct MyPageView: View {
         }
     }
 
+    private var accountSection: some View {
+        VStack(spacing: 0) {
+            Rectangle()
+                .fill(.grey50)
+                .frame(height: 10)
+
+            VStack(spacing: 0) {
+                accountButton("로그아웃") {
+                    showsLogoutConfirmation = true
+                }
+                accountButton("회원 탈퇴", isDestructive: true) {
+                    showsWithdrawWarning = true
+                }
+
+                if let message = authenticationState.accountErrorMessage {
+                    Text(message)
+                        .font(.b2_md)
+                        .foregroundStyle(.orange700)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 12)
+                }
+            }
+            .padding(.horizontal, 16)
+        }
+        .disabled(authenticationState.operation != .idle)
+        .overlay {
+            if authenticationState.operation == .loggingOut
+                || authenticationState.operation == .withdrawing {
+                ProgressView()
+            }
+        }
+    }
+
+    private func accountButton(
+        _ title: String,
+        isDestructive: Bool = false,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            Text(title)
+                .font(.b1_md)
+                .foregroundStyle(isDestructive ? .orange700 : .grey1000)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 24)
+                .contentShape(.rect)
+        }
+        .buttonStyle(.plain)
+        .overlay(alignment: .bottom) {
+            Rectangle()
+                .fill(.grey70)
+                .frame(height: 1)
+        }
+    }
+
     private func openLink(_ link: MyPageLink) {
         guard let url = viewModel.url(for: link) else { return }
 
@@ -117,4 +227,5 @@ struct MyPageView: View {
 #Preview {
     MyPageView()
         .environment(Router())
+        .environment(AuthenticationState.preview())
 }
