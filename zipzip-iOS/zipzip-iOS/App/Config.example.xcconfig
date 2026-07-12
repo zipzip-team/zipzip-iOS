@@ -1,0 +1,2 @@
+// Copy this file to Config.xcconfig to override the checked-in development fallback.
+BASE_URL = api.example.com
