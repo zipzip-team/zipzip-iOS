@@ -372,7 +372,7 @@ private struct AlbumShareDestinationSheet: View {
         ) {
             if !authenticationState.isLoggedIn {
                 ShareLoginPrompt {
-                    authenticationState.logIn()
+                    authenticationState.requestLogin(.album)
                 }
             } else {
                 ShareAlbumList(
@@ -459,7 +459,7 @@ private struct AlbumViewPreview: View {
                         .ignoresSafeArea(.container, edges: .bottom)
                 }
             }
-            .environment(AuthenticationState())
+            .environment(AuthenticationState.preview())
             .environment(Router())
     }
 }
