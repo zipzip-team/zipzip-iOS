@@ -44,6 +44,9 @@ struct AlbumPhotoPickerView: View {
         }
         .navigationBarBackButtonHidden(true)
         .toolbarVisibility(.hidden, for: .navigationBar)
+        .task {
+            await viewModel.loadPhotos()
+        }
     }
 
     private var cancelButton: some View {
@@ -66,7 +69,6 @@ struct AlbumPhotoPickerView: View {
     NavigationStack {
         AlbumPhotoPickerView(
             viewModel: AlbumPhotoPickerViewModel(
-                sections: PhotoSection.sample,
                 onComplete: { _ in }
             )
         )

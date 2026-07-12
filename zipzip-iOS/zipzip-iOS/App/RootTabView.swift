@@ -12,9 +12,14 @@ struct RootTabView: View {
     @State private var selection: NavbarTab = .main
     @State private var loaded: Set<NavbarTab> = [.main]
     @State private var pictureViewModel = PictureViewModel()
-    @State private var albumViewModel = AlbumViewModel()
     @State private var shareViewModel = ShareViewModel()
     @State private var showShareSheet = false
+
+    let albumViewModel: AlbumViewModel
+
+    init(albumViewModel: AlbumViewModel) {
+        self.albumViewModel = albumViewModel
+    }
 
     var body: some View {
         content
@@ -25,7 +30,8 @@ struct RootTabView: View {
             .onChange(of: selection) { _, newValue in
                 loaded.insert(newValue)
                 if newValue != .album {
-                    albumViewModel.exitSelectionMode()
+                    albumViewModel.resetForTabChange()
+                    router.removeAlbumRoutes()
                 }
                 if newValue != .share {
                     shareViewModel.resetTransientUI()
@@ -33,10 +39,31 @@ struct RootTabView: View {
             }
             .bottomSheet(isPresented: $showShareSheet, detents: [.full]) { dismiss in
                 ShareSheet(
-                    albums: Album.samples,
+                    albums: albumViewModel.shareDestinations,
                     sharedAlbums: Album.sharedSamples,
                     shareAlbums: ShareAlbum.samples,
-                    onDismiss: { dismiss() }
+                    onDismiss: { dismiss() },
+                    onComplete: { destinations in
+                        let localIdentifiers = pictureViewModel.selectedPhotoLocalIdentifiers
+                        Task {
+                            guard await albumViewModel.addPhotos(
+                                localIdentifiers: localIdentifiers,
+                                to: destinations
+                            ) else {
+                                return
+                            }
+
+                            dismiss()
+                            pictureViewModel.cancelSelection()
+                            guard let albumID = destinations.firstPersonalAlbumID else {
+                                return
+                            }
+
+                            selection = .album
+                            router.removeAlbumRoutes()
+                            router.push(.albumDetail(albumID))
+                        }
+                    }
                 )
             }
     }
@@ -44,7 +71,11 @@ struct RootTabView: View {
     @ViewBuilder private var bottomBar: some View {
         if selection == .picture, pictureViewModel.isSelectionMode {
             ActionBar(items: [
-                .init(icon: .moveToAlbum, title: "집으로") { showShareSheet = true },
+                .init(
+                    icon: .moveToAlbum,
+                    title: "집으로",
+                    isDisabled: pictureViewModel.selectedPhotoIDs.isEmpty
+                ) { showShareSheet = true },
                 .init(icon: .metadata, title: "정보 수정") {
                     if let metadata = pictureViewModel.firstSelectedMetadata {
                         router.push(.photoInfoEdit(metadata))
@@ -64,7 +95,7 @@ struct RootTabView: View {
     private var showsNavbar: Bool {
         switch selection {
         case .album:
-            !albumViewModel.isSelectionMode && !albumViewModel.isDetailPresented
+            !albumViewModel.isSelectionMode && !router.path.contains(where: \.isAlbumRoute)
         case .share:
             !shareViewModel.hidesRootNavbar
         default:
@@ -88,7 +119,12 @@ struct RootTabView: View {
     @ViewBuilder private func page(for tab: NavbarTab) -> some View {
         switch tab {
         case .main: MainView()
-        case .picture: PictureView(viewModel: pictureViewModel)
+        case .picture:
+            PictureView(
+                viewModel: pictureViewModel,
+                onOpenFilter: { router.push(.filter) },
+                onOpenPhoto: { router.push(.photoDetail($0)) }
+            )
         case .album: AlbumView(viewModel: albumViewModel)
         case .share: ShareView(viewModel: shareViewModel)
         }

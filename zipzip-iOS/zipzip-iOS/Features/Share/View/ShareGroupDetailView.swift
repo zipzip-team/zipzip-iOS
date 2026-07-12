@@ -360,7 +360,13 @@ struct ShareImportView: View {
                 return
             }
             viewModel.addAlbums(
-                [Album(name: "새 사진집", count: selectedPhotoIDs.count)],
+                [
+                    Album(
+                        id: nextAvailableAlbumID,
+                        name: "새 사진집",
+                        count: selectedPhotoIDs.count
+                    )
+                ],
                 to: groupID
             )
         case .albums:
@@ -370,6 +376,13 @@ struct ShareImportView: View {
             }
             viewModel.addAlbums(albums, to: groupID)
         }
+    }
+
+    private var nextAvailableAlbumID: Album.ID {
+        let existingIDs = viewModel.groups
+            .flatMap(\.albums)
+            .map(\.id)
+        return (existingIDs.max() ?? 0) + 1
     }
 }
 

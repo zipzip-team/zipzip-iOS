@@ -21,7 +21,13 @@ final class PhotoSyncCoordinator {
     @Dependency(\.placeLabeling) private var placeLabeling
 
     @ObservationIgnored
+    @Dependency(\.deviceBackfill) private var deviceBackfill
+
+    @ObservationIgnored
     private var task: Task<Void, Never>?
+
+    @ObservationIgnored
+    private var backfillTask: Task<Void, Never>?
 
     var progress: SyncProgress?
     var isFinished = false
@@ -37,6 +43,19 @@ final class PhotoSyncCoordinator {
                 try await placeLabeling.labelPendingPhotos()
             } catch {
                 logger.error("photo library sync failed: \(error)")
+            }
+            startBackfill()
+        }
+    }
+
+    private func startBackfill() {
+        guard backfillTask == nil else { return }
+        backfillTask = Task(priority: .utility) {
+            do {
+                try await deviceBackfill.backfillPendingDevices()
+            } catch is CancellationError {
+            } catch {
+                logger.error("device backfill failed: \(error)")
             }
         }
     }

@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import UIKit
 
 struct PhotoItem: View {
     private let cornerRadius: CGFloat = 4
@@ -31,6 +32,14 @@ struct PhotoItem: View {
                 RoundedRectangle(cornerRadius: cornerRadius)
                     .stroke(.white00, lineWidth: 2)
             }
+    }
+}
+
+struct PhotoKitPhotoItem: View {
+    let image: UIImage?
+
+    var body: some View {
+        PhotoItem(image: image.map(Image.init(uiImage:)))
     }
 }
 

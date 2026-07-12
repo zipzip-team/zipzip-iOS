@@ -48,14 +48,18 @@ struct PhotoDetailView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     let photo: Photo
+    private let albums: [Album]
     let deletionContext: PhotoDeletionContext
+    private let excludedAlbumIDs: Set<Album.ID>
     private let onDelete: (PhotoDeletionAction) -> Void
+    private let onAddToAlbums: ([String], [ShareDestination]) -> Void
+    private let onMoveToAlbums: ([Int], [ShareDestination]) -> Void
 
     @State private var isEditingInfo = false
     @State private var showShareSheet = false
     @State private var showDeleteAlert = false
     @State private var isFavorite = false
-    @State private var photoSize: CGSize = .zero
+    @State private var imageViewModel = PhotoDetailImageViewModel()
     @State private var photoScale: CGFloat = 1
     @State private var photoOffset: CGSize = .zero
     @GestureState private var gestureScale: CGFloat = 1
@@ -70,12 +74,20 @@ struct PhotoDetailView: View {
 
     init(
         photo: Photo,
+        albums: [Album] = Album.samples,
         deletionContext: PhotoDeletionContext = .gallery,
-        onDelete: @escaping (PhotoDeletionAction) -> Void = { _ in }
+        excludedAlbumIDs: Set<Album.ID> = [],
+        onDelete: @escaping (PhotoDeletionAction) -> Void = { _ in },
+        onAddToAlbums: @escaping ([String], [ShareDestination]) -> Void = { _, _ in },
+        onMoveToAlbums: @escaping ([Int], [ShareDestination]) -> Void = { _, _ in }
     ) {
         self.photo = photo
+        self.albums = albums
         self.deletionContext = deletionContext
+        self.excludedAlbumIDs = excludedAlbumIDs
         self.onDelete = onDelete
+        self.onAddToAlbums = onAddToAlbums
+        self.onMoveToAlbums = onMoveToAlbums
     }
 
     var body: some View {
@@ -95,9 +107,8 @@ struct PhotoDetailView: View {
                     ScrollView(showsIndicators: false) {
                         VStack(spacing: 0) {
                             PhotoDetailImage(
-                                localIdentifier: photo.localIdentifier,
-                                contentMode: isEditingInfo ? .fill : .fit,
-                                imageSize: $photoSize
+                                image: imageViewModel.image,
+                                contentMode: isEditingInfo ? .fill : .fit
                             )
                             .frame(
                                 width: geometry.size.width,
@@ -166,12 +177,32 @@ struct PhotoDetailView: View {
             }
         }
         .statusBarHidden(isCommittedPhotoZoomed)
+        .task(id: photo.localIdentifier) {
+            await imageViewModel.loadImage(for: photo.localIdentifier)
+        }
         .bottomSheet(isPresented: $showShareSheet, detents: [.full]) { dismiss in
             ShareSheet(
-                albums: Album.samples,
+                albums: albums,
                 sharedAlbums: Album.sharedSamples,
                 shareAlbums: ShareAlbum.samples,
-                onDismiss: { dismiss() }
+                onDismiss: { dismiss() },
+                excludedAlbumIDs: excludedAlbumIDs,
+                onComplete: { destinations in
+                    guard !photo.localIdentifier.isEmpty else {
+                        return
+                    }
+
+                    switch deletionContext {
+                    case .album:
+                        guard let albumPhotoID = photo.albumPhotoID else {
+                            return
+                        }
+                        onMoveToAlbums([albumPhotoID], destinations)
+                    case .gallery:
+                        onAddToAlbums([photo.localIdentifier], destinations)
+                    }
+                    dismiss()
+                }
             )
         }
         .bottomSheetAlert(
@@ -226,7 +257,11 @@ struct PhotoDetailView: View {
     private var actionBar: some View {
         ActionBar(items: [
             .init(icon: isFavorite ? .starFilled : .starStroke, title: "즐겨찾기") { isFavorite.toggle() },
-            .init(icon: .moveToAlbum, title: "집으로") { showShareSheet = true },
+            .init(
+                icon: .moveToAlbum,
+                title: "집으로",
+                isDisabled: photo.localIdentifier.isEmpty
+            ) { showShareSheet = true },
             .init(icon: .metadata, title: "정보 수정") {
                 setInfoEditing(true)
             },
@@ -343,8 +378,8 @@ struct PhotoDetailView: View {
     }
 
     private func aspectFitPhotoSize(in containerSize: CGSize, scale: CGFloat) -> CGSize {
-        guard photoSize.width > 0,
-              photoSize.height > 0,
+        guard imageViewModel.imageSize.width > 0,
+              imageViewModel.imageSize.height > 0,
               containerSize.width > 0,
               containerSize.height > 0
         else {
@@ -352,13 +387,13 @@ struct PhotoDetailView: View {
         }
 
         let fitScale = min(
-            containerSize.width / photoSize.width,
-            containerSize.height / photoSize.height
+            containerSize.width / imageViewModel.imageSize.width,
+            containerSize.height / imageViewModel.imageSize.height
         )
 
         return CGSize(
-            width: photoSize.width * fitScale * scale,
-            height: photoSize.height * fitScale * scale
+            width: imageViewModel.imageSize.width * fitScale * scale,
+            height: imageViewModel.imageSize.height * fitScale * scale
         )
     }
 

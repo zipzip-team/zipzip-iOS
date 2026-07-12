@@ -12,11 +12,21 @@ struct Photo: Identifiable, Hashable {
     let id: UUID
     let localIdentifier: String
     let metadata: PhotoMetadata
+    let albumPhotoID: Int?
 
-    init(localIdentifier: String = "", metadata: PhotoMetadata) {
+    init(
+        localIdentifier: String = "",
+        metadata: PhotoMetadata,
+        albumPhotoID: Int? = nil
+    ) {
         self.localIdentifier = localIdentifier
         self.metadata = metadata
-        self.id = localIdentifier.isEmpty ? UUID() : Self.stableID(for: localIdentifier)
+        self.albumPhotoID = albumPhotoID
+        if let albumPhotoID {
+            self.id = Self.stableID(for: "album-photo-\(albumPhotoID)")
+        } else {
+            self.id = localIdentifier.isEmpty ? UUID() : Self.stableID(for: localIdentifier)
+        }
     }
 
     private static func stableID(for localIdentifier: String) -> UUID {
@@ -52,4 +62,18 @@ extension PhotoSection {
         PhotoSection(title: "7월 1일", photos: Photo.make(8)),
         PhotoSection(title: "6월 30일", photos: Photo.make(8))
     ]
+}
+
+extension Array where Element == PhotoSection {
+    func localIdentifiers(for photoIDs: [UUID]) -> [String] {
+        let photosByID = Dictionary(uniqueKeysWithValues: flatMap(\.photos).map { ($0.id, $0) })
+        return photoIDs.compactMap { photoID in
+            guard let localIdentifier = photosByID[photoID]?.localIdentifier,
+                  !localIdentifier.isEmpty
+            else {
+                return nil
+            }
+            return localIdentifier
+        }
+    }
 }

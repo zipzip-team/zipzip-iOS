@@ -14,9 +14,11 @@ struct FilteredPictureView: View {
     @State private var pictureViewModel = PictureViewModel()
     @State private var viewModel: FilteredPictureViewModel
     @State private var showShareSheet = false
+    private let albumViewModel: AlbumViewModel
 
-    init(appliedFilters: [AppliedFilter]) {
+    init(appliedFilters: [AppliedFilter], albumViewModel: AlbumViewModel) {
         _viewModel = State(initialValue: FilteredPictureViewModel(appliedFilters: appliedFilters))
+        self.albumViewModel = albumViewModel
     }
 
     var body: some View {
@@ -28,6 +30,8 @@ struct FilteredPictureView: View {
             ScrollView {
                 PhotoGallery(
                     sections: pictureViewModel.sections,
+                    thumbnailImages: pictureViewModel.thumbnailImages,
+                    loadThumbnail: pictureViewModel.loadThumbnail,
                     isSelectionMode: pictureViewModel.isSelectionMode,
                     selectedPhotoIDs: pictureViewModel.selectedPhotoIDs,
                     onTapPhoto: pictureViewModel.toggleSelection,
@@ -84,10 +88,29 @@ struct FilteredPictureView: View {
         }
         .bottomSheet(isPresented: $showShareSheet, detents: [.full]) { dismiss in
             ShareSheet(
-                albums: Album.samples,
+                albums: albumViewModel.shareDestinations,
                 sharedAlbums: Album.sharedSamples,
                 shareAlbums: ShareAlbum.samples,
-                onDismiss: { dismiss() }
+                onDismiss: { dismiss() },
+                onComplete: { destinations in
+                    let localIdentifiers = pictureViewModel.selectedPhotoLocalIdentifiers
+                    Task {
+                        guard await albumViewModel.addPhotos(
+                            localIdentifiers: localIdentifiers,
+                            to: destinations
+                        ) else {
+                            return
+                        }
+
+                        dismiss()
+                        pictureViewModel.cancelSelection()
+                        guard let albumID = destinations.firstPersonalAlbumID else {
+                            return
+                        }
+
+                        router.push(.albumDetail(albumID))
+                    }
+                }
             )
         }
         .bottomSheetAlert(
@@ -173,6 +196,6 @@ struct FilteredPictureView: View {
     FilteredPictureView(appliedFilters: [
         AppliedFilter(kind: .device, value: "iphone 6"),
         AppliedFilter(kind: .location, value: "오사카")
-    ])
-    .environment(Router())
+    ], albumViewModel: AlbumViewModel(albums: AlbumViewItem.samples))
+        .environment(Router())
 }
