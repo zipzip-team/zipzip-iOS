@@ -6,24 +6,21 @@
 //
 
 import ImageIO
-import OSLog
 @preconcurrency import Photos
-
-private let logger = Logger(subsystem: "com.zipzip.zipzip-iOS", category: "PhotoLibrarySync")
 
 nonisolated enum AssetDeviceInfo: Equatable {
     case resolved(make: String?, model: String?)
-    case unavailable
+    case pending
 }
 
 nonisolated enum AssetEXIFReader {
     private static let maxStreamedBytes = 2 * 1024 * 1024
     private static let minParseBytes = 128 * 1024
 
-    static func deviceInfo(for asset: PHAsset) async -> AssetDeviceInfo {
+    static func deviceInfo(for asset: PHAsset, allowsNetwork: Bool) async -> AssetDeviceInfo {
         guard !asset.mediaSubtypes.contains(.photoScreenshot) else { return .resolved(make: nil, model: nil) }
         guard let resource = photoResource(for: asset) else { return .resolved(make: nil, model: nil) }
-        return await streamDeviceInfo(from: resource)
+        return await streamDeviceInfo(from: resource, allowsNetwork: allowsNetwork)
     }
 
     private static func photoResource(for asset: PHAsset) -> PHAssetResource? {
@@ -36,10 +33,11 @@ nonisolated enum AssetEXIFReader {
     }
 
     private static func streamDeviceInfo(
-        from resource: PHAssetResource
+        from resource: PHAssetResource,
+        allowsNetwork: Bool
     ) async -> AssetDeviceInfo {
         let options = PHAssetResourceRequestOptions()
-        options.isNetworkAccessAllowed = true
+        options.isNetworkAccessAllowed = allowsNetwork
 
         let manager = PHAssetResourceManager.default()
         let box = ResourceStreamBox()
@@ -68,9 +66,8 @@ nonisolated enum AssetEXIFReader {
                     },
                     completionHandler: { error in
                         box.finish {
-                            if let error {
-                                logger.error("failed to stream original for EXIF: \(error)")
-                                continuation.resume(returning: .unavailable)
+                            if error != nil {
+                                continuation.resume(returning: .pending)
                             } else {
                                 let info = parseDeviceInfo(from: box.buffer)
                                 continuation.resume(returning: .resolved(make: info?.make, model: info?.model))
