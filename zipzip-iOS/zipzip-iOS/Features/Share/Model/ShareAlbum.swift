@@ -8,21 +8,66 @@
 import Foundation
 
 struct ShareAlbum: Identifiable, Hashable {
-    let id = UUID()
-    let name: String
+    let id: UUID
+    var name: String
     let date: Date
     let memberCount: Int
+    var albums: [Album]
+
+    init(
+        id: UUID = UUID(),
+        name: String,
+        date: Date,
+        memberCount: Int,
+        albums: [Album] = []
+    ) {
+        self.id = id
+        self.name = name
+        self.date = date
+        self.memberCount = memberCount
+        self.albums = albums
+    }
 }
 
 extension ShareAlbum {
     /// 실제 데이터 연동 전까지 사용하는 더미 데이터.
     static let samples: [ShareAlbum] = [
-        ShareAlbum(name: "집집팟", date: date(2026, 7, 2), memberCount: 4),
-        ShareAlbum(name: "알콩달콩", date: date(2026, 7, 3), memberCount: 1),
-        ShareAlbum(name: "하늘바람", date: date(2026, 7, 3), memberCount: 5),
-        ShareAlbum(name: "달빛소리", date: date(2026, 7, 4), memberCount: 2),
-        ShareAlbum(name: "별무리", date: date(2026, 7, 4), memberCount: 8),
-        ShareAlbum(name: "꽃길만걷자", date: date(2026, 7, 5), memberCount: 3)
+        ShareAlbum(
+            name: "집집팟",
+            date: date(2026, 7, 2),
+            memberCount: 4,
+            albums: Album.sharedSamples
+        ),
+        ShareAlbum(
+            name: "알콩달콩",
+            date: date(2026, 7, 3),
+            memberCount: 1,
+            albums: Array(Album.sharedSamples.prefix(4))
+        ),
+        ShareAlbum(
+            name: "하늘바람",
+            date: date(2026, 7, 3),
+            memberCount: 5,
+            albums: Array(Album.sharedSamples.prefix(3))
+        ),
+        ShareAlbum(
+            name: "달빛소리",
+            date: date(2026, 7, 4),
+            memberCount: 2,
+            albums: Array(Album.sharedSamples.prefix(2))
+        ),
+        ShareAlbum(
+            name: "별무리",
+            date: date(2026, 7, 4),
+            memberCount: 8,
+            albums: Array(Album.sharedSamples.prefix(4))
+        ),
+        ShareAlbum(
+            name: "꽃길만걷자",
+            date: date(2026, 7, 5),
+            memberCount: 3,
+            albums: Array(Album.sharedSamples.prefix(3))
+        )
     ]
 
     private static func date(_ year: Int, _ month: Int, _ day: Int) -> Date {
