@@ -77,8 +77,7 @@ struct RootView: View {
                         deletionContext: .album,
                         excludedAlbumIDs: [albumID],
                         onDelete: { action in
-                            albumViewModel.deletePhotos([photo.id], from: albumID, action: action)
-                            return true
+                            await albumViewModel.deletePhotos([photo.id], from: albumID, action: action)
                         },
                         onAddToAlbums: addPhotosToAlbums,
                         onMoveToAlbums: { albumPhotoIDs, destinations in
