@@ -11,11 +11,6 @@
 		CA881BC72FF418B200AA3125 /* Alamofire in Frameworks */ = {isa = PBXBuildFile; productRef = CA881BC62FF418B200AA3125 /* Alamofire */; };
 /* End PBXBuildFile section */
 
-/* Begin PBXFileReference section */
-		CA881AA02FF3FF9800AA3125 /* zipzip-iOS.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "zipzip-iOS.app"; sourceTree = BUILT_PRODUCTS_DIR; };
-		A11000013000000000000001 /* zipzip-iOSTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "zipzip-iOSTests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
-/* End PBXFileReference section */
-
 /* Begin PBXContainerItemProxy section */
 		A11900013000000000000001 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -26,12 +21,16 @@
 		};
 /* End PBXContainerItemProxy section */
 
+/* Begin PBXFileReference section */
+		A11000013000000000000001 /* zipzip-iOSTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "zipzip-iOSTests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
+		CA881AA02FF3FF9800AA3125 /* zipzip-iOS.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "zipzip-iOS.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+/* End PBXFileReference section */
+
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
 		CA881B242FF415EC00AA3125 /* Exceptions for "zipzip-iOS" folder in "zipzip-iOS" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
 				App/Info.plist,
-				App/zipzip-iOS.entitlements,
 				Core/Extensions/.gitkeep,
 				Shared/Component/.gitkeep,
 				Shared/Model/.gitkeep,
@@ -268,7 +267,7 @@
 					"@executable_path/Frameworks",
 					"@loader_path/Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = "app.zipzip.ios.tests";
+				PRODUCT_BUNDLE_IDENTIFIER = app.zipzip.ios.tests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
@@ -291,7 +290,7 @@
 					"@executable_path/Frameworks",
 					"@loader_path/Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = "app.zipzip.ios.tests";
+				PRODUCT_BUNDLE_IDENTIFIER = app.zipzip.ios.tests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
