@@ -5,12 +5,9 @@
 //  Created by 성환 on 7/8/26.
 //
 
-import SQLiteData
 import SwiftUI
 
 struct PhotoInfoEditContent: View {
-    @Dependency(\.photoFilterOptions) private var filterOptions
-
     @State private var metadata: PhotoMetadata
     @State private var showDeviceSheet = false
     @State private var pickerDevice = ""
@@ -18,10 +15,11 @@ struct PhotoInfoEditContent: View {
     @State private var pickerLocation = ""
     @State private var showDateSheet = false
     @State private var pickerDate = Date()
-    @State private var devices: [FilterDevice] = []
+    @State private var viewModel: PhotoInfoEditViewModel
 
-    init(metadata: PhotoMetadata) {
+    init(metadata: PhotoMetadata, viewModel: PhotoInfoEditViewModel = PhotoInfoEditViewModel()) {
         _metadata = State(initialValue: metadata)
+        _viewModel = State(initialValue: viewModel)
     }
 
     var body: some View {
@@ -57,7 +55,7 @@ struct PhotoInfoEditContent: View {
             .padding(.top, 40)
         }
         .bottomSheet(isPresented: $showDeviceSheet, detents: [.content]) { dismiss in
-            DeviceFilterSheet(devices: devices, selected: $pickerDevice) {
+            DeviceFilterSheet(devices: viewModel.devices, selected: $pickerDevice) {
                 applyDevice(pickerDevice)
                 dismiss()
             }
@@ -83,12 +81,8 @@ struct PhotoInfoEditContent: View {
             )
         }
         .task {
-            await loadDevices()
+            await viewModel.load()
         }
-    }
-
-    private func loadDevices() async {
-        devices = (try? await filterOptions.load())?.devices ?? []
     }
 
     private var header: some View {
@@ -138,7 +132,7 @@ struct PhotoInfoEditContent: View {
     }
 
     private func applyDevice(_ name: String) {
-        guard let device = devices.first(where: { $0.name == name }) else { return }
+        guard let device = viewModel.devices.first(where: { $0.name == name }) else { return }
         metadata = PhotoMetadata(
             deviceName: device.name,
             deviceType: device.type,
@@ -167,7 +161,10 @@ struct PhotoInfoEditContent: View {
 }
 
 #Preview {
-    PhotoInfoEditContent(metadata: PhotoMetadata.samples[0])
-        .padding(.horizontal, 16)
-        .background(Color.orange30)
+    PhotoInfoEditContent(
+        metadata: PhotoMetadata.samples[0],
+        viewModel: PhotoInfoEditViewModel(devices: PhotoFilterOptions.sample.devices)
+    )
+    .padding(.horizontal, 16)
+    .background(Color.orange30)
 }
