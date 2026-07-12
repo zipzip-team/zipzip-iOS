@@ -15,7 +15,7 @@ struct RootTabView: View {
     @State private var shareViewModel = ShareViewModel()
     @State private var showShareSheet = false
 
-    private let albumViewModel: AlbumViewModel
+    let albumViewModel: AlbumViewModel
 
     init(albumViewModel: AlbumViewModel) {
         self.albumViewModel = albumViewModel
