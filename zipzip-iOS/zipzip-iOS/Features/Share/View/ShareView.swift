@@ -115,12 +115,20 @@ struct ShareView: View {
         if authenticationState.isLoggedIn {
             ShareGroupListView(viewModel: viewModel)
         } else {
-            ShareRootLoginView(onLogin: authenticationState.logIn)
+            ShareRootLoginView(onLogin: viewModel.showLogin)
         }
     }
 
     @ViewBuilder private func destination(for route: ShareRoute) -> some View {
         switch route {
+        case .login:
+            ShareLoginView(
+                onBack: viewModel.goBack,
+                onAppleLogin: {
+                    authenticationState.logIn()
+                    viewModel.completeLogin()
+                }
+            )
         case let .group(groupID):
             ShareGroupDetailView(groupID: groupID, viewModel: viewModel)
         case let .album(groupID, albumID):
@@ -250,16 +258,23 @@ private struct ShareRootLoginView: View {
         ShareRootStateContainer(title: "공유") {
             VStack(spacing: 32) {
                 VStack(spacing: 8) {
-                    ShareAssetPlaceholder(width: 92, height: 80)
-                    Text("공유는\n로그인이 필요해요")
-                        .font(.t2_md)
-                        .foregroundStyle(.grey1000)
-                        .multilineTextAlignment(.center)
+                    Image(.shareLoginRequiredArtwork)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 92, height: 80)
+                        .accessibilityHidden(true)
+                    Image(.shareLoginRequiredText)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 146, height: 53)
+                        .accessibilityLabel("공유는 로그인이 필요해요")
                 }
 
                 CommonButton(title: "로그인", property1: .cta, action: onLogin)
                     .frame(width: 171)
             }
+            .padding(.top, 252)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         }
     }
 }
