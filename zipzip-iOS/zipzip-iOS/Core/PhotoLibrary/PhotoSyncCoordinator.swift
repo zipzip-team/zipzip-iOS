@@ -33,9 +33,20 @@ final class PhotoSyncCoordinator {
     var isFinished = false
 
     func startIfNeeded() {
+        runSync()
+    }
+
+    func refresh() {
+        runSync()
+    }
+
+    private func runSync() {
         guard task == nil else { return }
         task = Task {
-            defer { isFinished = true }
+            defer {
+                task = nil
+                isFinished = true
+            }
             do {
                 for try await progress in photoLibrarySync.syncIfNeeded() {
                     self.progress = progress
@@ -51,6 +62,7 @@ final class PhotoSyncCoordinator {
     private func startBackfill() {
         guard backfillTask == nil else { return }
         backfillTask = Task(priority: .utility) {
+            defer { backfillTask = nil }
             do {
                 try await deviceBackfill.backfillPendingDevices()
             } catch is CancellationError {

@@ -35,6 +35,10 @@ struct RootView: View {
                 photoSync.startIfNeeded()
                 await albumViewModel.loadAlbums()
             }
+            .onChange(of: scenePhase) { _, newPhase in
+                guard hasCompletedOnboarding, newPhase == .active else { return }
+                photoSync.refresh()
+            }
             .navigationDestination(for: Route.self) { route in
                 switch route {
                 case .splash:

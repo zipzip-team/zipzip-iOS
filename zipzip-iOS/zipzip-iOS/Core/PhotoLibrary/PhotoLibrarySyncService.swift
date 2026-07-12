@@ -24,7 +24,7 @@ nonisolated struct PhotoLibrarySyncService {
         AsyncThrowingStream { continuation in
             let task = Task {
                 do {
-                    try await importAll(continuation)
+                    try await run(continuation)
                     continuation.finish()
                 } catch {
                     continuation.finish(throwing: error)
@@ -35,17 +35,26 @@ nonisolated struct PhotoLibrarySyncService {
     }
 
     @concurrent
-    private func importAll(
+    private func run(
         _ continuation: AsyncThrowingStream<SyncProgress, Error>.Continuation
     ) async throws {
         let status = PHPhotoLibrary.authorizationStatus(for: .readWrite)
         guard status == .authorized || status == .limited else { return }
 
-        let hasImported = try await database.read { db in
-            try Self.hasCompletedInitialImport(db)
+        let savedToken = try await database.read { db in
+            try Self.loadChangeToken(db)
         }
-        guard !hasImported else { return }
+        if let savedToken {
+            try await syncIncremental(since: savedToken, continuation)
+        } else {
+            try await importAll(continuation)
+        }
+    }
 
+    @concurrent
+    private func importAll(
+        _ continuation: AsyncThrowingStream<SyncProgress, Error>.Continuation
+    ) async throws {
         let baselineToken = PHPhotoLibrary.shared().currentChangeToken
 
         let options = PHFetchOptions()
@@ -63,40 +72,117 @@ nonisolated struct PhotoLibrarySyncService {
                 fetchResult.objects(at: IndexSet(integersIn: processed ..< upperBound))
             }
             let chunk = await Self.loadMetadata(for: assets)
-
-            let neededKeys = Set(chunk.compactMap(Self.deviceKey)).subtracting(deviceCache.keys)
-            if !neededKeys.isEmpty {
-                let resolved = try await database.write { db in
-                    var map: [DeviceKey: Int] = [:]
-                    for key in neededKeys {
-                        map[key] = try Self.deviceID(for: key, db: db)
-                    }
-                    return map
-                }
-                deviceCache.merge(resolved) { current, _ in current }
-            }
-
-            // iCloud 전용 사진(devicePending)은 기기 미정으로 저장해 백필로 미룬다.
-            // 기기 정보가 없는 사진(스크린샷 등)은 저장하지 않는다.
-            let entries: [(AssetMetadata, Int?)] = chunk.compactMap { metadata in
-                if metadata.devicePending { return (metadata, nil) }
-                guard let key = Self.deviceKey(for: metadata),
-                      let deviceID = deviceCache[key]
-                else { return nil }
-                return (metadata, deviceID)
-            }
-
-            try await database.write { db in
-                for (metadata, deviceID) in entries {
-                    try Self.upsert(metadata, deviceID: deviceID, addedAt: scanDate, db: db)
-                }
-            }
+            try await persist(chunk, scanDate: scanDate, deviceCache: &deviceCache)
             processed = upperBound
             continuation.yield(SyncProgress(processed: processed, total: total))
         }
 
         try await database.write { db in
             try Self.saveChangeToken(baselineToken, db)
+        }
+    }
+
+    /// 저장된 토큰 이후의 변경분(추가·수정)만 반영한다. 토큰이 만료됐으면 전체 재임포트로 폴백한다.
+    @concurrent
+    private func syncIncremental(
+        since token: PHPersistentChangeToken,
+        _ continuation: AsyncThrowingStream<SyncProgress, Error>.Continuation
+    ) async throws {
+        let library = PHPhotoLibrary.shared()
+        let changes: PHPersistentChangeFetchResult
+        do {
+            changes = try library.fetchPersistentChanges(since: token)
+        } catch let error as PHPhotosError where error.code == .persistentChangeTokenExpired {
+            try await importAll(continuation)
+            return
+        }
+
+        var changedIdentifiers: Set<String> = []
+        var latestToken: PHPersistentChangeToken?
+        do {
+            for change in changes {
+                try Task.checkCancellation()
+                let details = try change.changeDetails(for: .asset)
+                changedIdentifiers.formUnion(details.insertedLocalIdentifiers)
+                changedIdentifiers.formUnion(details.updatedLocalIdentifiers)
+                latestToken = change.changeToken
+            }
+        } catch let error as PHPhotosError where error.code == .persistentChangeDetailsUnavailable {
+            try await importAll(continuation)
+            return
+        }
+
+        if !changedIdentifiers.isEmpty {
+            try await applyChanges(Array(changedIdentifiers), continuation)
+        }
+
+        if let latestToken {
+            try await database.write { db in
+                try Self.saveChangeToken(latestToken, db)
+            }
+        }
+    }
+
+    private func applyChanges(
+        _ identifiers: [String],
+        _ continuation: AsyncThrowingStream<SyncProgress, Error>.Continuation
+    ) async throws {
+        let fetchResult = PHAsset.fetchAssets(withLocalIdentifiers: identifiers, options: nil)
+        var assets: [PHAsset] = []
+        assets.reserveCapacity(fetchResult.count)
+        fetchResult.enumerateObjects { asset, _, _ in
+            guard asset.mediaType == .image else { return }
+            assets.append(asset)
+        }
+        guard !assets.isEmpty else { return }
+
+        let scanDate = Date()
+        let total = assets.count
+        var deviceCache: [DeviceKey: Int] = [:]
+        var processed = 0
+        while processed < total {
+            try Task.checkCancellation()
+            let upperBound = min(processed + Self.chunkSize, total)
+            let slice = Array(assets[processed ..< upperBound])
+            let chunk = await Self.loadMetadata(for: slice)
+            try await persist(chunk, scanDate: scanDate, deviceCache: &deviceCache)
+            processed = upperBound
+            continuation.yield(SyncProgress(processed: processed, total: total))
+        }
+    }
+
+    /// 청크의 기기 정보를 해석해 저장한다.
+    /// iCloud 전용 사진(devicePending)은 기기 미정으로 저장해 백필로 미룬다.
+    /// 기기 정보가 없는 사진(스크린샷 등)은 저장하지 않는다.
+    private func persist(
+        _ chunk: [AssetMetadata],
+        scanDate: Date,
+        deviceCache: inout [DeviceKey: Int]
+    ) async throws {
+        let neededKeys = Set(chunk.compactMap(Self.deviceKey)).subtracting(deviceCache.keys)
+        if !neededKeys.isEmpty {
+            let resolved = try await database.write { db in
+                var map: [DeviceKey: Int] = [:]
+                for key in neededKeys {
+                    map[key] = try Self.deviceID(for: key, db: db)
+                }
+                return map
+            }
+            deviceCache.merge(resolved) { current, _ in current }
+        }
+
+        let entries: [(AssetMetadata, Int?)] = chunk.compactMap { metadata in
+            if metadata.devicePending { return (metadata, nil) }
+            guard let key = Self.deviceKey(for: metadata),
+                  let deviceID = deviceCache[key]
+            else { return nil }
+            return (metadata, deviceID)
+        }
+
+        try await database.write { db in
+            for (metadata, deviceID) in entries {
+                try Self.upsert(metadata, deviceID: deviceID, addedAt: scanDate, db: db)
+            }
         }
     }
 
@@ -187,12 +273,18 @@ nonisolated struct PhotoLibrarySyncService {
         return Int(db.lastInsertedRowID)
     }
 
-    private static func hasCompletedInitialImport(_ db: Database) throws -> Bool {
-        let token = try SyncStateRecord
+    private static func loadChangeToken(_ db: Database) throws -> PHPersistentChangeToken? {
+        let stored = try SyncStateRecord
             .where { $0.id.eq(1) }
             .select(\.changeToken)
             .fetchOne(db)
-        return (token ?? nil) != nil
+        guard let base64 = stored ?? nil,
+              let data = Data(base64Encoded: base64)
+        else { return nil }
+        return try? NSKeyedUnarchiver.unarchivedObject(
+            ofClass: PHPersistentChangeToken.self,
+            from: data
+        )
     }
 
     private static func saveChangeToken(_ token: PHPersistentChangeToken, _ db: Database) throws {
