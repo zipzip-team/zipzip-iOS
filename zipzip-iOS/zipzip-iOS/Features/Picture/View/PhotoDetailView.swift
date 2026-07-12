@@ -61,6 +61,7 @@ struct PhotoDetailView: View {
     @State private var showShareSheet = false
     @State private var showDeleteAlert = false
     @State private var isFavorite = false
+    @State private var didToggleFavorite = false
     @State private var imageViewModel = PhotoDetailImageViewModel()
     @State private var photoScale: CGFloat = 1
     @State private var photoOffset: CGSize = .zero
@@ -188,7 +189,10 @@ struct PhotoDetailView: View {
         }
         .task(id: photo.localIdentifier) {
             guard !photo.localIdentifier.isEmpty else { return }
-            isFavorite = await loadIsFavorite(photo.localIdentifier)
+            didToggleFavorite = false
+            let loaded = await loadIsFavorite(photo.localIdentifier)
+            guard !didToggleFavorite else { return }
+            isFavorite = loaded
         }
         .bottomSheet(isPresented: $showShareSheet, detents: [.full]) { dismiss in
             ShareSheet(
@@ -287,6 +291,7 @@ struct PhotoDetailView: View {
     private func toggleFavorite() {
         guard !photo.localIdentifier.isEmpty else { return }
 
+        didToggleFavorite = true
         let next = !isFavorite
         isFavorite = next
         onToggleFavorite(photo.localIdentifier, next)
