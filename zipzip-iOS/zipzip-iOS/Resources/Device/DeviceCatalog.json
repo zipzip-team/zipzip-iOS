@@ -1,0 +1,25 @@
+{
+  "androidPhones": {
+    "makeKeywords": ["samsung", "google", "lg", "xiaomi", "oneplus", "oppo", "vivo", "huawei", "motorola", "pixel"],
+    "modelPrefixes": ["SM-", "GT-", "SHV-", "SHW-", "SCH-", "SPH-", "Galaxy", "Pixel", "Nexus"]
+  },
+  "cameraBrands": [
+    "sony",
+    "nikon",
+    "canon",
+    "samsung",
+    "fujifilm",
+    "kodak",
+    "casio",
+    "olympus",
+    "om digital",
+    "panasonic",
+    "leica",
+    "ricoh",
+    "pentax",
+    "sigma",
+    "hasselblad",
+    "gopro",
+    "dji"
+  ]
+}

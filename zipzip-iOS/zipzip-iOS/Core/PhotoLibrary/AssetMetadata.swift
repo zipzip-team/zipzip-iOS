@@ -17,8 +17,10 @@ nonisolated struct AssetMetadata {
     let width: Int
     let height: Int
     let isFavorite: Bool
+    let make: String?
+    let model: String?
 
-    init(asset: PHAsset) {
+    private init(asset: PHAsset, make: String?, model: String?) {
         self.localIdentifier = asset.localIdentifier
         self.creationDate = asset.creationDate
         self.addedDate = asset.addedDate
@@ -27,5 +29,13 @@ nonisolated struct AssetMetadata {
         self.width = asset.pixelWidth
         self.height = asset.pixelHeight
         self.isFavorite = asset.isFavorite
+        self.make = make
+        self.model = model
+    }
+
+    /// PHAsset의 기본 메타데이터에 원본 EXIF 촬영 기기 정보(make/model)를 더해 생성한다.
+    static func load(from asset: PHAsset) async -> AssetMetadata {
+        let (make, model) = await AssetEXIFReader.deviceInfo(for: asset)
+        return AssetMetadata(asset: asset, make: make, model: model)
     }
 }

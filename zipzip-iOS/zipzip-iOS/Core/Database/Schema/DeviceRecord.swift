@@ -12,4 +12,5 @@ struct DeviceRecord {
     let id: Int
     var make: String?
     var model: String?
+    @Column("is_registered") var isRegistered = false
 }

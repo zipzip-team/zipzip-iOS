@@ -42,7 +42,8 @@ func appDatabase() throws -> any DatabaseWriter {
             CREATE TABLE "device"(
               "id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
               "make" TEXT,
-              "model" TEXT
+              "model" TEXT,
+              "is_registered" INTEGER NOT NULL DEFAULT 0
             ) STRICT
             """
         )

@@ -15,15 +15,17 @@ struct PhotoInfoEditContent: View {
     @State private var pickerLocation = ""
     @State private var showDateSheet = false
     @State private var pickerDate = Date()
+    @State private var viewModel: PhotoInfoEditViewModel
 
     private let showsHeader: Bool
-    private let devices: [FilterDevice] = PhotoFilterOptions.sample.devices
 
     init(
         metadata: PhotoMetadata,
-        showsHeader: Bool = true
+        showsHeader: Bool = true,
+        viewModel: PhotoInfoEditViewModel = PhotoInfoEditViewModel()
     ) {
         _metadata = State(initialValue: metadata)
+        _viewModel = State(initialValue: viewModel)
         self.showsHeader = showsHeader
     }
 
@@ -62,7 +64,7 @@ struct PhotoInfoEditContent: View {
             .padding(.top, showsHeader ? 40 : 0)
         }
         .bottomSheet(isPresented: $showDeviceSheet, detents: [.content]) { dismiss in
-            DeviceFilterSheet(devices: devices, selected: $pickerDevice, onCancel: dismiss) {
+            DeviceFilterSheet(devices: viewModel.devices, selected: $pickerDevice, onCancel: dismiss) {
                 applyDevice(pickerDevice)
                 dismiss()
             }
@@ -86,6 +88,9 @@ struct PhotoInfoEditContent: View {
                     dismiss()
                 }
             )
+        }
+        .task {
+            await viewModel.load()
         }
     }
 
@@ -136,7 +141,7 @@ struct PhotoInfoEditContent: View {
     }
 
     private func applyDevice(_ name: String) {
-        guard let device = devices.first(where: { $0.name == name }) else { return }
+        guard let device = viewModel.devices.first(where: { $0.name == name }) else { return }
         metadata = PhotoMetadata(
             deviceName: device.name,
             deviceType: device.type,
@@ -165,7 +170,10 @@ struct PhotoInfoEditContent: View {
 }
 
 #Preview {
-    PhotoInfoEditContent(metadata: PhotoMetadata.samples[0])
-        .padding(.horizontal, 16)
-        .background(Color.orange30)
+    PhotoInfoEditContent(
+        metadata: PhotoMetadata.samples[0],
+        viewModel: PhotoInfoEditViewModel(devices: PhotoFilterOptions.sample.devices)
+    )
+    .padding(.horizontal, 16)
+    .background(Color.orange30)
 }
