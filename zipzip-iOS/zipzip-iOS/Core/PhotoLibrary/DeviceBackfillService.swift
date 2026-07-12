@@ -56,17 +56,13 @@ nonisolated struct DeviceBackfillService {
             let resolvedCount = try await database.write { db in
                 var count = 0
                 for (photoID, info) in results {
-                    guard case let .resolved(make, model) = info else { continue }
-                    if make == nil, model == nil {
-                        try PhotoRecord.where { $0.id.eq(photoID) }.delete().execute(db)
-                    } else if let deviceID = cache[DeviceKey(make: make, model: model)] {
-                        try PhotoRecord
-                            .update { $0.deviceID = #bind(deviceID) }
-                            .where { $0.id.eq(photoID) }
-                            .execute(db)
-                    } else {
-                        continue
-                    }
+                    guard case let .resolved(make, model) = info,
+                          let deviceID = cache[DeviceKey(make: make, model: model)]
+                    else { continue }
+                    try PhotoRecord
+                        .update { $0.deviceID = #bind(deviceID) }
+                        .where { $0.id.eq(photoID) }
+                        .execute(db)
                     count += 1
                 }
                 return count
@@ -125,7 +121,7 @@ nonisolated struct DeviceBackfillService {
     }
 
     private static func deviceKey(for result: (Int, AssetDeviceInfo)) -> DeviceKey? {
-        guard case let .resolved(make, model) = result.1, make != nil || model != nil else { return nil }
+        guard case let .resolved(make, model) = result.1 else { return nil }
         return DeviceKey(make: make, model: model)
     }
 
