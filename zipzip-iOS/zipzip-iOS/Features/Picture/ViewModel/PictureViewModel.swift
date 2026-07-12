@@ -33,6 +33,18 @@ final class PictureViewModel {
             .metadata
     }
 
+    var selectedPhotoLocalIdentifiers: [String] {
+        let photosByID = Dictionary(uniqueKeysWithValues: sections.flatMap(\.photos).map { ($0.id, $0) })
+        return selectedPhotoIDs.compactMap { photoID in
+            guard let localIdentifier = photosByID[photoID]?.localIdentifier,
+                  !localIdentifier.isEmpty
+            else {
+                return nil
+            }
+            return localIdentifier
+        }
+    }
+
     func enterSelectionMode() {
         isSelectionMode = true
     }
