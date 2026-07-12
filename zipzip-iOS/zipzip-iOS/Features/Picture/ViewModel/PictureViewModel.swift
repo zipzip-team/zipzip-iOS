@@ -15,6 +15,9 @@ final class PictureViewModel {
     @ObservationIgnored
     @Fetch private var response: [PhotoSection]
 
+    @ObservationIgnored
+    @Dependency(\.photoDeletion) private var deletion
+
     private static let logger = Logger(subsystem: "com.zipzip.zipzip-iOS", category: "PictureSections")
 
     @ObservationIgnored private var loadingThumbnailIdentifiers: Set<String> = []
@@ -53,6 +56,23 @@ final class PictureViewModel {
 
     func requestDelete() {
         showDeleteAlert = true
+    }
+
+    func deleteSelectedPhotos() async {
+        guard await deletePhotos(localIdentifiers: selectedPhotoLocalIdentifiers) else { return }
+        cancelSelection()
+    }
+
+    @discardableResult
+    func deletePhotos(localIdentifiers: [String]) async -> Bool {
+        guard !localIdentifiers.isEmpty else { return false }
+        do {
+            try await deletion.delete(localIdentifiers: localIdentifiers)
+            return true
+        } catch {
+            Self.logger.error("failed to delete photos: \(error)")
+            return false
+        }
     }
 
     func cancelSelection() {

@@ -70,7 +70,10 @@ struct PictureView: View {
             secondaryTitle: "취소",
             primaryTitle: "삭제",
             onSecondaryTap: { viewModel.showDeleteAlert = false },
-            onPrimaryTap: { viewModel.showDeleteAlert = false } // TODO: 삭제 실행 연결
+            onPrimaryTap: {
+                viewModel.showDeleteAlert = false
+                Task { await viewModel.deleteSelectedPhotos() }
+            }
         )
     }
 

@@ -171,22 +171,6 @@ nonisolated struct AlbumStore {
         }
     }
 
-    func deletePhotos(localIdentifiers: [String]) async throws {
-        let uniqueLocalIdentifiers = Array(Set(localIdentifiers.filter { !$0.isEmpty }))
-        guard !uniqueLocalIdentifiers.isEmpty else {
-            return
-        }
-
-        try await database.write { db in
-            for localIdentifier in uniqueLocalIdentifiers {
-                try PhotoRecord
-                    .where { $0.localIdentifier.eq(localIdentifier) }
-                    .delete()
-                    .execute(db)
-            }
-        }
-    }
-
     func isPhotoFavorite(localIdentifier: String) async throws -> Bool {
         guard !localIdentifier.isEmpty else {
             return false
