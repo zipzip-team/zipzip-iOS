@@ -17,6 +17,10 @@ struct RootTabView: View {
 
     private let albumViewModel: AlbumViewModel
 
+    init(albumViewModel: AlbumViewModel) {
+        self.albumViewModel = albumViewModel
+    }
+
     var body: some View {
         content
             .frame(maxWidth: .infinity, maxHeight: .infinity)

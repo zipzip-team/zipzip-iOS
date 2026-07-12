@@ -108,8 +108,8 @@ struct FilteredPictureView: View {
 
                         router.push(.albumDetail(albumID))
                     }
-                    }
-                )
+                }
+            )
         }
         .bottomSheetAlert(
             isPresented: $pictureViewModel.showDeleteAlert,
