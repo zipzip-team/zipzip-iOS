@@ -24,7 +24,7 @@ final class PhotoInfoEditViewModel {
     private(set) var devices: [FilterDevice]
 
     @ObservationIgnored private var deviceRecords: [DeviceRecord] = []
-    @ObservationIgnored private let localIdentifiers: [String]
+    @ObservationIgnored private var localIdentifiers: [String]
 
     init(devices: [FilterDevice] = [], localIdentifiers: [String] = []) {
         self.devices = devices
@@ -54,12 +54,15 @@ final class PhotoInfoEditViewModel {
         }
 
         do {
-            try await metadataEdit.updateDevice(
+            let mapping = try await metadataEdit.updateDevice(
                 localIdentifiers: localIdentifiers,
                 deviceID: record.id,
                 make: record.make,
                 model: record.model
             )
+            if !mapping.isEmpty {
+                localIdentifiers = localIdentifiers.map { mapping[$0] ?? $0 }
+            }
         } catch {
             Self.logger.error("failed to update device: \(error)")
         }
