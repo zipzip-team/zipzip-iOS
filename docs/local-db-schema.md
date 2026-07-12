@@ -61,8 +61,12 @@
 | 앨범 ID | `id` | INTEGER | PK |  |
 | 이름 | `name` | TEXT |  |  |
 | 생성 일시 | `created_at` | INTEGER |  | 사진집 created date |
+| 즐겨찾기 앨범 여부 | `is_favorite` | INTEGER | NOT NULL DEFAULT 0 | 0/1 — 1이면 시스템 '즐겨찾기' 앨범 (아래 참고) |
 
 > 대표 썸네일은 `album_photo.added_at` 최신 3개로 **파생**(컬럼 없음). MVP는 앨범 수동 정렬·대표 지정 없음.
+
+> **즐겨찾기 앨범 (`is_favorite = 1`)** — 마이그레이션으로 1개 시드되는 시스템 앨범. 사진 상세뷰의 별 버튼이 이 앨범에 사진을 `album_photo` 행으로 담고/빼는 **토글**로 동작한다. 규칙: **삭제 불가**, 앨범 목록에서 **항상 선두**(조회 시 `is_favorite DESC` 우선 정렬), 소속 사진 **0장이면 목록에서 숨김**(빈↔비어있지 않음 경계에서 등장/소멸). 담기/빼기·썸네일·카운트는 일반 앨범과 동일하게 `album_photo`로 처리한다.
+> ⚠️ `album.is_favorite`(앱 큐레이션 앨범 식별)와 `photo.is_favorite`(iOS 사진 앱 하트 미러)는 **서로 다른 개념**이다. 즐겨찾기 앨범 소속은 `album_photo`로 관리되며 `photo.is_favorite`·PhotoKit과 동기화되지 않는다.
 > 
 
 #### `album_photo` — 앨범-사진 조인 (M:N)
