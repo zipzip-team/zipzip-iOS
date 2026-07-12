@@ -321,10 +321,6 @@ final class AlbumViewModel {
     }
 
     private func renameAlbum(_ albumID: AlbumViewItem.ID, to name: String) async {
-        guard let index = albums.firstIndex(where: { $0.id == albumID }) else {
-            return
-        }
-
         if loadsAlbumsFromDatabase {
             do {
                 try await albumStore.renameAlbum(id: albumID, name: name)
@@ -333,6 +329,9 @@ final class AlbumViewModel {
             }
         }
 
+        guard let index = albums.firstIndex(where: { $0.id == albumID }) else {
+            return
+        }
         albums[index].name = name
     }
 
