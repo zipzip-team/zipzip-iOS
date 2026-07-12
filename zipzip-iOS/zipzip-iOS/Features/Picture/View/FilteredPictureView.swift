@@ -42,7 +42,7 @@ struct FilteredPictureView: View {
         .navigationBarBackButtonHidden(true)
         .task { await viewModel.loadOptions() }
         .task(id: viewModel.appliedFilters) {
-            await pictureViewModel.loadPhotos(filters: viewModel.appliedFilters)
+            await pictureViewModel.applyFilters(viewModel.appliedFilters)
         }
         .bottomSheet(isPresented: $viewModel.showDeviceSheet, detents: [.content]) { dismiss in
             DeviceFilterSheet(

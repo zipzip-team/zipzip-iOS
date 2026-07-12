@@ -12,18 +12,21 @@ import SwiftUI
 @Observable
 final class PictureViewModel {
     @ObservationIgnored
-    @Dependency(\.photoSections) private var provider
+    @Fetch private var response: [PhotoSection]
 
     private static let logger = Logger(subsystem: "com.zipzip.zipzip-iOS", category: "PictureSections")
-
-    @ObservationIgnored private var library: [FilterablePhoto]?
-    @ObservationIgnored private var registeredDeviceIDs: Set<Int>?
 
     var isSelectionMode = false
     private(set) var selectedPhotoIDs: [UUID] = []
     var showDeleteAlert = false
 
-    private(set) var sections: [PhotoSection] = []
+    var sections: [PhotoSection] {
+        response
+    }
+
+    init(filters: [AppliedFilter] = []) {
+        _response = Fetch(wrappedValue: [], PhotoSectionsRequest(filters: filters))
+    }
 
     var firstSelectedMetadata: PhotoMetadata? {
         guard let firstID = selectedPhotoIDs.first else { return nil }
@@ -46,24 +49,9 @@ final class PictureViewModel {
         selectedPhotoIDs = []
     }
 
-    func loadPhotos(filters: [AppliedFilter] = []) async {
+    func applyFilters(_ filters: [AppliedFilter]) async {
         do {
-            let library: [FilterablePhoto]
-            let registeredIDs: Set<Int>
-            if let cachedLibrary = self.library, let cachedIDs = registeredDeviceIDs {
-                library = cachedLibrary
-                registeredIDs = cachedIDs
-            } else {
-                library = try await provider.loadLibrary()
-                registeredIDs = try await provider.loadRegisteredDeviceIDs()
-                self.library = library
-                registeredDeviceIDs = registeredIDs
-            }
-            sections = await provider.sections(
-                from: library,
-                filters: filters,
-                registeredDeviceIDs: registeredIDs
-            )
+            try await $response.load(PhotoSectionsRequest(filters: filters))
         } catch {
             Self.logger.error("failed to load photo sections: \(error)")
         }

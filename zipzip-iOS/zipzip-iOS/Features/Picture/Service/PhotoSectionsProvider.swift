@@ -17,64 +17,58 @@ struct FilterablePhoto {
     let hasLocation: Bool
 }
 
-nonisolated struct PhotoSectionsProvider {
-    @Dependency(\.defaultDatabase) private var database
+nonisolated struct PhotoSectionsRequest: FetchKeyRequest {
+    let filters: [AppliedFilter]
 
-    func loadLibrary() async throws -> [FilterablePhoto] {
-        try await database.read { db in
-            let records = try PhotoRecord.all.fetchAll(db)
-            let devices = try DeviceRecord.all.fetchAll(db)
-            let places = try PlaceRecord.all.fetchAll(db)
-
-            let deviceByID = Dictionary(uniqueKeysWithValues: devices.map { ($0.id, $0) })
-            let placeByID = Dictionary(uniqueKeysWithValues: places.map { ($0.id, $0) })
-
-            return records.map { record in
-                let device = record.deviceID.flatMap { deviceByID[$0] }
-                let filterDevice = DeviceModelCatalog.filterDevice(make: device?.make, model: device?.model)
-                let place = record.placeID.flatMap { placeByID[$0] }
-                let dateText = record.takenAt.map(AppliedFilter.dateText) ?? ""
-                let metadata = PhotoMetadata(
-                    deviceName: filterDevice.name,
-                    deviceType: filterDevice.type,
-                    location: place?.name ?? "",
-                    dateText: dateText
-                )
-                return FilterablePhoto(
-                    photo: Photo(localIdentifier: record.localIdentifier, metadata: metadata),
-                    deviceID: record.deviceID,
-                    takenAt: record.takenAt,
-                    addedAt: record.addedAt,
-                    addedDate: record.addedDate,
-                    hasLocation: record.placeID != nil
-                )
-            }
-        }
+    init(filters: [AppliedFilter] = []) {
+        self.filters = filters
     }
 
-    /// 등록된 기기 id 집합. library와 함께 한 번 로드해 캐시하는 용도.
-    func loadRegisteredDeviceIDs() async throws -> Set<Int> {
-        try await database.read { db in
-            let ids = try DeviceRecord
-                .where { $0.isRegistered.eq(true) }
-                .select(\.id)
-                .fetchAll(db)
-            return Set(ids)
+    func fetch(_ db: Database) throws -> [PhotoSection] {
+        let records = try PhotoRecord.all.fetchAll(db)
+        let devices = try DeviceRecord.all.fetchAll(db)
+        let places = try PlaceRecord.all.fetchAll(db)
+
+        let deviceByID = Dictionary(uniqueKeysWithValues: devices.map { ($0.id, $0) })
+        let placeByID = Dictionary(uniqueKeysWithValues: places.map { ($0.id, $0) })
+        let registeredDeviceIDs = Set(devices.filter(\.isRegistered).map(\.id))
+
+        let library = records.map { record in
+            let device = record.deviceID.flatMap { deviceByID[$0] }
+            let filterDevice = DeviceModelCatalog.filterDevice(make: device?.make, model: device?.model)
+            let place = record.placeID.flatMap { placeByID[$0] }
+            let dateText = record.takenAt.map(AppliedFilter.dateText) ?? ""
+            let metadata = PhotoMetadata(
+                deviceName: filterDevice.name,
+                deviceType: filterDevice.type,
+                location: place?.name ?? "",
+                dateText: dateText
+            )
+            return FilterablePhoto(
+                photo: Photo(localIdentifier: record.localIdentifier, metadata: metadata),
+                deviceID: record.deviceID,
+                takenAt: record.takenAt,
+                addedAt: record.addedAt,
+                addedDate: record.addedDate,
+                hasLocation: record.placeID != nil
+            )
         }
+
+        return Self.sections(from: library, filters: filters, registeredDeviceIDs: registeredDeviceIDs)
     }
 
-    func sections(
+    private static func sections(
         from library: [FilterablePhoto],
         filters: [AppliedFilter],
         registeredDeviceIDs: Set<Int>
-    ) async -> [PhotoSection] {
+    ) -> [PhotoSection] {
         // 등록된 기기의 사진만 노출한다.
         var filtered = library.filter { photo in
             guard let deviceID = photo.deviceID else { return false }
             return registeredDeviceIDs.contains(deviceID)
         }
         for filter in filters {
-            filtered = Self.apply(filter, to: filtered)
+            filtered = apply(filter, to: filtered)
         }
 
         let sorted = filtered.sorted { lhs, rhs in
@@ -121,16 +115,5 @@ nonisolated struct PhotoSectionsProvider {
                 return photos
             }
         }
-    }
-}
-
-private enum PhotoSectionsProviderKey: DependencyKey {
-    static let liveValue = PhotoSectionsProvider()
-}
-
-extension DependencyValues {
-    var photoSections: PhotoSectionsProvider {
-        get { self[PhotoSectionsProviderKey.self] }
-        set { self[PhotoSectionsProviderKey.self] = newValue }
     }
 }
