@@ -37,10 +37,10 @@ extension ShareAlbum {
 extension Album {
     /// 공유집에서 사용하는 앨범 더미 데이터. (사진집 앨범과 다른 세트)
     static let sharedSamples: [Album] = [
-        Album(name: "여름 바다", count: 320),
-        Album(name: "캠핑 기록", count: 88),
-        Album(name: "주말 나들이", count: 512),
-        Album(name: "생일 모음", count: 147),
-        Album(name: "동네 한바퀴", count: 63)
+        Album(id: 101, name: "여름 바다", count: 320),
+        Album(id: 102, name: "캠핑 기록", count: 88),
+        Album(id: 103, name: "주말 나들이", count: 512),
+        Album(id: 104, name: "생일 모음", count: 147),
+        Album(id: 105, name: "동네 한바퀴", count: 63)
     ]
 }
