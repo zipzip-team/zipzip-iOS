@@ -12,11 +12,21 @@ struct Photo: Identifiable, Hashable {
     let id: UUID
     let localIdentifier: String
     let metadata: PhotoMetadata
+    let albumPhotoID: Int?
 
-    init(localIdentifier: String = "", metadata: PhotoMetadata) {
+    init(
+        localIdentifier: String = "",
+        metadata: PhotoMetadata,
+        albumPhotoID: Int? = nil
+    ) {
         self.localIdentifier = localIdentifier
         self.metadata = metadata
-        self.id = localIdentifier.isEmpty ? UUID() : Self.stableID(for: localIdentifier)
+        self.albumPhotoID = albumPhotoID
+        if let albumPhotoID {
+            self.id = Self.stableID(for: "album-photo-\(albumPhotoID)")
+        } else {
+            self.id = localIdentifier.isEmpty ? UUID() : Self.stableID(for: localIdentifier)
+        }
     }
 
     private static func stableID(for localIdentifier: String) -> UUID {
