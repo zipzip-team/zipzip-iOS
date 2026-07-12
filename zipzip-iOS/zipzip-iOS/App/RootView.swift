@@ -45,11 +45,17 @@ struct RootView: View {
                 case .filter:
                     FilterView()
                 case let .filterResult(filters):
-                    FilteredPictureView(appliedFilters: filters)
+                    FilteredPictureView(
+                        appliedFilters: filters,
+                        albumViewModel: albumViewModel
+                    )
                 case let .photoInfoEdit(metadata):
                     PhotoInfoEditView(metadata: metadata)
                 case let .photoDetail(photo):
-                    PhotoDetailView(photo: photo)
+                    PhotoDetailView(
+                        photo: photo,
+                        onAddToAlbums: addPhotosToAlbums
+                    )
                 case let .albumDetail(albumID):
                     AlbumDetailDestinationView(
                         viewModel: albumViewModel,
@@ -59,8 +65,17 @@ struct RootView: View {
                     PhotoDetailView(
                         photo: photo,
                         deletionContext: .album,
+                        excludedAlbumIDs: [albumID],
                         onDelete: { action in
                             albumViewModel.deletePhotos([photo.id], from: albumID, action: action)
+                        },
+                        onAddToAlbums: addPhotosToAlbums,
+                        onMoveToAlbums: { albumPhotoIDs, destinations in
+                            moveAlbumPhotosToAlbums(
+                                ids: albumPhotoIDs,
+                                from: albumID,
+                                destinations: destinations
+                            )
                         }
                     )
                 case .myPage:
@@ -71,5 +86,44 @@ struct RootView: View {
             }
         }
         .environment(photoSync)
+    }
+
+    private func addPhotosToAlbums(
+        localIdentifiers: [String],
+        destinations: [ShareDestination]
+    ) {
+        Task {
+            guard await albumViewModel.addPhotos(
+                localIdentifiers: localIdentifiers,
+                to: destinations
+            ) else {
+                return
+            }
+
+            guard let albumID = destinations.firstPersonalAlbumID else {
+                return
+            }
+
+            router.push(.albumDetail(albumID))
+        }
+    }
+
+    private func moveAlbumPhotosToAlbums(
+        ids: [Int],
+        from sourceAlbumID: Album.ID,
+        destinations: [ShareDestination]
+    ) {
+        Task {
+            guard await albumViewModel.moveAlbumPhotos(
+                ids: ids,
+                from: sourceAlbumID,
+                to: destinations
+            ), let albumID = destinations.firstPersonalAlbumID
+            else {
+                return
+            }
+
+            router.push(.albumDetail(albumID))
+        }
     }
 }
