@@ -37,19 +37,21 @@ struct AlbumView: View {
                 AlbumTitleHeader(isVisible: !viewModel.isSelectionMode)
                     .frame(height: 54, alignment: .bottom)
 
-                LazyVGrid(
-                    columns: columns,
-                    alignment: .center,
-                    spacing: 20
-                ) {
-                    ForEach(viewModel.albums) { album in
-                        AlbumGridCard(
-                            album: album,
-                            selectionNumber: viewModel.selectionNumber(for: album),
-                            isSelectionMode: viewModel.isSelectionMode,
-                            onSelectionTap: { viewModel.toggleSelection(for: album) },
-                            onOpenTap: { viewModel.showDetail(for: album, router: router) }
-                        )
+                if !viewModel.albums.isEmpty {
+                    LazyVGrid(
+                        columns: columns,
+                        alignment: .center,
+                        spacing: 20
+                    ) {
+                        ForEach(viewModel.albums) { album in
+                            AlbumGridCard(
+                                album: album,
+                                selectionNumber: viewModel.selectionNumber(for: album),
+                                isSelectionMode: viewModel.isSelectionMode,
+                                onSelectionTap: { viewModel.toggleSelection(for: album) },
+                                onOpenTap: { viewModel.showDetail(for: album, router: router) }
+                            )
+                        }
                     }
                     .padding(.horizontal, 16)
                     .padding(.top, 17)
