@@ -293,20 +293,30 @@ struct ShareImportView: View {
     ]
 
     var body: some View {
-        ZStack {
+        ZStack(alignment: .top) {
             Color.orange30
                 .ignoresSafeArea()
 
-            Group {
+            VStack(spacing: 0) {
+                ShareImportHeader(
+                    selection: $selection,
+                    onCancel: viewModel.goBack,
+                    onComplete: completeImport
+                )
+
                 switch selection {
                 case .photos:
-                    AlbumDetailGalleryPlaceholderView(
-                        photoCount: PhotoSection.sample.reduce(0) { $0 + $1.photos.count },
-                        showsSelectionControls: true,
-                        selectedPhotoIDs: selectedPhotoIDs,
-                        onSelectPhoto: togglePhoto
-                    )
-                    .padding(.top, 86)
+                    ScrollView(showsIndicators: false) {
+                        PhotoGallery(
+                            sections: PhotoSection.sample,
+                            isSelectionMode: true,
+                            selectedPhotoIDs: selectedPhotoIDs,
+                            onTapPhoto: togglePhoto
+                        )
+                        .padding(.horizontal, 16)
+                        .padding(.top, 14)
+                        .padding(.bottom, 32)
+                    }
                 case .albums:
                     ScrollView(showsIndicators: false) {
                         LazyVGrid(columns: columns, spacing: 20) {
@@ -324,44 +334,11 @@ struct ShareImportView: View {
                             }
                         }
                         .padding(.horizontal, 16)
-                        .padding(.top, 89)
+                        .padding(.top, 29)
                         .padding(.bottom, 32)
                     }
                 }
             }
-        }
-        .overlay(alignment: .topLeading) {
-            RoundedIconButton(items: [
-                .init(id: "import-back", icon: .iconChevronLeft, accessibilityLabel: "뒤로가기") {
-                    viewModel.goBack()
-                }
-            ])
-            .padding(.top, 14)
-            .padding(.leading, 16)
-        }
-        .overlay(alignment: .top) {
-            HStack(spacing: 8) {
-                SelectableButton(
-                    title: "사진",
-                    isSelected: selection == .photos,
-                    selectedColor: .orange500
-                ) { selection = .photos }
-                SelectableButton(
-                    title: "사진집",
-                    isSelected: selection == .albums,
-                    selectedColor: .orange500
-                ) { selection = .albums }
-            }
-            .padding(.top, 12)
-        }
-        .overlay(alignment: .topTrailing) {
-            RoundedIconButton(items: [
-                .init(id: "import-complete", icon: .select, accessibilityLabel: "불러오기 완료") {
-                    completeImport()
-                }
-            ])
-            .padding(.top, 14)
-            .padding(.trailing, 16)
         }
         .navigationBarBackButtonHidden(true)
         .toolbarVisibility(.hidden, for: .navigationBar)
@@ -400,6 +377,44 @@ struct ShareImportView: View {
             }
             viewModel.addAlbums(albums, to: groupID)
         }
+    }
+}
+
+private struct ShareImportHeader: View {
+    @Binding var selection: ShareImportSelection
+    let onCancel: () -> Void
+    let onComplete: () -> Void
+
+    var body: some View {
+        HStack(spacing: 0) {
+            RoundedTextButton(title: "취소", style: .cancel, action: onCancel)
+
+            Spacer(minLength: 0)
+
+            HStack(spacing: 8) {
+                SelectableButton(
+                    title: "사진",
+                    isSelected: selection == .photos,
+                    selectedColor: .orange500
+                ) {
+                    selection = .photos
+                }
+
+                SelectableButton(
+                    title: "사진집",
+                    isSelected: selection == .albums,
+                    selectedColor: .orange500
+                ) {
+                    selection = .albums
+                }
+            }
+
+            Spacer(minLength: 0)
+
+            RoundedTextButton(title: "완료", style: .cancel, action: onComplete)
+        }
+        .padding(.horizontal, 16)
+        .frame(height: 60)
     }
 }
 
