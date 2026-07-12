@@ -12,6 +12,17 @@ enum ShareDestination: Hashable {
     case sharedAlbum(shareAlbumID: ShareAlbum.ID, albumID: Album.ID)
 }
 
+extension Array where Element == ShareDestination {
+    var firstPersonalAlbumID: Album.ID? {
+        for destination in self {
+            if case let .album(albumID) = destination {
+                return albumID
+            }
+        }
+        return nil
+    }
+}
+
 struct ShareSheet: View {
     @Environment(AuthenticationState.self) private var authenticationState
 
@@ -19,11 +30,17 @@ struct ShareSheet: View {
     let sharedAlbums: [Album]
     let shareAlbums: [ShareAlbum]
     let onDismiss: () -> Void
-    var onComplete: (ShareDestination) -> Void = { _ in }
+    var excludedAlbumIDs: Set<Album.ID> = []
+    /// 완료 시 선택 순서대로 전달한다. 호출 화면은 사진 추가, 이동 등 필요한 동작을 결정한다.
+    var onComplete: ([ShareDestination]) -> Void = { _ in }
+    var loadsAlbumsFromDatabase = false
 
     @State private var selection: BottomSheetTabSelection = .left
-    @State private var selectedAlbumID: Album.ID?
+    @State private var selectedAlbumIDs: [Album.ID] = []
     @State private var targetShareAlbum: ShareAlbum?
+    @State private var fetchedAlbums: [Album]?
+
+    private let albumStore = AlbumStore()
 
     var body: some View {
         BottomSheet(
@@ -32,7 +49,9 @@ struct ShareSheet: View {
                 leadingHeaderButton
             },
             rightItem: {
-                headerButton("완료", isDisabled: selectedDestination == nil, action: completeSelection)
+                if showsCompletionButton {
+                    headerButton("완료", isDisabled: selectedDestinations.isEmpty, action: completeSelection)
+                }
             }
         ) {
             content
@@ -44,7 +63,10 @@ struct ShareSheet: View {
         }
         .onChange(of: selection) { _, _ in
             targetShareAlbum = nil
-            selectedAlbumID = nil
+            selectedAlbumIDs = []
+        }
+        .task {
+            await loadAlbumsIfNeeded()
         }
     }
 
@@ -60,8 +82,8 @@ struct ShareSheet: View {
         switch selection {
         case .left:
             AlbumSelectionGrid(
-                albums: albums,
-                selectedAlbumID: selectedAlbumID,
+                albums: personalAlbums,
+                selectedAlbumIDs: selectedAlbumIDs,
                 onSelect: selectAlbum
             )
         case .right:
@@ -72,13 +94,13 @@ struct ShareSheet: View {
             } else if targetShareAlbum != nil {
                 AlbumSelectionGrid(
                     albums: sharedAlbums,
-                    selectedAlbumID: selectedAlbumID,
+                    selectedAlbumIDs: selectedAlbumIDs,
                     onSelect: selectAlbum
                 )
             } else {
                 ShareAlbumList(albums: shareAlbums) { album in
                     targetShareAlbum = album
-                    selectedAlbumID = nil
+                    selectedAlbumIDs = []
                 }
             }
         }
@@ -101,7 +123,15 @@ struct ShareSheet: View {
     }
 
     private func selectAlbum(_ album: Album) {
-        selectedAlbumID = album.id
+        if let index = selectedAlbumIDs.firstIndex(of: album.id) {
+            selectedAlbumIDs.remove(at: index)
+        } else {
+            selectedAlbumIDs.append(album.id)
+        }
+    }
+
+    private var showsCompletionButton: Bool {
+        selection == .left || authenticationState.isLoggedIn
     }
 
     private var selectedDestination: ShareDestination? {
@@ -111,21 +141,23 @@ struct ShareSheet: View {
 
         switch selection {
         case .left:
-            return .album(selectedAlbumID)
+            return selectedAlbumIDs.map(ShareDestination.album)
         case .right:
             guard let targetShareAlbum else {
-                return nil
+                return []
             }
-            return .sharedAlbum(shareAlbumID: targetShareAlbum.id, albumID: selectedAlbumID)
+            return selectedAlbumIDs.map {
+                .sharedAlbum(shareAlbumID: targetShareAlbum.id, albumID: $0)
+            }
         }
     }
 
     private func completeSelection() {
-        guard let selectedDestination else {
+        guard !selectedDestinations.isEmpty else {
             return
         }
 
-        onComplete(selectedDestination)
+        onComplete(selectedDestinations)
         onDismiss()
     }
 
@@ -161,7 +193,7 @@ struct ShareLoginPrompt: View {
 
 struct AlbumSelectionGrid: View {
     let albums: [Album]
-    let selectedAlbumID: Album.ID?
+    let selectedAlbumIDs: [Album.ID]
     let onSelect: (Album) -> Void
 
     private let columns = [
@@ -179,8 +211,9 @@ struct AlbumSelectionGrid: View {
                         AlbumCard(
                             name: album.name,
                             count: album.count,
-                            state: selectedAlbumID == album.id ? .highlighted : .plain,
-                            nameColorOverride: .white00
+                            state: selectedAlbumIDs.contains(album.id) ? .highlighted : .plain,
+                            nameColorOverride: .white00,
+                            thumbnailLocalIdentifiers: album.thumbnailLocalIdentifiers
                         )
                     }
                     .buttonStyle(StaticButtonStyle())
