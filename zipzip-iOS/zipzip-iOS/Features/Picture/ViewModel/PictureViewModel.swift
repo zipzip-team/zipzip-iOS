@@ -59,7 +59,7 @@ final class PictureViewModel {
     }
 
     func deleteSelectedPhotos() async {
-        await deletePhotos(localIdentifiers: selectedPhotoLocalIdentifiers)
+        guard await deletePhotos(localIdentifiers: selectedPhotoLocalIdentifiers) else { return }
         cancelSelection()
     }
 
