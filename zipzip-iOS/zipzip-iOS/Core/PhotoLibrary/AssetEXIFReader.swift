@@ -6,23 +6,21 @@
 //
 
 import ImageIO
-import OSLog
 @preconcurrency import Photos
-
-private let logger = Logger(subsystem: "com.zipzip.zipzip-iOS", category: "PhotoLibrarySync")
 
 nonisolated enum AssetDeviceInfo: Equatable {
     case resolved(make: String?, model: String?)
-    case unavailable
+    case pending
 }
 
 nonisolated enum AssetEXIFReader {
     private static let maxStreamedBytes = 2 * 1024 * 1024
+    private static let minParseBytes = 128 * 1024
 
-    static func deviceInfo(for asset: PHAsset) async -> AssetDeviceInfo {
+    static func deviceInfo(for asset: PHAsset, allowsNetwork: Bool) async -> AssetDeviceInfo {
         guard !asset.mediaSubtypes.contains(.photoScreenshot) else { return .resolved(make: nil, model: nil) }
         guard let resource = photoResource(for: asset) else { return .resolved(make: nil, model: nil) }
-        return await streamDeviceInfo(from: resource)
+        return await streamDeviceInfo(from: resource, allowsNetwork: allowsNetwork)
     }
 
     private static func photoResource(for asset: PHAsset) -> PHAssetResource? {
@@ -35,14 +33,14 @@ nonisolated enum AssetEXIFReader {
     }
 
     private static func streamDeviceInfo(
-        from resource: PHAssetResource
+        from resource: PHAssetResource,
+        allowsNetwork: Bool
     ) async -> AssetDeviceInfo {
         let options = PHAssetResourceRequestOptions()
-        options.isNetworkAccessAllowed = true
+        options.isNetworkAccessAllowed = allowsNetwork
 
         let manager = PHAssetResourceManager.default()
         let box = ResourceStreamBox()
-        let source = CGImageSourceCreateIncremental(nil)
 
         return await withTaskCancellationHandler {
             await withCheckedContinuation { (continuation: CheckedContinuation<AssetDeviceInfo, Never>) in
@@ -52,14 +50,15 @@ nonisolated enum AssetEXIFReader {
                     dataReceivedHandler: { data in
                         guard !box.isDone() else { return }
                         box.append(data)
-                        CGImageSourceUpdateData(source, box.buffer as CFData, false)
+                        let atCap = box.byteCount >= maxStreamedBytes
+                        guard box.reachedParseThreshold(minBytes: minParseBytes) || atCap else { return }
 
-                        if let info = parseDeviceInfo(from: source) {
+                        if let info = parseDeviceInfo(from: box.buffer) {
                             box.finish {
                                 if let id = box.requestID() { manager.cancelDataRequest(id) }
                                 continuation.resume(returning: .resolved(make: info.make, model: info.model))
                             }
-                        } else if box.byteCount >= maxStreamedBytes {
+                        } else if atCap {
                             box.finish {
                                 if let id = box.requestID() { manager.cancelDataRequest(id) }
                                 continuation.resume(returning: .resolved(make: nil, model: nil))
@@ -68,12 +67,10 @@ nonisolated enum AssetEXIFReader {
                     },
                     completionHandler: { error in
                         box.finish {
-                            if let error {
-                                logger.error("failed to stream original for EXIF: \(error)")
-                                continuation.resume(returning: .unavailable)
+                            if error != nil {
+                                continuation.resume(returning: .pending)
                             } else {
-                                CGImageSourceUpdateData(source, box.buffer as CFData, true)
-                                let info = parseDeviceInfo(from: source)
+                                let info = parseDeviceInfo(from: box.buffer)
                                 continuation.resume(returning: .resolved(make: info?.make, model: info?.model))
                             }
                         }
@@ -86,8 +83,10 @@ nonisolated enum AssetEXIFReader {
         }
     }
 
-    private static func parseDeviceInfo(from source: CGImageSource) -> (make: String?, model: String?)? {
-        guard let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],
+    private static func parseDeviceInfo(from data: Data) -> (make: String?, model: String?)? {
+        let options = [kCGImageSourceShouldCache: false] as CFDictionary
+        guard let source = CGImageSourceCreateWithData(data as CFData, options),
+              let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],
               let tiff = properties[kCGImagePropertyTIFFDictionary] as? [CFString: Any]
         else { return nil }
 
@@ -108,6 +107,17 @@ private final class ResourceStreamBox: @unchecked Sendable {
     private var data = Data()
     private var storedRequestID: PHAssetResourceDataRequestID?
     private var isFinished = false
+    private var parseThreshold: Int?
+
+    /// 파싱 시도 간격을 점증시켜(임계값 도달 시 2배로) 콜백마다 전체 버퍼를 재파싱하지 않도록 한다.
+    func reachedParseThreshold(minBytes: Int) -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        let threshold = parseThreshold ?? minBytes
+        guard data.count >= threshold else { return false }
+        parseThreshold = threshold * 2
+        return true
+    }
 
     var buffer: Data {
         lock.lock()

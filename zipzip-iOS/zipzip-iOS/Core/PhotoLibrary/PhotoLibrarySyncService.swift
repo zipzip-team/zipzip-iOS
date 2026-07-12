@@ -48,11 +48,6 @@ nonisolated struct PhotoLibrarySyncService {
 
         let baselineToken = PHPhotoLibrary.shared().currentChangeToken
 
-        let importedIdentifiers = try await database.read { db in
-            try PhotoRecord.select(\.localIdentifier).fetchAll(db)
-        }
-        let importedSet = Set(importedIdentifiers)
-
         let options = PHFetchOptions()
         options.sortDescriptors = [NSSortDescriptor(key: "creationDate", ascending: true)]
         let fetchResult = PHAsset.fetchAssets(with: .image, options: options)
@@ -61,17 +56,13 @@ nonisolated struct PhotoLibrarySyncService {
 
         var deviceCache: [DeviceKey: Int] = [:]
         var processed = 0
-        var hasUnavailable = false
         while processed < total {
             try Task.checkCancellation()
             let upperBound = min(processed + Self.chunkSize, total)
             let assets = autoreleasepool {
                 fetchResult.objects(at: IndexSet(integersIn: processed ..< upperBound))
             }
-            let pending = assets.filter { !importedSet.contains($0.localIdentifier) }
-            let chunk = await Self.loadMetadata(for: pending)
-
-            if chunk.contains(where: \.deviceUnavailable) { hasUnavailable = true }
+            let chunk = await Self.loadMetadata(for: assets)
 
             let neededKeys = Set(chunk.compactMap(Self.deviceKey)).subtracting(deviceCache.keys)
             if !neededKeys.isEmpty {
@@ -85,9 +76,11 @@ nonisolated struct PhotoLibrarySyncService {
                 deviceCache.merge(resolved) { current, _ in current }
             }
 
-            let entries: [(AssetMetadata, Int)] = chunk.compactMap { metadata in
-                guard !metadata.deviceUnavailable,
-                      let key = Self.deviceKey(for: metadata),
+            // iCloud 전용 사진(devicePending)은 기기 미정으로 저장해 백필로 미룬다.
+            // 기기 정보가 없는 사진(스크린샷 등)은 저장하지 않는다.
+            let entries: [(AssetMetadata, Int?)] = chunk.compactMap { metadata in
+                if metadata.devicePending { return (metadata, nil) }
+                guard let key = Self.deviceKey(for: metadata),
                       let deviceID = deviceCache[key]
                 else { return nil }
                 return (metadata, deviceID)
@@ -102,7 +95,6 @@ nonisolated struct PhotoLibrarySyncService {
             continuation.yield(SyncProgress(processed: processed, total: total))
         }
 
-        guard !hasUnavailable else { return }
         try await database.write { db in
             try Self.saveChangeToken(baselineToken, db)
         }
@@ -136,7 +128,7 @@ nonisolated struct PhotoLibrarySyncService {
 
     private static func upsert(
         _ metadata: AssetMetadata,
-        deviceID: Int,
+        deviceID: Int?,
         addedAt: Date,
         db: Database
     ) throws {

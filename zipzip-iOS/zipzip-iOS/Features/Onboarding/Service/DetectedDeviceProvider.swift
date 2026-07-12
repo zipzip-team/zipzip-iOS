@@ -5,6 +5,7 @@
 //  Created by 성환 on 7/11/26.
 //
 
+import Foundation
 import SQLiteData
 
 nonisolated struct DetectedDeviceProvider {
@@ -55,6 +56,9 @@ nonisolated struct DetectedDeviceProvider {
     }
 
     private static func detectedDevice(id: Int, make: String?, model: String?) -> DetectedDevice? {
+        // 기기 정보가 없는 사진(make/model 미상)은 선택할 수 없도록 목록에서 제외한다.
+        guard hasDeviceInfo(make: make, model: model) else { return nil }
+
         let category = DeviceModelCatalog.category(make: make, model: model)
 
         guard category != .galaxy else { return nil }
@@ -70,5 +74,11 @@ nonisolated struct DetectedDeviceProvider {
             modelName: modelName,
             type: type
         )
+    }
+
+    private static func hasDeviceInfo(make: String?, model: String?) -> Bool {
+        let make = (make ?? "").trimmingCharacters(in: .whitespaces)
+        let model = (model ?? "").trimmingCharacters(in: .whitespaces)
+        return !make.isEmpty || !model.isEmpty
     }
 }

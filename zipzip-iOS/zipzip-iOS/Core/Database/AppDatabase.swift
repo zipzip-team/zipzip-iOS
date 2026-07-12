@@ -96,10 +96,10 @@ func appDatabase() throws -> any DatabaseWriter {
         try #sql(
             """
             CREATE TABLE "album_photo"(
+              "id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
               "album_id" INTEGER NOT NULL REFERENCES "album"("id") ON DELETE CASCADE,
               "photo_id" INTEGER NOT NULL REFERENCES "photo"("id") ON DELETE CASCADE,
-              "added_at" INTEGER NOT NULL,
-              PRIMARY KEY("album_id", "photo_id")
+              "added_at" INTEGER NOT NULL
             ) STRICT
             """
         )
@@ -164,6 +164,35 @@ func appDatabase() throws -> any DatabaseWriter {
         .execute(db)
         try #sql(#"CREATE INDEX "idx_shared_album_group_id" ON "shared_album"("shared_group_id")"#).execute(db)
         try #sql(#"CREATE INDEX "idx_shared_photo_album_id" ON "shared_photo"("shared_album_id")"#).execute(db)
+    }
+
+    migrator.registerMigration("Give album photos unique identities") { db in
+        try #sql(
+            """
+            CREATE TABLE "album_photo_new"(
+              "id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+              "album_id" INTEGER NOT NULL REFERENCES "album"("id") ON DELETE CASCADE,
+              "photo_id" INTEGER NOT NULL REFERENCES "photo"("id") ON DELETE CASCADE,
+              "added_at" INTEGER NOT NULL
+            ) STRICT
+            """
+        )
+        .execute(db)
+
+        try #sql(
+            """
+            INSERT INTO "album_photo_new"("album_id", "photo_id", "added_at")
+            SELECT "album_id", "photo_id", "added_at" FROM "album_photo"
+            """
+        )
+        .execute(db)
+
+        try #sql(#"DROP TABLE "album_photo""#).execute(db)
+        try #sql(#"ALTER TABLE "album_photo_new" RENAME TO "album_photo""#).execute(db)
+        try #sql(
+            #"CREATE INDEX "idx_album_photo_album_added" ON "album_photo"("album_id", "added_at")"#
+        )
+        .execute(db)
     }
 
     do {

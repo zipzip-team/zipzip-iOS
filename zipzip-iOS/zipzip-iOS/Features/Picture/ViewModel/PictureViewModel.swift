@@ -8,6 +8,7 @@
 import OSLog
 import SQLiteData
 import SwiftUI
+import UIKit
 
 @Observable
 final class PictureViewModel {
@@ -16,9 +17,15 @@ final class PictureViewModel {
 
     private static let logger = Logger(subsystem: "com.zipzip.zipzip-iOS", category: "PictureSections")
 
+    @ObservationIgnored private var loadingThumbnailIdentifiers: Set<String> = []
+
     var isSelectionMode = false
     private(set) var selectedPhotoIDs: [UUID] = []
     var showDeleteAlert = false
+
+    private(set) var thumbnailImages: [String: UIImage] = [:]
+
+    private static let thumbnailSize = CGSize(width: 300, height: 300)
 
     var sections: [PhotoSection] {
         response
@@ -34,6 +41,10 @@ final class PictureViewModel {
             .flatMap(\.photos)
             .first { $0.id == firstID }?
             .metadata
+    }
+
+    var selectedPhotoLocalIdentifiers: [String] {
+        sections.localIdentifiers(for: selectedPhotoIDs)
     }
 
     func enterSelectionMode() {
@@ -55,6 +66,25 @@ final class PictureViewModel {
         } catch {
             Self.logger.error("failed to load photo sections: \(error)")
         }
+    }
+
+    func loadThumbnail(for localIdentifier: String) async {
+        guard !localIdentifier.isEmpty,
+              thumbnailImages[localIdentifier] == nil,
+              !loadingThumbnailIdentifiers.contains(localIdentifier)
+        else {
+            return
+        }
+
+        loadingThumbnailIdentifiers.insert(localIdentifier)
+        defer { loadingThumbnailIdentifiers.remove(localIdentifier) }
+
+        let image = await PhotoThumbnailLoader.shared.thumbnail(
+            for: localIdentifier,
+            targetSize: Self.thumbnailSize
+        )
+        guard !Task.isCancelled, let image else { return }
+        thumbnailImages[localIdentifier] = image
     }
 
     func handleLongPress(_ id: UUID) {
