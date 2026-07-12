@@ -9,11 +9,7 @@ import SwiftUI
 import UIKit
 
 struct PhotoThumbnail: View {
-    let localIdentifier: String
-
-    @State private var image: UIImage?
-
-    private static let targetSize = CGSize(width: 300, height: 300)
+    let image: UIImage?
 
     var body: some View {
         Color.grey200
@@ -25,14 +21,5 @@ struct PhotoThumbnail: View {
                 }
             }
             .clipped()
-            .task(id: localIdentifier) {
-                guard !localIdentifier.isEmpty else { return }
-                let loadedImage = await PhotoThumbnailLoader.shared.thumbnail(
-                    for: localIdentifier,
-                    targetSize: Self.targetSize
-                )
-                guard !Task.isCancelled else { return }
-                image = loadedImage
-            }
     }
 }

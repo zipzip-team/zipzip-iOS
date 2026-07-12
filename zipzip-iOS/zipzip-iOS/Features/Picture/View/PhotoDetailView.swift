@@ -59,7 +59,7 @@ struct PhotoDetailView: View {
     @State private var showShareSheet = false
     @State private var showDeleteAlert = false
     @State private var isFavorite = false
-    @State private var photoSize: CGSize = .zero
+    @State private var imageViewModel = PhotoDetailImageViewModel()
     @State private var photoScale: CGFloat = 1
     @State private var photoOffset: CGSize = .zero
     @GestureState private var gestureScale: CGFloat = 1
@@ -107,9 +107,8 @@ struct PhotoDetailView: View {
                     ScrollView(showsIndicators: false) {
                         VStack(spacing: 0) {
                             PhotoDetailImage(
-                                localIdentifier: photo.localIdentifier,
-                                contentMode: isEditingInfo ? .fill : .fit,
-                                imageSize: $photoSize
+                                image: imageViewModel.image,
+                                contentMode: isEditingInfo ? .fill : .fit
                             )
                             .frame(
                                 width: geometry.size.width,
@@ -178,6 +177,9 @@ struct PhotoDetailView: View {
             }
         }
         .statusBarHidden(isCommittedPhotoZoomed)
+        .task(id: photo.localIdentifier) {
+            await imageViewModel.loadImage(for: photo.localIdentifier)
+        }
         .bottomSheet(isPresented: $showShareSheet, detents: [.full]) { dismiss in
             ShareSheet(
                 albums: albums,
@@ -376,8 +378,8 @@ struct PhotoDetailView: View {
     }
 
     private func aspectFitPhotoSize(in containerSize: CGSize, scale: CGFloat) -> CGSize {
-        guard photoSize.width > 0,
-              photoSize.height > 0,
+        guard imageViewModel.imageSize.width > 0,
+              imageViewModel.imageSize.height > 0,
               containerSize.width > 0,
               containerSize.height > 0
         else {
@@ -385,13 +387,13 @@ struct PhotoDetailView: View {
         }
 
         let fitScale = min(
-            containerSize.width / photoSize.width,
-            containerSize.height / photoSize.height
+            containerSize.width / imageViewModel.imageSize.width,
+            containerSize.height / imageViewModel.imageSize.height
         )
 
         return CGSize(
-            width: photoSize.width * fitScale * scale,
-            height: photoSize.height * fitScale * scale
+            width: imageViewModel.imageSize.width * fitScale * scale,
+            height: imageViewModel.imageSize.height * fitScale * scale
         )
     }
 

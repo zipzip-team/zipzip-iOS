@@ -30,6 +30,8 @@ struct FilteredPictureView: View {
             ScrollView {
                 PhotoGallery(
                     sections: pictureViewModel.sections,
+                    thumbnailImages: pictureViewModel.thumbnailImages,
+                    loadThumbnail: pictureViewModel.loadThumbnail,
                     isSelectionMode: pictureViewModel.isSelectionMode,
                     selectedPhotoIDs: pictureViewModel.selectedPhotoIDs,
                     onTapPhoto: pictureViewModel.toggleSelection,

@@ -8,6 +8,7 @@
 import OSLog
 import SQLiteData
 import SwiftUI
+import UIKit
 
 @Observable
 final class PictureViewModel {
@@ -18,12 +19,16 @@ final class PictureViewModel {
 
     @ObservationIgnored private var library: [FilterablePhoto]?
     @ObservationIgnored private var registeredDeviceIDs: Set<Int>?
+    @ObservationIgnored private var loadingThumbnailIdentifiers: Set<String> = []
 
     var isSelectionMode = false
     private(set) var selectedPhotoIDs: [UUID] = []
     var showDeleteAlert = false
 
     private(set) var sections: [PhotoSection] = []
+    private(set) var thumbnailImages: [String: UIImage] = [:]
+
+    private static let thumbnailSize = CGSize(width: 300, height: 300)
 
     var firstSelectedMetadata: PhotoMetadata? {
         guard let firstID = selectedPhotoIDs.first else { return nil }
@@ -71,6 +76,25 @@ final class PictureViewModel {
         } catch {
             Self.logger.error("failed to load photo sections: \(error)")
         }
+    }
+
+    func loadThumbnail(for localIdentifier: String) async {
+        guard !localIdentifier.isEmpty,
+              thumbnailImages[localIdentifier] == nil,
+              !loadingThumbnailIdentifiers.contains(localIdentifier)
+        else {
+            return
+        }
+
+        loadingThumbnailIdentifiers.insert(localIdentifier)
+        defer { loadingThumbnailIdentifiers.remove(localIdentifier) }
+
+        let image = await PhotoThumbnailLoader.shared.thumbnail(
+            for: localIdentifier,
+            targetSize: Self.thumbnailSize
+        )
+        guard !Task.isCancelled, let image else { return }
+        thumbnailImages[localIdentifier] = image
     }
 
     func handleLongPress(_ id: UUID) {

@@ -40,6 +40,8 @@ struct PictureView: View {
 
                 PhotoGallery(
                     sections: viewModel.sections,
+                    thumbnailImages: viewModel.thumbnailImages,
+                    loadThumbnail: viewModel.loadThumbnail,
                     isSelectionMode: viewModel.isSelectionMode,
                     selectedPhotoIDs: viewModel.selectedPhotoIDs,
                     onTapPhoto: viewModel.toggleSelection,
