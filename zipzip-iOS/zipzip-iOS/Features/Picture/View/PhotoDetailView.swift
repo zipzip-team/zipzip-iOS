@@ -49,7 +49,10 @@ struct PhotoDetailView: View {
 
     let photo: Photo
     let deletionContext: PhotoDeletionContext
+    private let excludedAlbumIDs: Set<Album.ID>
     private let onDelete: (PhotoDeletionAction) -> Void
+    private let onAddToAlbums: ([String], [ShareDestination]) -> Void
+    private let onMoveToAlbums: ([Int], [ShareDestination]) -> Void
 
     @State private var isEditingInfo = false
     @State private var showShareSheet = false
@@ -71,11 +74,17 @@ struct PhotoDetailView: View {
     init(
         photo: Photo,
         deletionContext: PhotoDeletionContext = .gallery,
-        onDelete: @escaping (PhotoDeletionAction) -> Void = { _ in }
+        excludedAlbumIDs: Set<Album.ID> = [],
+        onDelete: @escaping (PhotoDeletionAction) -> Void = { _ in },
+        onAddToAlbums: @escaping ([String], [ShareDestination]) -> Void = { _, _ in },
+        onMoveToAlbums: @escaping ([Int], [ShareDestination]) -> Void = { _, _ in }
     ) {
         self.photo = photo
         self.deletionContext = deletionContext
+        self.excludedAlbumIDs = excludedAlbumIDs
         self.onDelete = onDelete
+        self.onAddToAlbums = onAddToAlbums
+        self.onMoveToAlbums = onMoveToAlbums
     }
 
     var body: some View {
@@ -171,7 +180,24 @@ struct PhotoDetailView: View {
                 albums: Album.samples,
                 sharedAlbums: Album.sharedSamples,
                 shareAlbums: ShareAlbum.samples,
-                onDismiss: { dismiss() }
+                onDismiss: { dismiss() },
+                excludedAlbumIDs: excludedAlbumIDs,
+                onComplete: { destinations in
+                    guard !photo.localIdentifier.isEmpty else {
+                        return
+                    }
+
+                    switch deletionContext {
+                    case .album:
+                        guard let albumPhotoID = photo.albumPhotoID else {
+                            return
+                        }
+                        onMoveToAlbums([albumPhotoID], destinations)
+                    case .gallery:
+                        onAddToAlbums([photo.localIdentifier], destinations)
+                    }
+                },
+                loadsAlbumsFromDatabase: true
             )
         }
         .bottomSheetAlert(
@@ -226,7 +252,11 @@ struct PhotoDetailView: View {
     private var actionBar: some View {
         ActionBar(items: [
             .init(icon: isFavorite ? .starFilled : .starStroke, title: "즐겨찾기") { isFavorite.toggle() },
-            .init(icon: .moveToAlbum, title: "집으로") { showShareSheet = true },
+            .init(
+                icon: .moveToAlbum,
+                title: "집으로",
+                isDisabled: photo.localIdentifier.isEmpty
+            ) { showShareSheet = true },
             .init(icon: .metadata, title: "정보 수정") {
                 setInfoEditing(true)
             },
