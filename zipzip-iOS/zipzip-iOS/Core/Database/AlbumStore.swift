@@ -12,7 +12,7 @@ nonisolated struct AlbumStore {
     func fetchAlbums() async throws -> [StoredAlbum] {
         try await database.read { db in
             let records = try AlbumRecord
-                .order { ($0.createdAt.desc(), $0.id.desc()) }
+                .order { ($0.isFavorite.desc(), $0.createdAt.desc(), $0.id.desc()) }
                 .fetchAll(db)
 
             return try records.map { record in
@@ -31,6 +31,7 @@ nonisolated struct AlbumStore {
                     id: record.id,
                     name: record.name,
                     createdAt: record.createdAt,
+                    isFavorite: record.isFavorite,
                     photoCount: photoCount,
                     thumbnailLocalIdentifiers: thumbnailLocalIdentifiers
                 )
@@ -49,6 +50,7 @@ nonisolated struct AlbumStore {
                 id: Int(db.lastInsertedRowID),
                 name: name,
                 createdAt: createdAt,
+                isFavorite: false,
                 photoCount: 0,
                 thumbnailLocalIdentifiers: []
             )
@@ -64,7 +66,7 @@ nonisolated struct AlbumStore {
         try await database.write { db in
             for id in uniqueIDs {
                 try AlbumRecord
-                    .where { $0.id.eq(id) }
+                    .where { $0.id.eq(id) && !$0.isFavorite }
                     .delete()
                     .execute(db)
             }
@@ -168,12 +170,86 @@ nonisolated struct AlbumStore {
             }
         }
     }
+
+    func isPhotoFavorite(localIdentifier: String) async throws -> Bool {
+        guard !localIdentifier.isEmpty else {
+            return false
+        }
+
+        return try await database.read { db in
+            guard let favoriteAlbumID = try Self.favoriteAlbumID(db),
+                  let photoID = try Self.photoID(forLocalIdentifier: localIdentifier, db)
+            else {
+                return false
+            }
+
+            let count = try AlbumPhotoRecord
+                .where { $0.albumID.eq(favoriteAlbumID) && $0.photoID.eq(photoID) }
+                .fetchCount(db)
+            return count > 0
+        }
+    }
+
+    func setPhotoFavorite(
+        localIdentifier: String,
+        isFavorite: Bool,
+        addedAt: Date = .now
+    ) async throws {
+        guard !localIdentifier.isEmpty else {
+            return
+        }
+
+        try await database.write { db in
+            guard let favoriteAlbumID = try Self.favoriteAlbumID(db),
+                  let photoID = try Self.photoID(forLocalIdentifier: localIdentifier, db)
+            else {
+                return
+            }
+
+            let existingCount = try AlbumPhotoRecord
+                .where { $0.albumID.eq(favoriteAlbumID) && $0.photoID.eq(photoID) }
+                .fetchCount(db)
+
+            if isFavorite {
+                guard existingCount == 0 else {
+                    return
+                }
+                try AlbumPhotoRecord.insert {
+                    ($0.albumID, $0.photoID, $0.addedAt)
+                }
+                values: {
+                    (favoriteAlbumID, photoID, addedAt)
+                }
+                .execute(db)
+            } else {
+                try AlbumPhotoRecord
+                    .where { $0.albumID.eq(favoriteAlbumID) && $0.photoID.eq(photoID) }
+                    .delete()
+                    .execute(db)
+            }
+        }
+    }
+
+    private static func favoriteAlbumID(_ db: Database) throws -> Int? {
+        try AlbumRecord
+            .where { $0.isFavorite }
+            .select(\.id)
+            .fetchOne(db)
+    }
+
+    private static func photoID(forLocalIdentifier localIdentifier: String, _ db: Database) throws -> Int? {
+        try PhotoRecord
+            .where { $0.localIdentifier.eq(localIdentifier) }
+            .select(\.id)
+            .fetchOne(db)
+    }
 }
 
 nonisolated struct StoredAlbum {
     let id: Int
     let name: String
     let createdAt: Date
+    let isFavorite: Bool
     let photoCount: Int
     let thumbnailLocalIdentifiers: [String]
 }

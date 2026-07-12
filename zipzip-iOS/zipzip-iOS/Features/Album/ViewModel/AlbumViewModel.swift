@@ -29,6 +29,7 @@ final class AlbumViewModel {
     @ObservationIgnored private let photoSectionsProvider: PhotoSectionsProvider
     @ObservationIgnored private let photoDeletion: PhotoDeletionService
     @ObservationIgnored private let loadsAlbumsFromDatabase: Bool
+    @ObservationIgnored private var favoriteWriteTasks: [String: Task<Void, Never>] = [:]
 
     init(
         albums: [AlbumViewItem]? = nil,
@@ -51,7 +52,9 @@ final class AlbumViewModel {
         guard loadsAlbumsFromDatabase else { return }
 
         guard let storedAlbums = try? await albumStore.fetchAlbums() else { return }
-        albums = storedAlbums.map(AlbumViewItem.init)
+        albums = storedAlbums
+            .map(AlbumViewItem.init)
+            .filter { !$0.isFavorite || $0.hasPhotos }
     }
 
     func enterSelectionMode() {
@@ -91,7 +94,8 @@ final class AlbumViewModel {
         guard let storedAlbum = try? await albumStore.createAlbum(name: trimmedName) else { return nil }
         let album = AlbumViewItem(storedAlbum: storedAlbum)
 
-        albums.insert(album, at: 0)
+        let insertIndex = albums.first?.isFavorite == true ? 1 : 0
+        albums.insert(album, at: insertIndex)
         isCreateAlbumSheetPresented = false
         return album
     }
@@ -116,6 +120,10 @@ final class AlbumViewModel {
     }
 
     func toggleSelection(for album: AlbumViewItem) {
+        guard !album.isFavorite else {
+            return
+        }
+
         if let index = selectedAlbumIDs.firstIndex(of: album.id) {
             selectedAlbumIDs.remove(at: index)
         } else {
@@ -256,13 +264,35 @@ final class AlbumViewModel {
     }
 
     var shareDestinations: [Album] {
-        albums.map {
-            Album(
-                id: $0.id,
-                name: $0.name,
-                count: $0.count,
-                thumbnailLocalIdentifiers: $0.thumbnailLocalIdentifiers
+        albums
+            .filter { !$0.isFavorite }
+            .map {
+                Album(
+                    id: $0.id,
+                    name: $0.name,
+                    count: $0.count,
+                    thumbnailLocalIdentifiers: $0.thumbnailLocalIdentifiers
+                )
+            }
+    }
+
+    func isPhotoFavorited(localIdentifier: String) async -> Bool {
+        (try? await albumStore.isPhotoFavorite(localIdentifier: localIdentifier)) ?? false
+    }
+
+    /// 같은 사진에 대한 즐겨찾기 쓰기를 제출 순서대로 직렬화한다.
+    /// 연타 시 마지막 탭 의도가 DB 최종 상태와 일치하도록 보장한다.
+    func setPhotoFavorite(localIdentifier: String, isFavorite: Bool) {
+        let previous = favoriteWriteTasks[localIdentifier]
+        favoriteWriteTasks[localIdentifier] = Task { [weak self] in
+            await previous?.value
+            guard let self else { return }
+
+            try? await albumStore.setPhotoFavorite(
+                localIdentifier: localIdentifier,
+                isFavorite: isFavorite
             )
+            await loadAlbums()
         }
     }
 
@@ -342,7 +372,8 @@ final class AlbumViewModel {
         ids: [AlbumViewItem.ID],
         beforeLocalStateUpdate: () -> Void = {}
     ) async -> Bool {
-        let uniqueIDs = Array(Set(ids))
+        let favoriteIDs = Set(albums.filter(\.isFavorite).map(\.id))
+        let uniqueIDs = Array(Set(ids).subtracting(favoriteIDs))
         guard !uniqueIDs.isEmpty else {
             return false
         }
@@ -387,6 +418,7 @@ struct AlbumViewItem: Identifiable, Equatable {
     var count: Int
     var photoIDs: [UUID]
     var thumbnailLocalIdentifiers: [String] = []
+    var isFavorite = false
 
     var detailItem: AlbumDetailItem {
         AlbumDetailItem(
@@ -434,7 +466,8 @@ extension AlbumViewItem {
             createdAt: storedAlbum.createdAt,
             count: storedAlbum.photoCount,
             photoIDs: [],
-            thumbnailLocalIdentifiers: storedAlbum.thumbnailLocalIdentifiers
+            thumbnailLocalIdentifiers: storedAlbum.thumbnailLocalIdentifiers,
+            isFavorite: storedAlbum.isFavorite
         )
     }
 }

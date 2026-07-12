@@ -13,4 +13,5 @@ struct AlbumRecord {
     let id: Int
     var name: String
     @Column("created_at", as: Date.UnixTimeRepresentation.self) var createdAt: Date
+    @Column("is_favorite") var isFavorite = false
 }

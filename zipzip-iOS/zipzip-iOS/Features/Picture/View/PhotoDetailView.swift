@@ -54,11 +54,14 @@ struct PhotoDetailView: View {
     private let onDelete: (PhotoDeletionAction) async -> Bool
     private let onAddToAlbums: ([String], [ShareDestination]) -> Void
     private let onMoveToAlbums: ([Int], [ShareDestination]) -> Void
+    private let loadIsFavorite: (String) async -> Bool
+    private let onToggleFavorite: (String, Bool) -> Void
 
     @State private var isEditingInfo = false
     @State private var showShareSheet = false
     @State private var showDeleteAlert = false
     @State private var isFavorite = false
+    @State private var didToggleFavorite = false
     @State private var imageViewModel = PhotoDetailImageViewModel()
     @State private var photoScale: CGFloat = 1
     @State private var photoOffset: CGSize = .zero
@@ -79,7 +82,9 @@ struct PhotoDetailView: View {
         excludedAlbumIDs: Set<Album.ID> = [],
         onDelete: @escaping (PhotoDeletionAction) async -> Bool = { _ in true },
         onAddToAlbums: @escaping ([String], [ShareDestination]) -> Void = { _, _ in },
-        onMoveToAlbums: @escaping ([Int], [ShareDestination]) -> Void = { _, _ in }
+        onMoveToAlbums: @escaping ([Int], [ShareDestination]) -> Void = { _, _ in },
+        loadIsFavorite: @escaping (String) async -> Bool = { _ in false },
+        onToggleFavorite: @escaping (String, Bool) -> Void = { _, _ in }
     ) {
         self.photo = photo
         self.albums = albums
@@ -88,6 +93,8 @@ struct PhotoDetailView: View {
         self.onDelete = onDelete
         self.onAddToAlbums = onAddToAlbums
         self.onMoveToAlbums = onMoveToAlbums
+        self.loadIsFavorite = loadIsFavorite
+        self.onToggleFavorite = onToggleFavorite
     }
 
     var body: some View {
@@ -180,6 +187,13 @@ struct PhotoDetailView: View {
         .task(id: photo.localIdentifier) {
             await imageViewModel.loadImage(for: photo.localIdentifier)
         }
+        .task(id: photo.localIdentifier) {
+            guard !photo.localIdentifier.isEmpty else { return }
+            didToggleFavorite = false
+            let loaded = await loadIsFavorite(photo.localIdentifier)
+            guard !didToggleFavorite else { return }
+            isFavorite = loaded
+        }
         .bottomSheet(isPresented: $showShareSheet, detents: [.full]) { dismiss in
             ShareSheet(
                 albums: albums,
@@ -256,7 +270,11 @@ struct PhotoDetailView: View {
 
     private var actionBar: some View {
         ActionBar(items: [
-            .init(icon: isFavorite ? .starFilled : .starStroke, title: "즐겨찾기") { isFavorite.toggle() },
+            .init(
+                icon: isFavorite ? .starFilled : .starStroke,
+                title: "즐겨찾기",
+                isDisabled: photo.localIdentifier.isEmpty
+            ) { toggleFavorite() },
             .init(
                 icon: .moveToAlbum,
                 title: "집으로",
@@ -268,6 +286,15 @@ struct PhotoDetailView: View {
             .init(icon: .delete, title: "삭제") { showDeleteAlert = true }
         ])
         .padding(.bottom, 16)
+    }
+
+    private func toggleFavorite() {
+        guard !photo.localIdentifier.isEmpty else { return }
+
+        didToggleFavorite = true
+        let next = !isFavorite
+        isFavorite = next
+        onToggleFavorite(photo.localIdentifier, next)
     }
 
     private func setInfoEditing(_ isEditing: Bool) {
