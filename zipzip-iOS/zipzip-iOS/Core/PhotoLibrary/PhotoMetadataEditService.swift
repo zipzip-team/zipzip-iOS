@@ -44,16 +44,17 @@ nonisolated struct PhotoMetadataEditService {
     ) async throws {
         guard !localIdentifiers.isEmpty else { return }
 
-        let coordinate = try await resolveCoordinate(name: name, latitude: latitude, longitude: longitude)
+        guard let coordinate = try await resolveCoordinate(name: name, latitude: latitude, longitude: longitude) else {
+            logger.error("location edit: coordinate unresolved, skipping \(name)")
+            return
+        }
 
-        if let coordinate {
-            let location = CLLocation(latitude: coordinate.latitude, longitude: coordinate.longitude)
-            let assets = Self.fetchAssets(localIdentifiers)
-            if !assets.isEmpty {
-                try await PHPhotoLibrary.shared().performChanges {
-                    for asset in assets {
-                        PHAssetChangeRequest(for: asset).location = location
-                    }
+        let location = CLLocation(latitude: coordinate.latitude, longitude: coordinate.longitude)
+        let assets = Self.fetchAssets(localIdentifiers)
+        if !assets.isEmpty {
+            try await PHPhotoLibrary.shared().performChanges {
+                for asset in assets {
+                    PHAssetChangeRequest(for: asset).location = location
                 }
             }
         }
@@ -61,24 +62,29 @@ nonisolated struct PhotoMetadataEditService {
         try await database.write { db in
             let placeID = try Self.findOrCreatePlace(
                 name: name,
-                latitude: coordinate?.latitude ?? 0,
-                longitude: coordinate?.longitude ?? 0,
+                latitude: coordinate.latitude,
+                longitude: coordinate.longitude,
                 db: db
             )
             try PhotoRecord
-                .update { $0.placeID = #bind(placeID) }
+                .update {
+                    $0.placeID = #bind(placeID)
+                    $0.latitude = #bind(coordinate.latitude)
+                    $0.longitude = #bind(coordinate.longitude)
+                }
                 .where { $0.localIdentifier.in(localIdentifiers) }
                 .execute(db)
         }
     }
 
+    @discardableResult
     func updateDevice(
         localIdentifiers: [String],
         deviceID: Int,
         make: String?,
         model: String?
-    ) async throws {
-        guard !localIdentifiers.isEmpty else { return }
+    ) async throws -> [String: String] {
+        guard !localIdentifiers.isEmpty else { return [:] }
 
         var replacements: [AssetReplacement] = []
         for localIdentifier in localIdentifiers {
@@ -98,7 +104,7 @@ nonisolated struct PhotoMetadataEditService {
                 uti: uti
             ))
         }
-        guard !replacements.isEmpty else { return }
+        guard !replacements.isEmpty else { return [:] }
 
         try await PHPhotoLibrary.shared().performChanges {
             for replacement in replacements {
@@ -114,7 +120,8 @@ nonisolated struct PhotoMetadataEditService {
             PHAssetChangeRequest.deleteAssets(replacements.map(\.asset) as NSArray)
         }
 
-        try await database.write { db in
+        return try await database.write { db in
+            var mapping: [String: String] = [:]
             for replacement in replacements {
                 guard let newLocalIdentifier = replacement.placeholder.identifier else { continue }
                 try PhotoRecord
@@ -124,7 +131,9 @@ nonisolated struct PhotoMetadataEditService {
                     }
                     .where { $0.localIdentifier.eq(replacement.localIdentifier) }
                     .execute(db)
+                mapping[replacement.localIdentifier] = newLocalIdentifier
             }
+            return mapping
         }
     }
 
@@ -176,9 +185,7 @@ nonisolated struct PhotoMetadataEditService {
         return await withCheckedContinuation { (continuation: CheckedContinuation<(Data, String)?, Never>) in
             let box = ResumeOnceBox()
             PHImageManager.default()
-                .requestImageDataAndOrientation(for: asset, options: options) { data, uti, _, info in
-                    let isDegraded = (info?[PHImageResultIsDegradedKey] as? Bool) ?? false
-                    if isDegraded { return }
+                .requestImageDataAndOrientation(for: asset, options: options) { data, uti, _, _ in
                     box.run {
                         if let data, let uti {
                             continuation.resume(returning: (data, uti))
