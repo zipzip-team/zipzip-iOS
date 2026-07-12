@@ -13,6 +13,7 @@ struct RootTabView: View {
     @State private var loaded: Set<NavbarTab> = [.main]
     @State private var pictureViewModel = PictureViewModel()
     @State private var albumViewModel = AlbumViewModel()
+    @State private var shareViewModel = ShareViewModel()
     @State private var showShareSheet = false
 
     var body: some View {
@@ -25,6 +26,9 @@ struct RootTabView: View {
                 loaded.insert(newValue)
                 if newValue != .album {
                     albumViewModel.exitSelectionMode()
+                }
+                if newValue != .share {
+                    shareViewModel.resetTransientUI()
                 }
             }
             .bottomSheet(isPresented: $showShareSheet, detents: [.full]) { dismiss in
@@ -58,7 +62,14 @@ struct RootTabView: View {
     }
 
     private var showsNavbar: Bool {
-        selection != .album || (!albumViewModel.isSelectionMode && !albumViewModel.isDetailPresented)
+        switch selection {
+        case .album:
+            !albumViewModel.isSelectionMode && !albumViewModel.isDetailPresented
+        case .share:
+            !shareViewModel.hidesRootNavbar
+        default:
+            true
+        }
     }
 
     private var content: some View {
@@ -79,7 +90,7 @@ struct RootTabView: View {
         case .main: MainView()
         case .picture: PictureView(viewModel: pictureViewModel)
         case .album: AlbumView(viewModel: albumViewModel)
-        case .share: ShareView()
+        case .share: ShareView(viewModel: shareViewModel)
         }
     }
 }
