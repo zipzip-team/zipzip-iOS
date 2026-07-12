@@ -195,38 +195,23 @@ private struct AlbumCollectionEmptyView: View {
     var body: some View {
         VStack(spacing: 32) {
             VStack(spacing: 10) {
-                illustration
+                Image(.albumCollectionEmptyArtwork)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 96, height: 86)
+                    .accessibilityHidden(true)
 
-                Text("집을 만들어 사진을 보관해보세요!")
-                    .font(.t2_md)
-                    .foregroundStyle(.grey1000)
-                    .multilineTextAlignment(.center)
+                Image(.albumCollectionEmptyDescription)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 257, height: 20)
+                    .accessibilityLabel("집을 만들어 사진을 보관해보세요!")
             }
 
             CommonButton(title: "시작하기", action: onStartTap)
                 .frame(width: 171)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-    }
-
-    private var illustration: some View {
-        ZStack {
-            Image(.albumFolder)
-                .resizable()
-                .scaledToFit()
-                .frame(width: 62, height: 56)
-                .offset(x: -12, y: 12)
-
-            Image(systemName: "hammer.fill")
-                .resizable()
-                .scaledToFit()
-                .foregroundStyle(.orange500)
-                .frame(width: 44, height: 44)
-                .rotationEffect(.degrees(-12))
-                .offset(x: 19, y: -12)
-        }
-        .frame(width: 96, height: 86)
-        .accessibilityHidden(true)
     }
 }
 
@@ -432,12 +417,20 @@ struct AlbumHeaderActionButton: View {
 }
 
 #Preview("Album View", traits: .fixedLayout(width: 390, height: 844)) {
-    AlbumViewPreview()
+    AlbumViewPreview(albums: AlbumViewItem.samples)
+}
+
+#Preview("Album View Empty", traits: .fixedLayout(width: 390, height: 844)) {
+    AlbumViewPreview(albums: [])
 }
 
 private struct AlbumViewPreview: View {
     @State private var selection: NavbarTab = .album
-    @State private var viewModel = AlbumViewModel()
+    @State private var viewModel: AlbumViewModel
+
+    init(albums: [AlbumViewItem]) {
+        _viewModel = State(initialValue: AlbumViewModel(albums: albums))
+    }
 
     var body: some View {
         AlbumView(viewModel: viewModel)
