@@ -11,6 +11,7 @@ struct Album: Identifiable, Hashable {
     let id: Int
     let name: String
     let count: Int
+    var thumbnailLocalIdentifiers: [String] = []
 }
 
 extension Album {
