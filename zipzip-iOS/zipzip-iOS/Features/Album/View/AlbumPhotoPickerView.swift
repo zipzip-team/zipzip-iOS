@@ -34,12 +34,12 @@ struct AlbumPhotoPickerView: View {
         }
         .overlay(alignment: .topLeading) {
             cancelButton
-                .padding(.top, 19)
+                .padding(.top, 14)
                 .padding(.leading, 16)
         }
         .overlay(alignment: .topTrailing) {
             completionButton
-                .padding(.top, 19)
+                .padding(.top, 14)
                 .padding(.trailing, 16)
         }
         .navigationBarBackButtonHidden(true)

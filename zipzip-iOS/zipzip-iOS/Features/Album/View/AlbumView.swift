@@ -49,8 +49,7 @@ struct AlbumView: View {
 
             ScrollView(showsIndicators: false) {
                 AlbumTitleHeader(isVisible: !viewModel.isSelectionMode)
-                    .padding(.top, 15)
-                    .frame(height: 67, alignment: .bottom)
+                    .frame(height: 54, alignment: .bottom)
 
                 if !viewModel.albums.isEmpty {
                     LazyVGrid(
@@ -87,7 +86,7 @@ struct AlbumView: View {
                 onSelectionTap: viewModel.enterSelectionMode,
                 onAddTap: viewModel.presentCreateAlbumSheet
             )
-            .padding(.top, 19)
+            .padding(.top, 14)
             .padding(.trailing, 16)
             .opacity(viewModel.isSelectionMode ? 0 : 1)
             .allowsHitTesting(!viewModel.isSelectionMode)
@@ -95,7 +94,7 @@ struct AlbumView: View {
         }
         .overlay(alignment: .topLeading) {
             RoundedTextButton(title: "취소", style: .cancel, action: viewModel.exitSelectionMode)
-                .padding(.top, 19)
+                .padding(.top, 14)
                 .padding(.leading, 16)
                 .opacity(viewModel.isSelectionMode ? 1 : 0)
                 .allowsHitTesting(viewModel.isSelectionMode)
