@@ -42,12 +42,12 @@ final class AlbumDetailViewModel {
     private var shouldPresentAlbumDeleteAlertAfterManagementDismissal = false
 
     private let actions: AlbumDetailActions
-    private let onEditPhotoInfo: (UUID) -> Void
+    private let onEditPhotoInfo: ([UUID]) -> Void
 
     init(
         initialSelectionMode: Bool = false,
         actions: AlbumDetailActions = .init(),
-        onEditPhotoInfo: @escaping (UUID) -> Void = { _ in }
+        onEditPhotoInfo: @escaping ([UUID]) -> Void = { _ in }
     ) {
         self.isSelectionMode = initialSelectionMode
         self.actions = actions
@@ -151,11 +151,11 @@ final class AlbumDetailViewModel {
     }
 
     func editSelectedPhotoInfo() {
-        guard let firstPhotoID = selectedPhotoIDs.first else {
+        guard !selectedPhotoIDs.isEmpty else {
             return
         }
 
-        onEditPhotoInfo(firstPhotoID)
+        onEditPhotoInfo(selectedPhotoIDs)
     }
 
     func presentPhotoDeleteAlert() {
