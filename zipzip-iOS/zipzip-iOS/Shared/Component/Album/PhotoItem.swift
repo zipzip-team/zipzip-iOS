@@ -5,7 +5,6 @@
 //  Created by 성환 on 7/8/26.
 //
 
-import Photos
 import SwiftUI
 import UIKit
 
@@ -37,39 +36,10 @@ struct PhotoItem: View {
 }
 
 struct PhotoKitPhotoItem: View {
-    let localIdentifier: String
-
-    @State private var image: UIImage?
+    let image: UIImage?
 
     var body: some View {
         PhotoItem(image: image.map(Image.init(uiImage:)))
-            .task(id: localIdentifier) {
-                image = await requestImage()
-            }
-    }
-
-    private func requestImage() async -> UIImage? {
-        let result = PHAsset.fetchAssets(
-            withLocalIdentifiers: [localIdentifier],
-            options: nil
-        )
-        guard let asset = result.firstObject else { return nil }
-
-        let options = PHImageRequestOptions()
-        options.deliveryMode = .highQualityFormat
-        options.resizeMode = .fast
-        options.isNetworkAccessAllowed = true
-
-        return await withCheckedContinuation { continuation in
-            PHCachingImageManager.default().requestImage(
-                for: asset,
-                targetSize: CGSize(width: 200, height: 160),
-                contentMode: .aspectFill,
-                options: options
-            ) { image, _ in
-                continuation.resume(returning: image)
-            }
-        }
     }
 }
 
