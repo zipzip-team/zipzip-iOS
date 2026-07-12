@@ -11,6 +11,8 @@ struct RootTabView: View {
     @Environment(Router.self) private var router
     @State private var selection: NavbarTab = .main
     @State private var pictureViewModel = PictureViewModel()
+    @State private var albumViewModel = AlbumViewModel()
+    @State private var shareViewModel = ShareViewModel()
     @State private var showShareSheet = false
 
     let albumViewModel: AlbumViewModel
@@ -25,6 +27,9 @@ struct RootTabView: View {
                 if newValue != .album {
                     albumViewModel.resetForTabChange()
                     router.removeAlbumRoutes()
+                }
+                if newValue != .share {
+                    shareViewModel.resetTransientUI()
                 }
             }
             .bottomSheet(isPresented: $showShareSheet, detents: [.full]) { dismiss in
@@ -83,7 +88,14 @@ struct RootTabView: View {
     }
 
     private var showsNavbar: Bool {
-        selection != .album || (!albumViewModel.isSelectionMode && !router.path.contains(where: \.isAlbumRoute))
+        switch selection {
+        case .album:
+            !albumViewModel.isSelectionMode && !albumViewModel.isDetailPresented
+        case .share:
+            !shareViewModel.hidesRootNavbar
+        default:
+            true
+        }
     }
 
     private var content: some View {
@@ -100,7 +112,7 @@ struct RootTabView: View {
                 onOpenPhoto: { router.push(.photoDetail($0)) }
             )
         case .album: AlbumView(viewModel: albumViewModel)
-        case .share: ShareView()
+        case .share: ShareView(viewModel: shareViewModel)
         }
     }
 }

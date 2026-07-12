@@ -17,7 +17,7 @@ struct ShareAlbumCard: View {
 
     private var dateText: String {
         let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy.M.d"
+        formatter.dateFormat = "yyyy. M. d"
         return formatter.string(from: date)
     }
 
