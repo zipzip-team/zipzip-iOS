@@ -9,6 +9,11 @@ import SwiftUI
 
 struct SplashView: View {
     @Environment(Router.self) private var router
+    private let continuesOnboarding: Bool
+
+    init(continuesOnboarding: Bool = true) {
+        self.continuesOnboarding = continuesOnboarding
+    }
 
     var body: some View {
         OnboardingContainerView(
@@ -27,6 +32,7 @@ struct SplashView: View {
             }
         }
         .task {
+            guard continuesOnboarding else { return }
             try? await Task.sleep(for: .seconds(3))
             router.push(.photoPermission)
         }

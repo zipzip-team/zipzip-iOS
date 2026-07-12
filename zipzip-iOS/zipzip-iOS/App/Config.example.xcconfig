@@ -1,0 +1,2 @@
+// Copy this file to Config.xcconfig and replace the value with the API host.
+BASE_URL = api.example.com

@@ -7,7 +7,6 @@ import Foundation
 import Observation
 
 enum ShareRoute: Hashable {
-    case login
     case group(ShareAlbum.ID)
     case album(groupID: ShareAlbum.ID, albumID: Album.ID)
     case importContent(ShareAlbum.ID)
@@ -75,14 +74,6 @@ final class ShareViewModel {
 
     func showGroup(_ group: ShareAlbum) {
         navigationPath.append(.group(group.id))
-    }
-
-    func showLogin() {
-        navigationPath.append(.login)
-    }
-
-    func completeLogin() {
-        navigationPath.removeAll()
     }
 
     func showAlbum(_ album: Album, in groupID: ShareAlbum.ID) {

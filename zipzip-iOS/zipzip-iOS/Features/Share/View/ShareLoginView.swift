@@ -3,30 +3,43 @@
 //  zipzip-iOS
 //
 
+import AuthenticationServices
 import SwiftUI
 
 struct ShareLoginView: View {
-    let onBack: () -> Void
-    let onAppleLogin: () -> Void
+    @Environment(AuthenticationState.self) private var authenticationState
 
     var body: some View {
+        @Bindable var authenticationState = authenticationState
+
         ZStack(alignment: .top) {
             Color.orange30
 
             ShareLoginScene()
                 .frame(width: 390, height: 520)
 
-            loginContent
+            loginContent(displayName: $authenticationState.displayNameDraft)
                 .padding(.top, 560)
 
             RoundedIconButton(items: [
                 .init(id: "share-login-back", icon: .iconChevronLeft, accessibilityLabel: "뒤로가기") {
-                    onBack()
+                    authenticationState.cancelLogin()
                 }
             ])
+            .disabled(authenticationState.isAuthenticating)
             .padding(.top, 66)
             .padding(.leading, 16)
             .frame(maxWidth: .infinity, alignment: .leading)
+
+            if authenticationState.isAuthenticating {
+                Color.black.opacity(0.2)
+                    .ignoresSafeArea()
+
+                ProgressView()
+                    .tint(.white)
+                    .controlSize(.large)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .ignoresSafeArea()
@@ -34,34 +47,48 @@ struct ShareLoginView: View {
         .toolbarVisibility(.hidden, for: .navigationBar)
     }
 
-    private var loginContent: some View {
-        VStack(spacing: 26) {
+    private func loginContent(displayName: Binding<String>) -> some View {
+        VStack(spacing: 20) {
             Image(.shareLoginSocialText)
                 .resizable()
                 .scaledToFit()
                 .frame(width: 162, height: 53)
                 .accessibilityLabel("소셜 계정으로 간편하게 로그인하기")
 
-            Button(action: onAppleLogin) {
-                ZStack {
-                    Text("Apple로 계속하기")
-                        .font(.t3_md)
-                        .foregroundStyle(.white00)
+            if authenticationState.requiresDisplayName {
+                VStack(spacing: 6) {
+                    TextInput("이름 입력", text: displayName)
+                        .frame(width: 320)
 
-                    Image(.shareLoginAppleLogo)
-                        .resizable()
-                        .scaledToFit()
-                        .frame(width: 44, height: 44)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.leading, 7)
-                        .accessibilityHidden(true)
+                    Text("이름은 1자 이상 50자 이하로 입력해 주세요.")
+                        .font(.b2_md)
+                        .foregroundStyle(
+                            authenticationState.isDisplayNameValid ? .grey600 : .orange700
+                        )
+                        .frame(width: 320, alignment: .leading)
                 }
-                .frame(width: 320, height: 44)
-                .background(.black, in: .rect(cornerRadius: 4))
-                .contentShape(.rect(cornerRadius: 4))
             }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Apple로 계속하기")
+
+            SignInWithAppleButton(
+                .continue,
+                onRequest: authenticationState.prepareAppleRequest,
+                onCompletion: authenticationState.handleAppleCompletion
+            )
+            .signInWithAppleButtonStyle(.black)
+            .frame(width: 320, height: 44)
+            .clipShape(.rect(cornerRadius: 4))
+            .disabled(
+                authenticationState.isAuthenticating
+                    || (authenticationState.requiresDisplayName && !authenticationState.isDisplayNameValid)
+            )
+
+            if let errorMessage = authenticationState.loginErrorMessage {
+                Text(errorMessage)
+                    .font(.b2_md)
+                    .foregroundStyle(.orange700)
+                    .multilineTextAlignment(.center)
+                    .frame(width: 320)
+            }
         }
         .frame(width: 358)
     }
@@ -93,5 +120,6 @@ private struct ShareLoginScene: View {
 }
 
 #Preview("Share Login", traits: .fixedLayout(width: 390, height: 844)) {
-    ShareLoginView(onBack: {}, onAppleLogin: {})
+    ShareLoginView()
+        .environment(AuthenticationState.preview())
 }

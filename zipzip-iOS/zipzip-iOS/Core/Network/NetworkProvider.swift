@@ -27,44 +27,47 @@ final class DefaultNetworkProvider: NetworkProvider {
     func request<T: Decodable>(_ endpoint: APIEndpoint) async throws -> T {
         let urlRequest = try endpoint.asURLRequest()
 
-        do {
-            return try await session.request(urlRequest, interceptor: interceptor)
-                .serializingDecodable(T.self)
-                .value
-        } catch let afError as AFError {
-            throw mapError(afError)
-        } catch {
-            throw NetworkError.unknown(statusCode: nil)
+        let response = await session.request(urlRequest, interceptor: interceptor)
+            .validate(statusCode: 200 ..< 300)
+            .serializingDecodable(T.self)
+            .response
+
+        switch response.result {
+        case let .success(value):
+            return value
+        case let .failure(error):
+            throw mapError(error, statusCode: response.response?.statusCode, data: response.data)
         }
     }
 
-    private func mapError(_ afError: AFError) -> NetworkError {
-        if case .responseSerializationFailed = afError {
-            return .decodingError
+    private func mapError(_ afError: AFError, statusCode: Int?, data: Data?) -> NetworkError {
+        if case let .sessionTaskFailed(error as URLError) = afError {
+            let transientCodes: Set<URLError.Code> = [
+                .cannotConnectToHost,
+                .cannotFindHost,
+                .dnsLookupFailed,
+                .networkConnectionLost,
+                .notConnectedToInternet,
+                .timedOut
+            ]
+            if transientCodes.contains(error.code) {
+                return .noResponse
+            }
         }
 
-        if case let .sessionTaskFailed(error as URLError) = afError,
-           error.code == .notConnectedToInternet || error.code == .networkConnectionLost {
-            return .noResponse
-        }
-
-        guard let statusCode = afError.responseCode else {
+        guard let statusCode = statusCode ?? afError.responseCode else {
+            if case .responseSerializationFailed = afError {
+                return .decodingError
+            }
             return .unknown(statusCode: nil)
         }
 
-        switch statusCode {
-        case 400:
-            return .badRequest
-        case 401:
-            return .unauthorized
-        case 403:
-            return .forbidden
-        case 404:
-            return .notFound
-        case 500 ... 599:
-            return .serverError
-        default:
-            return .unknown(statusCode: statusCode)
-        }
+        let apiError = data.flatMap { try? JSONDecoder().decode(APIErrorResponse.self, from: $0) }
+        return .server(
+            statusCode: statusCode,
+            code: apiError?.code,
+            message: apiError?.message,
+            body: data
+        )
     }
 }

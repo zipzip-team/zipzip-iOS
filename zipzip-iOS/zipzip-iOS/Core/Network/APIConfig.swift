@@ -10,9 +10,10 @@ import Foundation
 enum APIConfig {
     static let baseURL: String = {
         guard let host = Bundle.main.object(forInfoDictionaryKey: "BASE_URL") as? String,
-              !host.isEmpty
+              !host.isEmpty,
+              !host.contains("$(")
         else {
-            fatalError("BASE_URL이 설정되지 않았습니다. Config.xcconfig를 확인하세요.")
+            preconditionFailure("BASE_URL 빌드 설정을 확인해 주세요.")
         }
         return "https://\(host)"
     }()

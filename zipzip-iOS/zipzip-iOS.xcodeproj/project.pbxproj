@@ -11,7 +11,18 @@
 		CA881BC72FF418B200AA3125 /* Alamofire in Frameworks */ = {isa = PBXBuildFile; productRef = CA881BC62FF418B200AA3125 /* Alamofire */; };
 /* End PBXBuildFile section */
 
+/* Begin PBXContainerItemProxy section */
+		A11900013000000000000001 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = CA881A982FF3FF9800AA3125 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = CA881A9F2FF3FF9800AA3125;
+			remoteInfo = "zipzip-iOS";
+		};
+/* End PBXContainerItemProxy section */
+
 /* Begin PBXFileReference section */
+		A11000013000000000000001 /* zipzip-iOSTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "zipzip-iOSTests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
 		CA881AA02FF3FF9800AA3125 /* zipzip-iOS.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "zipzip-iOS.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -29,6 +40,11 @@
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
+		A11100013000000000000001 /* zipzip-iOSTests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = "zipzip-iOSTests";
+			sourceTree = "<group>";
+		};
 		CA881AA22FF3FF9800AA3125 /* zipzip-iOS */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
@@ -40,6 +56,13 @@
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
+		A11200013000000000000001 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		CA881A9D2FF3FF9800AA3125 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
@@ -56,6 +79,7 @@
 			isa = PBXGroup;
 			children = (
 				CA881AA22FF3FF9800AA3125 /* zipzip-iOS */,
+				A11100013000000000000001 /* zipzip-iOSTests */,
 				CA881AA12FF3FF9800AA3125 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -64,6 +88,7 @@
 			isa = PBXGroup;
 			children = (
 				CA881AA02FF3FF9800AA3125 /* zipzip-iOS.app */,
+				A11000013000000000000001 /* zipzip-iOSTests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -71,10 +96,34 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
+		A11500013000000000000001 /* zipzip-iOSTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A11600013000000000000001 /* Build configuration list for PBXNativeTarget "zipzip-iOSTests" */;
+			buildPhases = (
+				A11400013000000000000001 /* Sources */,
+				A11200013000000000000001 /* Frameworks */,
+				A11300013000000000000001 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				A12000013000000000000001 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				A11100013000000000000001 /* zipzip-iOSTests */,
+			);
+			name = "zipzip-iOSTests";
+			packageProductDependencies = (
+			);
+			productName = "zipzip-iOSTests";
+			productReference = A11000013000000000000001 /* zipzip-iOSTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
 		CA881A9F2FF3FF9800AA3125 /* zipzip-iOS */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = CA881AAD2FF3FF9800AA3125 /* Build configuration list for PBXNativeTarget "zipzip-iOS" */;
 			buildPhases = (
+				A13000013000000000000001 /* Validate API Configuration */,
 				CA881D002FF5000000AA3125 /* SwiftFormat */,
 				CA881A9C2FF3FF9800AA3125 /* Sources */,
 				CA881A9D2FF3FF9800AA3125 /* Frameworks */,
@@ -106,6 +155,10 @@
 				LastSwiftUpdateCheck = 2660;
 				LastUpgradeCheck = 2660;
 				TargetAttributes = {
+					A11500013000000000000001 = {
+						CreatedOnToolsVersion = 26.6;
+						TestTargetID = CA881A9F2FF3FF9800AA3125;
+					};
 					CA881A9F2FF3FF9800AA3125 = {
 						CreatedOnToolsVersion = 26.6;
 					};
@@ -132,11 +185,19 @@
 			projectRoot = "";
 			targets = (
 				CA881A9F2FF3FF9800AA3125 /* zipzip-iOS */,
+				A11500013000000000000001 /* zipzip-iOSTests */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
+		A11300013000000000000001 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		CA881A9E2FF3FF9800AA3125 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -147,6 +208,25 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXShellScriptBuildPhase section */
+		A13000013000000000000001 /* Validate API Configuration */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			name = "Validate API Configuration";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "set -e\ncase \"${BASE_URL:-}\" in\n  \"\"|'$(BASE_URL)')\n    echo \"error: BASE_URL is not configured. Copy App/Config.example.xcconfig to App/Config.xcconfig and set the API host.\"\n    exit 1\n    ;;\nesac\n";
+		};
 		CA881D002FF5000000AA3125 /* SwiftFormat */ = {
 			isa = PBXShellScriptBuildPhase;
 			alwaysOutOfDate = 1;
@@ -169,6 +249,13 @@
 /* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
+		A11400013000000000000001 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		CA881A9C2FF3FF9800AA3125 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -178,7 +265,61 @@
 		};
 /* End PBXSourcesBuildPhase section */
 
+/* Begin PBXTargetDependency section */
+		A12000013000000000000001 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = CA881A9F2FF3FF9800AA3125 /* zipzip-iOS */;
+			targetProxy = A11900013000000000000001 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
 /* Begin XCBuildConfiguration section */
+		A11700013000000000000001 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = app.zipzip.ios.tests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/zipzip-iOS.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/zipzip-iOS";
+			};
+			name = Debug;
+		};
+		A11800013000000000000001 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = app.zipzip.ios.tests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/zipzip-iOS.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/zipzip-iOS";
+			};
+			name = Release;
+		};
 		CA881AAB2FF3FF9800AA3125 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			baseConfigurationReferenceAnchor = CA881AA22FF3FF9800AA3125 /* zipzip-iOS */;
@@ -309,6 +450,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = "zipzip-iOS/App/zipzip-iOS.entitlements";
 				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "iPhone Developer";
 				CODE_SIGN_STYLE = Manual;
 				CURRENT_PROJECT_VERSION = 1;
@@ -350,6 +492,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = "zipzip-iOS/App/zipzip-iOS.entitlements";
 				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "iPhone Developer";
 				CODE_SIGN_STYLE = Manual;
 				CURRENT_PROJECT_VERSION = 1;
@@ -387,6 +530,15 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
+		A11600013000000000000001 /* Build configuration list for PBXNativeTarget "zipzip-iOSTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A11700013000000000000001 /* Debug */,
+				A11800013000000000000001 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 		CA881A9B2FF3FF9800AA3125 /* Build configuration list for PBXProject "zipzip-iOS" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
