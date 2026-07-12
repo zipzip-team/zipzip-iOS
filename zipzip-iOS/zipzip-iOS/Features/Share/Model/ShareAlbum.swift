@@ -7,11 +7,17 @@
 
 import Foundation
 
+enum ShareGroupRole: Hashable {
+    case admin
+    case participant
+}
+
 struct ShareAlbum: Identifiable, Hashable {
     let id: UUID
     var name: String
     let date: Date
     let memberCount: Int
+    let currentUserRole: ShareGroupRole
     var albums: [Album]
 
     init(
@@ -19,12 +25,14 @@ struct ShareAlbum: Identifiable, Hashable {
         name: String,
         date: Date,
         memberCount: Int,
+        currentUserRole: ShareGroupRole = .admin,
         albums: [Album] = []
     ) {
         self.id = id
         self.name = name
         self.date = date
         self.memberCount = memberCount
+        self.currentUserRole = currentUserRole
         self.albums = albums
     }
 }
@@ -42,6 +50,7 @@ extension ShareAlbum {
             name: "알콩달콩",
             date: date(2026, 7, 3),
             memberCount: 1,
+            currentUserRole: .participant,
             albums: Array(Album.sharedSamples.prefix(4))
         ),
         ShareAlbum(

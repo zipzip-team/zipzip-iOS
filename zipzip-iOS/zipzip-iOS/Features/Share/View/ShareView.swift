@@ -109,6 +109,24 @@ struct ShareView: View {
                 onComplete: viewModel.completeAlbumManagement
             )
         }
+        .bottomSheet(
+            isPresented: $viewModel.isShareManagementPresented,
+            detents: [.full],
+            initialDetent: .full,
+            showsDragIndicator: .visible,
+            expandsToLargestDetentOnScroll: false
+        ) { _ in
+            if let group = viewModel.managedShareGroup {
+                ShareGroupManagementSheet(
+                    group: group,
+                    groupName: $viewModel.shareGroupNameDraft,
+                    inviteCode: viewModel.inviteCode,
+                    onClose: viewModel.dismissShareManagement,
+                    onComplete: viewModel.completeShareManagement,
+                    onLeave: viewModel.leaveManagedShareGroup
+                )
+            }
+        }
     }
 
     @ViewBuilder private var rootContent: some View {

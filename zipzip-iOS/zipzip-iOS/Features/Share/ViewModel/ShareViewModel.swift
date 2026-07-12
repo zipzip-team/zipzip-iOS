@@ -35,16 +35,19 @@ final class ShareViewModel {
     var isInviteSheetPresented = false
     var isCommentsPresented = false
     var isAlbumManagementPresented = false
+    var isShareManagementPresented = false
 
     var joinCode = ""
     var groupNameDraft = ""
     let inviteCode = "# 3d2dsd322d32d23"
     var commentDraft = ""
     var albumNameDraft = ""
+    var shareGroupNameDraft = ""
 
     private(set) var pendingJoinGroup: ShareAlbum?
     private(set) var pendingCreatedGroup: ShareAlbum?
     private(set) var albumManagementTarget: ShareAlbumManagementTarget?
+    private(set) var managedShareGroup: ShareAlbum?
 
     init(groups: [ShareAlbum] = ShareAlbum.samples) {
         self.groups = groups
@@ -112,6 +115,7 @@ final class ShareViewModel {
             name: "집집팟",
             date: .now,
             memberCount: 4,
+            currentUserRole: .participant,
             albums: Array(Album.sharedSamples.prefix(2))
         )
         isJoinSheetPresented = false
@@ -146,7 +150,8 @@ final class ShareViewModel {
         pendingCreatedGroup = ShareAlbum(
             name: trimmedName,
             date: .now,
-            memberCount: 1
+            memberCount: 1,
+            currentUserRole: .admin
         )
         isCreateSheetPresented = false
         isInviteSheetPresented = true
@@ -236,6 +241,41 @@ final class ShareViewModel {
         albumManagementTarget = nil
     }
 
+    func presentShareManagement(groupID: ShareAlbum.ID) {
+        guard let group = group(withID: groupID) else {
+            return
+        }
+        shareGroupNameDraft = group.name
+        managedShareGroup = group
+        isShareManagementPresented = true
+    }
+
+    func completeShareManagement() {
+        let trimmedName = shareGroupNameDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedName.isEmpty,
+              let managedShareGroup,
+              let groupIndex = groups.firstIndex(where: { $0.id == managedShareGroup.id })
+        else {
+            return
+        }
+        groups[groupIndex].name = trimmedName
+        self.managedShareGroup?.name = trimmedName
+        dismissShareManagement()
+    }
+
+    func leaveManagedShareGroup() {
+        guard let managedShareGroup else {
+            return
+        }
+        groups.removeAll { $0.id == managedShareGroup.id }
+        dismissShareManagement()
+        navigationPath.removeAll()
+    }
+
+    func dismissShareManagement() {
+        isShareManagementPresented = false
+    }
+
     func resetTransientUI() {
         isAddMode = false
         navigationPath.removeAll()
@@ -244,8 +284,10 @@ final class ShareViewModel {
         isCreateSheetPresented = false
         isInviteSheetPresented = false
         isCommentsPresented = false
+        isShareManagementPresented = false
         pendingJoinGroup = nil
         pendingCreatedGroup = nil
+        managedShareGroup = nil
         dismissAlbumManagement()
     }
 }

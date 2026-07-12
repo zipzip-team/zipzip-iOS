@@ -130,8 +130,7 @@ struct ShareGroupDetailView: View {
             .init(
                 icon: .settingShare,
                 title: "공유 관리",
-                isDisabled: selectedAlbumIDs.count != 1,
-                action: manageSelectedAlbum
+                action: presentShareManagement
             ),
             .init(
                 icon: .moveToAlbum,
@@ -178,9 +177,6 @@ struct ShareGroupDetailView: View {
     }
 
     private func enterSelectionMode() {
-        guard viewModel.group(withID: groupID)?.albums.isEmpty == false else {
-            return
-        }
         isSelectionMode = true
     }
 
@@ -189,11 +185,8 @@ struct ShareGroupDetailView: View {
         selectedAlbumIDs.removeAll()
     }
 
-    private func manageSelectedAlbum() {
-        guard let albumID = selectedAlbumIDs.first else {
-            return
-        }
-        viewModel.presentAlbumManagement(groupID: groupID, albumID: albumID)
+    private func presentShareManagement() {
+        viewModel.presentShareManagement(groupID: groupID)
         exitSelectionMode()
     }
 
