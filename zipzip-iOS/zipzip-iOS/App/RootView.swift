@@ -62,7 +62,9 @@ struct RootView: View {
                     PhotoDetailView(
                         photo: photo,
                         albums: albumViewModel.shareDestinations,
-                        onAddToAlbums: addPhotosToAlbums
+                        onAddToAlbums: addPhotosToAlbums,
+                        loadIsFavorite: { await albumViewModel.isPhotoFavorited(localIdentifier: $0) },
+                        onToggleFavorite: togglePhotoFavorite
                     )
                 case let .albumDetail(albumID):
                     AlbumDetailDestinationView(
@@ -85,7 +87,9 @@ struct RootView: View {
                                 from: albumID,
                                 destinations: destinations
                             )
-                        }
+                        },
+                        loadIsFavorite: { await albumViewModel.isPhotoFavorited(localIdentifier: $0) },
+                        onToggleFavorite: togglePhotoFavorite
                     )
                 case .myPage:
                     MyPageView()
@@ -134,6 +138,15 @@ struct RootView: View {
             }
 
             router.push(.albumDetail(albumID))
+        }
+    }
+
+    private func togglePhotoFavorite(localIdentifier: String, isFavorite: Bool) {
+        Task {
+            await albumViewModel.setPhotoFavorite(
+                localIdentifier: localIdentifier,
+                isFavorite: isFavorite
+            )
         }
     }
 
