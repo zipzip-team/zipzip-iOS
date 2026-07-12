@@ -285,11 +285,16 @@ private struct ShareCollectionEmptyView: View {
     var body: some View {
         VStack(spacing: 32) {
             VStack(spacing: 8) {
-                ShareAssetPlaceholder(width: 79, height: 105)
-                Text("공유 공간에서\n추억을 기록하세요.")
-                    .font(.t2_md)
-                    .foregroundStyle(.grey1000)
-                    .multilineTextAlignment(.center)
+                Image(.shareCollectionEmptyArtwork)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 79, height: 105)
+                    .accessibilityHidden(true)
+                Image(.shareCollectionEmptyText)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 141, height: 54)
+                    .accessibilityLabel("공유 공간에서 추억을 기록하세요")
             }
 
             CommonButton(title: "그룹 만들기", action: onCreate)
