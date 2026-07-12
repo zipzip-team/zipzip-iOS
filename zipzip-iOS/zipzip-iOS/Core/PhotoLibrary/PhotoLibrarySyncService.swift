@@ -126,7 +126,10 @@ nonisolated struct PhotoLibrarySyncService {
         let fetchResult = PHAsset.fetchAssets(withLocalIdentifiers: identifiers, options: nil)
         var assets: [PHAsset] = []
         assets.reserveCapacity(fetchResult.count)
-        fetchResult.enumerateObjects { asset, _, _ in assets.append(asset) }
+        fetchResult.enumerateObjects { asset, _, _ in
+            guard asset.mediaType == .image else { return }
+            assets.append(asset)
+        }
         guard !assets.isEmpty else { return }
 
         let scanDate = Date()
