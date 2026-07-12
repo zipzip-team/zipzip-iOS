@@ -9,10 +9,12 @@ import Foundation
 
 enum APIConfig {
     static let baseURL: String = {
-        let configuredHost = Bundle.main.object(forInfoDictionaryKey: "BASE_URL") as? String
-        let host = configuredHost.flatMap { value in
-            value.isEmpty || value.contains("$(") ? nil : value
-        } ?? "dev-api.zipzip.site"
+        guard let host = Bundle.main.object(forInfoDictionaryKey: "BASE_URL") as? String,
+              !host.isEmpty,
+              !host.contains("$(")
+        else {
+            preconditionFailure("BASE_URL 빌드 설정을 확인해 주세요.")
+        }
         return "https://\(host)"
     }()
 }

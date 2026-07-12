@@ -123,6 +123,7 @@
 			isa = PBXNativeTarget;
 			buildConfigurationList = CA881AAD2FF3FF9800AA3125 /* Build configuration list for PBXNativeTarget "zipzip-iOS" */;
 			buildPhases = (
+				A13000013000000000000001 /* Validate API Configuration */,
 				CA881D002FF5000000AA3125 /* SwiftFormat */,
 				CA881A9C2FF3FF9800AA3125 /* Sources */,
 				CA881A9D2FF3FF9800AA3125 /* Frameworks */,
@@ -207,6 +208,25 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXShellScriptBuildPhase section */
+		A13000013000000000000001 /* Validate API Configuration */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			name = "Validate API Configuration";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "set -e\ncase \"${BASE_URL:-}\" in\n  \"\"|'$(BASE_URL)')\n    echo \"error: BASE_URL is not configured. Copy App/Config.example.xcconfig to App/Config.xcconfig and set the API host.\"\n    exit 1\n    ;;\nesac\n";
+		};
 		CA881D002FF5000000AA3125 /* SwiftFormat */ = {
 			isa = PBXShellScriptBuildPhase;
 			alwaysOutOfDate = 1;
