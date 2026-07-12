@@ -17,7 +17,8 @@ struct LocationSearchSheet: View {
     @Dependency(\.photoFilterOptions) private var filterOptions
     @State private var locations: [String] = []
     @State private var query = ""
-    @State private var selectedCoordinate: CLLocationCoordinate2D?
+    @State private var pendingCompletion: MKLocalSearchCompletion?
+    @State private var isCompleting = false
     @State private var searchModel = LocationSearchModel()
 
     var body: some View {
@@ -27,8 +28,14 @@ struct LocationSearchSheet: View {
             },
             rightItem: {
                 headerButton(title: "완료") {
-                    onDone(selected, selectedCoordinate?.latitude, selectedCoordinate?.longitude)
+                    guard !isCompleting else { return }
+                    Task {
+                        isCompleting = true
+                        await complete()
+                        isCompleting = false
+                    }
                 }
+                .disabled(isCompleting)
             }
         ) {
             VStack(alignment: .leading, spacing: 16) {
@@ -118,21 +125,28 @@ struct LocationSearchSheet: View {
     private func selectSaved(_ location: String) {
         selected = location
         query = location
-        selectedCoordinate = nil
+        pendingCompletion = nil
     }
 
     private func selectResult(_ result: MKLocalSearchCompletion) {
         selected = result.title
         query = result.title
-        selectedCoordinate = nil
-        Task { await resolveCoordinate(for: result) }
+        pendingCompletion = result
     }
 
-    private func resolveCoordinate(for completion: MKLocalSearchCompletion) async {
+    private func complete() async {
+        guard let completion = pendingCompletion else {
+            onDone(selected, nil, nil)
+            return
+        }
+        guard let coordinate = await resolveCoordinate(for: completion) else { return }
+        onDone(selected, coordinate.latitude, coordinate.longitude)
+    }
+
+    private func resolveCoordinate(for completion: MKLocalSearchCompletion) async -> CLLocationCoordinate2D? {
         let request = MKLocalSearch.Request(completion: completion)
         let response = try? await MKLocalSearch(request: request).start()
-        guard let coordinate = response?.mapItems.first?.placemark.coordinate else { return }
-        selectedCoordinate = coordinate
+        return response?.mapItems.first?.placemark.coordinate
     }
 
     private func loadLocations() async {
