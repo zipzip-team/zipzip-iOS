@@ -99,13 +99,17 @@ nonisolated struct PhotoLibrarySyncService {
 
         var changedIdentifiers: Set<String> = []
         var latestToken: PHPersistentChangeToken?
-        for change in changes {
-            try Task.checkCancellation()
-            if let details = try? change.changeDetails(for: .asset) {
+        do {
+            for change in changes {
+                try Task.checkCancellation()
+                let details = try change.changeDetails(for: .asset)
                 changedIdentifiers.formUnion(details.insertedLocalIdentifiers)
                 changedIdentifiers.formUnion(details.updatedLocalIdentifiers)
+                latestToken = change.changeToken
             }
-            latestToken = change.changeToken
+        } catch let error as PHPhotosError where error.code == .persistentChangeDetailsUnavailable {
+            try await importAll(continuation)
+            return
         }
 
         if !changedIdentifiers.isEmpty {
