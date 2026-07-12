@@ -14,9 +14,11 @@ struct FilteredPictureView: View {
     @State private var pictureViewModel = PictureViewModel()
     @State private var viewModel: FilteredPictureViewModel
     @State private var showShareSheet = false
+    private let albumViewModel: AlbumViewModel
 
-    init(appliedFilters: [AppliedFilter]) {
+    init(appliedFilters: [AppliedFilter], albumViewModel: AlbumViewModel) {
         _viewModel = State(initialValue: FilteredPictureViewModel(appliedFilters: appliedFilters))
+        self.albumViewModel = albumViewModel
     }
 
     var body: some View {
@@ -87,7 +89,26 @@ struct FilteredPictureView: View {
                 albums: Album.samples,
                 sharedAlbums: Album.sharedSamples,
                 shareAlbums: ShareAlbum.samples,
-                onDismiss: { dismiss() }
+                onDismiss: { dismiss() },
+                onComplete: { destinations in
+                    let localIdentifiers = pictureViewModel.selectedPhotoLocalIdentifiers
+                    Task {
+                        guard await albumViewModel.addPhotos(
+                            localIdentifiers: localIdentifiers,
+                            to: destinations
+                        ) else {
+                            return
+                        }
+
+                        pictureViewModel.cancelSelection()
+                        guard let albumID = destinations.firstPersonalAlbumID else {
+                            return
+                        }
+
+                        router.push(.albumDetail(albumID))
+                    }
+                },
+                loadsAlbumsFromDatabase: true
             )
         }
         .bottomSheetAlert(
@@ -173,6 +194,6 @@ struct FilteredPictureView: View {
     FilteredPictureView(appliedFilters: [
         AppliedFilter(kind: .device, value: "iphone 6"),
         AppliedFilter(kind: .location, value: "오사카")
-    ])
-    .environment(Router())
+    ], albumViewModel: AlbumViewModel(albums: AlbumViewItem.samples))
+        .environment(Router())
 }
