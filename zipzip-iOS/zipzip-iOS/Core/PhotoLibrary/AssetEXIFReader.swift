@@ -6,38 +6,153 @@
 //
 
 import ImageIO
+import OSLog
 @preconcurrency import Photos
 
+private let logger = Logger(subsystem: "com.zipzip.zipzip-iOS", category: "PhotoLibrarySync")
+
+nonisolated enum AssetDeviceInfo: Equatable {
+    case resolved(make: String?, model: String?)
+    case unavailable
+}
+
 nonisolated enum AssetEXIFReader {
-    /// 사진 원본 EXIF의 TIFF Make/Model(촬영 기기 정보)을 읽는다. 정보가 없으면 nil.
-    static func deviceInfo(for asset: PHAsset) async -> (make: String?, model: String?) {
-        // 스크린샷 등 촬영 기기 정보가 없는 사진은 원본을 읽지 않고 건너뛴다.
-        guard !asset.mediaSubtypes.contains(.photoScreenshot) else { return (nil, nil) }
+    private static let maxStreamedBytes = 2 * 1024 * 1024
 
-        guard let url = await fullSizeImageURL(for: asset),
-              let source = CGImageSourceCreateWithURL(url as CFURL, nil),
-              let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],
-              let tiff = properties[kCGImagePropertyTIFFDictionary] as? [CFString: Any]
-        else { return (nil, nil) }
-
-        return (
-            cleaned(tiff[kCGImagePropertyTIFFMake] as? String),
-            cleaned(tiff[kCGImagePropertyTIFFModel] as? String)
-        )
+    static func deviceInfo(for asset: PHAsset) async -> AssetDeviceInfo {
+        guard !asset.mediaSubtypes.contains(.photoScreenshot) else { return .resolved(make: nil, model: nil) }
+        guard let resource = photoResource(for: asset) else { return .resolved(make: nil, model: nil) }
+        return await streamDeviceInfo(from: resource)
     }
 
-    private static func fullSizeImageURL(for asset: PHAsset) async -> URL? {
-        let options = PHContentEditingInputRequestOptions()
-        options.isNetworkAccessAllowed = false
-        return await withCheckedContinuation { (continuation: CheckedContinuation<URL?, Never>) in
-            asset.requestContentEditingInput(with: options) { input, _ in
-                continuation.resume(returning: input?.fullSizeImageURL)
-            }
+    private static func photoResource(for asset: PHAsset) -> PHAssetResource? {
+        let resources = PHAssetResource.assetResources(for: asset)
+        let preferredTypes: [PHAssetResourceType] = [.photo, .fullSizePhoto, .alternatePhoto]
+        for type in preferredTypes {
+            if let match = resources.first(where: { $0.type == type }) { return match }
         }
+        return nil
+    }
+
+    private static func streamDeviceInfo(
+        from resource: PHAssetResource
+    ) async -> AssetDeviceInfo {
+        let options = PHAssetResourceRequestOptions()
+        options.isNetworkAccessAllowed = true
+
+        let manager = PHAssetResourceManager.default()
+        let box = ResourceStreamBox()
+        let source = CGImageSourceCreateIncremental(nil)
+
+        return await withTaskCancellationHandler {
+            await withCheckedContinuation { (continuation: CheckedContinuation<AssetDeviceInfo, Never>) in
+                let requestID = manager.requestData(
+                    for: resource,
+                    options: options,
+                    dataReceivedHandler: { data in
+                        guard !box.isDone() else { return }
+                        box.append(data)
+                        CGImageSourceUpdateData(source, box.buffer as CFData, false)
+
+                        if let info = parseDeviceInfo(from: source) {
+                            box.finish {
+                                if let id = box.requestID() { manager.cancelDataRequest(id) }
+                                continuation.resume(returning: .resolved(make: info.make, model: info.model))
+                            }
+                        } else if box.byteCount >= maxStreamedBytes {
+                            box.finish {
+                                if let id = box.requestID() { manager.cancelDataRequest(id) }
+                                continuation.resume(returning: .resolved(make: nil, model: nil))
+                            }
+                        }
+                    },
+                    completionHandler: { error in
+                        box.finish {
+                            if let error {
+                                logger.error("failed to stream original for EXIF: \(error)")
+                                continuation.resume(returning: .unavailable)
+                            } else {
+                                CGImageSourceUpdateData(source, box.buffer as CFData, true)
+                                let info = parseDeviceInfo(from: source)
+                                continuation.resume(returning: .resolved(make: info?.make, model: info?.model))
+                            }
+                        }
+                    }
+                )
+                box.store(requestID)
+            }
+        } onCancel: {
+            if let id = box.requestID() { manager.cancelDataRequest(id) }
+        }
+    }
+
+    private static func parseDeviceInfo(from source: CGImageSource) -> (make: String?, model: String?)? {
+        guard let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],
+              let tiff = properties[kCGImagePropertyTIFFDictionary] as? [CFString: Any]
+        else { return nil }
+
+        let make = cleaned(tiff[kCGImagePropertyTIFFMake] as? String)
+        let model = cleaned(tiff[kCGImagePropertyTIFFModel] as? String)
+        guard make != nil || model != nil else { return nil }
+        return (make, model)
     }
 
     private static func cleaned(_ value: String?) -> String? {
         let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines)
         return (trimmed?.isEmpty ?? true) ? nil : trimmed
+    }
+}
+
+private final class ResourceStreamBox: @unchecked Sendable {
+    private let lock = NSLock()
+    private var data = Data()
+    private var storedRequestID: PHAssetResourceDataRequestID?
+    private var isFinished = false
+
+    var buffer: Data {
+        lock.lock()
+        defer { lock.unlock() }
+        return data
+    }
+
+    var byteCount: Int {
+        lock.lock()
+        defer { lock.unlock() }
+        return data.count
+    }
+
+    func append(_ chunk: Data) {
+        lock.lock()
+        defer { lock.unlock() }
+        data.append(chunk)
+    }
+
+    func store(_ id: PHAssetResourceDataRequestID) {
+        lock.lock()
+        defer { lock.unlock() }
+        storedRequestID = id
+    }
+
+    func requestID() -> PHAssetResourceDataRequestID? {
+        lock.lock()
+        defer { lock.unlock() }
+        return storedRequestID
+    }
+
+    func isDone() -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return isFinished
+    }
+
+    func finish(_ resume: () -> Void) {
+        lock.lock()
+        if isFinished {
+            lock.unlock()
+            return
+        }
+        isFinished = true
+        lock.unlock()
+        resume()
     }
 }
