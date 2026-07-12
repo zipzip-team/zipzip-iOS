@@ -15,7 +15,7 @@ struct RootTabView: View {
     @State private var shareViewModel = ShareViewModel()
     @State private var showShareSheet = false
 
-    let albumViewModel: AlbumViewModel
+    private let albumViewModel: AlbumViewModel
 
     var body: some View {
         content
