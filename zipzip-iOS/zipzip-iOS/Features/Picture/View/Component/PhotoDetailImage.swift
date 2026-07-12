@@ -47,6 +47,7 @@ struct PhotoDetailImage: View {
                     for: localIdentifier,
                     targetSize: Self.targetSize
                 )
+                guard !Task.isCancelled else { return }
                 image = loadedImage
                 imageSize = loadedImage?.size ?? .zero
             }

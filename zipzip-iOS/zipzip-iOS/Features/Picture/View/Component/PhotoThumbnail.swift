@@ -27,10 +27,12 @@ struct PhotoThumbnail: View {
             .clipped()
             .task(id: localIdentifier) {
                 guard !localIdentifier.isEmpty else { return }
-                image = await PhotoThumbnailLoader.shared.thumbnail(
+                let loadedImage = await PhotoThumbnailLoader.shared.thumbnail(
                     for: localIdentifier,
                     targetSize: Self.targetSize
                 )
+                guard !Task.isCancelled else { return }
+                image = loadedImage
             }
     }
 }

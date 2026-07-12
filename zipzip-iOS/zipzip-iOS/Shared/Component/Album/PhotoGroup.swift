@@ -68,12 +68,21 @@ struct PhotoGroup: View {
 
         thumbnailImages = [:]
         for localIdentifier in localIdentifiers.prefix(3) where !localIdentifier.isEmpty {
+            guard !Task.isCancelled else {
+                return
+            }
+
             guard let image = await PhotoThumbnailLoader.shared.thumbnail(
                 for: localIdentifier,
                 targetSize: Self.thumbnailSize
             ) else {
                 continue
             }
+
+            guard !Task.isCancelled else {
+                return
+            }
+
             thumbnailImages[localIdentifier] = image
         }
     }

@@ -36,7 +36,7 @@ final class PhotoThumbnailLoader: @unchecked Sendable {
         options.isNetworkAccessAllowed = true
 
         let box = ImageRequestBox()
-        return await withTaskCancellationHandler {
+        let image = await withTaskCancellationHandler {
             await withCheckedContinuation { (continuation: CheckedContinuation<UIImage?, Never>) in
                 let requestID = manager.requestImage(
                     for: asset,
@@ -44,15 +44,20 @@ final class PhotoThumbnailLoader: @unchecked Sendable {
                     contentMode: contentMode,
                     options: options
                 ) { image, _ in
-                    box.finish { continuation.resume(returning: image) }
+                    box.finish { shouldReturnImage in
+                        continuation.resume(returning: shouldReturnImage ? image : nil)
+                    }
                 }
-                box.store(requestID)
+                if box.store(requestID) {
+                    manager.cancelImageRequest(requestID)
+                }
             }
         } onCancel: {
-            if let requestID = box.requestID() {
+            if let requestID = box.cancel() {
                 manager.cancelImageRequest(requestID)
             }
         }
+        return Task.isCancelled ? nil : image
     }
 }
 
@@ -60,27 +65,31 @@ private final class ImageRequestBox: @unchecked Sendable {
     private let lock = NSLock()
     private var storedRequestID: PHImageRequestID?
     private var isFinished = false
+    private var isCancelled = false
 
-    func store(_ id: PHImageRequestID) {
+    func store(_ id: PHImageRequestID) -> Bool {
         lock.lock()
         defer { lock.unlock() }
         storedRequestID = id
+        return isCancelled
     }
 
-    func requestID() -> PHImageRequestID? {
+    func cancel() -> PHImageRequestID? {
         lock.lock()
         defer { lock.unlock() }
+        isCancelled = true
         return storedRequestID
     }
 
-    func finish(_ resume: () -> Void) {
+    func finish(_ resume: (Bool) -> Void) {
         lock.lock()
         if isFinished {
             lock.unlock()
             return
         }
         isFinished = true
+        let shouldReturnImage = !isCancelled
         lock.unlock()
-        resume()
+        resume(shouldReturnImage)
     }
 }
