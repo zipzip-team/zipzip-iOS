@@ -8,8 +8,19 @@
 import SwiftUI
 
 struct PictureView: View {
-    @Environment(Router.self) private var router
     let viewModel: PictureViewModel
+    let onOpenFilter: () -> Void
+    let onOpenPhoto: (Photo) -> Void
+
+    init(
+        viewModel: PictureViewModel,
+        onOpenFilter: @escaping () -> Void = {},
+        onOpenPhoto: @escaping (Photo) -> Void = { _ in }
+    ) {
+        self.viewModel = viewModel
+        self.onOpenFilter = onOpenFilter
+        self.onOpenPhoto = onOpenPhoto
+    }
 
     var body: some View {
         @Bindable var viewModel = viewModel
@@ -33,7 +44,7 @@ struct PictureView: View {
                     selectedPhotoIDs: viewModel.selectedPhotoIDs,
                     onTapPhoto: viewModel.toggleSelection,
                     onLongPressPhoto: viewModel.handleLongPress,
-                    onOpenPhoto: { router.push(.photoDetail($0)) }
+                    onOpenPhoto: onOpenPhoto
                 )
                 .padding(.horizontal, 16)
             }
@@ -64,7 +75,7 @@ struct PictureView: View {
 
     private var floatingButton: some View {
         RoundedIconButton(items: [
-            .init(id: "filter", icon: .filter, accessibilityLabel: "필터") { router.push(.filter) },
+            .init(id: "filter", icon: .filter, accessibilityLabel: "필터", action: onOpenFilter),
             .init(id: "selection", icon: .select, accessibilityLabel: "사진 선택") {
                 viewModel.enterSelectionMode()
             }
@@ -92,5 +103,4 @@ private struct PhotoRecommendationPlaceholder: View {
 
 #Preview {
     PictureView(viewModel: PictureViewModel())
-        .environment(Router())
 }
