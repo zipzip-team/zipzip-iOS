@@ -375,10 +375,11 @@ private struct AlbumShareDestinationSheet: View {
                     authenticationState.logIn()
                 }
             } else {
-                AlbumSelectionGrid(
-                    albums: sharedAlbums,
-                    selectedAlbumIDs: selectedAlbumID.map { [$0] } ?? [],
-                    onSelect: selectAlbum
+                ShareAlbumList(
+                    albums: shareAlbums,
+                    selectedShareAlbumID: selectedShareAlbumID,
+                    showsChevron: false,
+                    onSelect: selectShareAlbum
                 )
             }
         }

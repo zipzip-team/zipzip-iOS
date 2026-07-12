@@ -119,6 +119,7 @@ struct ShareSheet: View {
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .disabled(isDisabled)
         .accessibilityHint(isDisabled ? "대상을 선택하면 완료할 수 있습니다." : "")
     }
 
@@ -134,11 +135,29 @@ struct ShareSheet: View {
         selection == .left || authenticationState.isLoggedIn
     }
 
-    private var selectedDestination: ShareDestination? {
-        guard let selectedAlbumID else {
-            return nil
+    private var personalAlbums: [Album] {
+        (fetchedAlbums ?? albums).filter { !excludedAlbumIDs.contains($0.id) }
+    }
+
+    @MainActor
+    private func loadAlbumsIfNeeded() async {
+        guard loadsAlbumsFromDatabase,
+              let storedAlbums = try? await albumStore.fetchAlbums()
+        else {
+            return
         }
 
+        fetchedAlbums = storedAlbums.map {
+            Album(
+                id: $0.id,
+                name: $0.name,
+                count: $0.photoCount,
+                thumbnailLocalIdentifiers: $0.thumbnailLocalIdentifiers
+            )
+        }
+    }
+
+    private var selectedDestinations: [ShareDestination] {
         switch selection {
         case .left:
             return selectedAlbumIDs.map(ShareDestination.album)
@@ -163,7 +182,7 @@ struct ShareSheet: View {
 
     private func returnToShareAlbumList() {
         targetShareAlbum = nil
-        selectedAlbumID = nil
+        selectedAlbumIDs = []
     }
 }
 
