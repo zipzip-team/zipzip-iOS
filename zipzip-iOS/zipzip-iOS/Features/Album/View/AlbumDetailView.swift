@@ -323,7 +323,9 @@ private struct AlbumDetailEmptyContent: View {
     var body: some View {
         VStack(spacing: 32) {
             VStack(spacing: 8) {
-                AlbumDetailEmptyIllustration()
+                Image(.albumDetailEmptyArtwork)
+                    .resizable()
+                    .scaledToFit()
                     .frame(width: 80, height: 80)
                     .accessibilityHidden(true)
 
@@ -342,51 +344,6 @@ private struct AlbumDetailEmptyContent: View {
             )
             .frame(width: 171)
         }
-    }
-}
-
-private struct AlbumDetailEmptyIllustration: View {
-    var body: some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: 5)
-                .fill(.grey100)
-                .frame(width: 31, height: 43)
-                .rotationEffect(.degrees(-34))
-                .offset(x: -12, y: 10)
-                .shadow(color: .black.opacity(0.08), radius: 4, y: 3)
-
-            RoundedRectangle(cornerRadius: 4)
-                .fill(.grey70)
-                .frame(width: 17, height: 27)
-                .rotationEffect(.degrees(-33))
-                .offset(x: 9, y: -21)
-                .shadow(color: .black.opacity(0.07), radius: 4, y: 3)
-
-            AlbumDetailEmptyLine()
-                .stroke(
-                    .yellow300,
-                    style: StrokeStyle(lineWidth: 2.5, lineCap: .round, lineJoin: .round)
-                )
-                .frame(width: 31, height: 53)
-                .offset(x: 13, y: 7)
-        }
-    }
-}
-
-private struct AlbumDetailEmptyLine: Shape {
-    func path(in rect: CGRect) -> Path {
-        var path = Path()
-        path.move(to: CGPoint(x: rect.width * 0.56, y: 0))
-        path.addLine(to: CGPoint(x: rect.width * 0.86, y: rect.height * 0.14))
-        path.addLine(to: CGPoint(x: rect.width * 0.88, y: rect.height * 0.43))
-        path.addLine(to: CGPoint(x: rect.width * 0.68, y: rect.height * 0.52))
-        path.addLine(to: CGPoint(x: rect.width * 0.38, y: rect.height * 0.46))
-        path.addLine(to: CGPoint(x: rect.width * 0.35, y: rect.height * 0.30))
-        path.addLine(to: CGPoint(x: rect.width * 0.63, y: rect.height * 0.26))
-        path.addLine(to: CGPoint(x: rect.width * 0.87, y: rect.height * 0.42))
-        path.addLine(to: CGPoint(x: rect.width * 0.76, y: rect.height * 0.76))
-        path.addLine(to: CGPoint(x: 0, y: rect.height))
-        return path
     }
 }
 
