@@ -197,28 +197,36 @@ struct AlbumSelectionGrid: View {
 
 struct ShareAlbumList: View {
     let albums: [ShareAlbum]
+    var selectedShareAlbumID: ShareAlbum.ID? = nil
+    var showsChevron = true
     let onSelect: (ShareAlbum) -> Void
 
     var body: some View {
         ScrollView(showsIndicators: false) {
-            LazyVStack(spacing: 8) {
+            LazyVStack(spacing: 12) {
                 ForEach(albums) { album in
                     Button {
                         onSelect(album)
                     } label: {
-                        ShareDestinationRow(album: album)
+                        ShareDestinationRow(
+                            album: album,
+                            isSelected: selectedShareAlbumID == album.id,
+                            showsChevron: showsChevron
+                        )
                     }
                     .buttonStyle(.plain)
                 }
             }
             .padding(.horizontal, 16)
-            .padding(.vertical, 28)
+            .padding(.vertical, 12)
         }
     }
 }
 
 private struct ShareDestinationRow: View {
     let album: ShareAlbum
+    let isSelected: Bool
+    let showsChevron: Bool
 
     var body: some View {
         HStack(spacing: 10) {
@@ -241,21 +249,33 @@ private struct ShareDestinationRow: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
 
-            Image(.chevronRight)
-                .renderingMode(.template)
-                .resizable()
-                .scaledToFit()
-                .foregroundStyle(.grey1000)
-                .frame(width: 24, height: 24)
-                .frame(width: 40, height: 40)
+            if showsChevron {
+                Image(.chevronRight)
+                    .renderingMode(.template)
+                    .resizable()
+                    .scaledToFit()
+                    .foregroundStyle(.grey1000)
+                    .frame(width: 24, height: 24)
+                    .frame(width: 40, height: 40)
+            } else {
+                Color.clear
+                    .frame(width: 40, height: 40)
+            }
         }
         .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(.grey50, in: .rect(cornerRadius: 12))
+        .background(isSelected ? .orange50 : .grey50, in: .rect(cornerRadius: 12))
+        .overlay {
+            if isSelected {
+                RoundedRectangle(cornerRadius: 12)
+                    .stroke(.orange300, lineWidth: 1)
+            }
+        }
         .contentShape(.rect(cornerRadius: 12))
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(album.name), \(album.memberCount)명")
-        .accessibilityHint("공유집 선택")
+        .accessibilityValue(isSelected ? "선택됨" : "")
+        .accessibilityHint(showsChevron ? "공유집 열기" : "공유집 선택")
     }
 }
 

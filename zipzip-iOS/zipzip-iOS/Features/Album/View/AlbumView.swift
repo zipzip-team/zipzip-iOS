@@ -145,10 +145,8 @@ struct AlbumView: View {
         .bottomSheet(isPresented: $viewModel.isShareAlbumSheetPresented, detents: [.full]) { _ in
             AlbumShareDestinationSheet(
                 shareAlbums: ShareAlbum.samples,
-                sharedAlbums: Album.sharedSamples,
                 onCancel: viewModel.dismissShareAlbumSheet,
-                onComplete: viewModel.completeShareAlbumMove,
-                onAddTap: viewModel.presentShareAlbumCreation
+                onComplete: viewModel.completeShareAlbumMove
             )
         }
     }
@@ -350,13 +348,10 @@ private struct AlbumShareDestinationSheet: View {
     @Environment(AuthenticationState.self) private var authenticationState
 
     let shareAlbums: [ShareAlbum]
-    let sharedAlbums: [Album]
     let onCancel: () -> Void
-    let onComplete: (ShareAlbum, Album) -> Void
-    let onAddTap: () -> Void
+    let onComplete: (ShareAlbum) -> Void
 
-    @State private var selectedShareAlbum: ShareAlbum?
-    @State private var selectedAlbumID: Album.ID?
+    @State private var selectedShareAlbumID: ShareAlbum.ID?
 
     var body: some View {
         BottomSheet(
@@ -365,15 +360,11 @@ private struct AlbumShareDestinationSheet: View {
             },
             rightItem: {
                 if authenticationState.isLoggedIn {
-                    if selectedShareAlbum == nil {
-                        addButton
-                    } else {
-                        AlbumSheetTextButton(
-                            title: "완료",
-                            isDisabled: selectedAlbumID == nil,
-                            action: completeSelection
-                        )
-                    }
+                    AlbumSheetTextButton(
+                        title: "완료",
+                        isDisabled: selectedShareAlbumID == nil,
+                        action: completeSelection
+                    )
                 }
             }
         ) {
@@ -381,50 +372,27 @@ private struct AlbumShareDestinationSheet: View {
                 ShareLoginPrompt {
                     authenticationState.logIn()
                 }
-            } else if selectedShareAlbum == nil {
-                ShareAlbumList(albums: shareAlbums, onSelect: selectShareAlbum)
             } else {
-                AlbumSelectionGrid(
-                    albums: sharedAlbums,
-                    selectedAlbumID: selectedAlbumID,
-                    onSelect: selectAlbum
+                ShareAlbumList(
+                    albums: shareAlbums,
+                    selectedShareAlbumID: selectedShareAlbumID,
+                    showsChevron: false,
+                    onSelect: selectShareAlbum
                 )
             }
         }
     }
 
     private func selectShareAlbum(_ album: ShareAlbum) {
-        selectedShareAlbum = album
-        selectedAlbumID = nil
-    }
-
-    private func selectAlbum(_ album: Album) {
-        selectedAlbumID = album.id
+        selectedShareAlbumID = album.id
     }
 
     private func completeSelection() {
-        guard let selectedShareAlbum,
-              let selectedAlbum = sharedAlbums.first(where: { $0.id == selectedAlbumID })
-        else {
+        guard let selectedShareAlbum = shareAlbums.first(where: { $0.id == selectedShareAlbumID }) else {
             return
         }
 
-        onComplete(selectedShareAlbum, selectedAlbum)
-    }
-
-    private var addButton: some View {
-        Button(action: onAddTap) {
-            Image(.plus)
-                .renderingMode(.template)
-                .resizable()
-                .scaledToFit()
-                .foregroundStyle(.white00)
-                .frame(width: 24, height: 24)
-                .frame(width: 72, height: 48)
-                .contentShape(.rect)
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel("공유집 추가")
+        onComplete(selectedShareAlbum)
     }
 }
 
