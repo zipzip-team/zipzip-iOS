@@ -52,27 +52,34 @@ struct AlbumView: View {
                     .padding(.top, 15)
                     .frame(height: 67, alignment: .bottom)
 
-                LazyVGrid(
-                    columns: columns,
-                    alignment: .center,
-                    spacing: 20
-                ) {
-                    ForEach(viewModel.albums) { album in
-                        AlbumGridCard(
-                            album: album,
-                            selectionNumber: viewModel.selectionNumber(for: album),
-                            isSelectionMode: viewModel.isSelectionMode,
-                            onSelectionTap: { viewModel.toggleSelection(for: album) },
-                            onOpenTap: { viewModel.showDetail(for: album) }
-                        )
+                if !viewModel.albums.isEmpty {
+                    LazyVGrid(
+                        columns: columns,
+                        alignment: .center,
+                        spacing: 20
+                    ) {
+                        ForEach(viewModel.albums) { album in
+                            AlbumGridCard(
+                                album: album,
+                                selectionNumber: viewModel.selectionNumber(for: album),
+                                isSelectionMode: viewModel.isSelectionMode,
+                                onSelectionTap: { viewModel.toggleSelection(for: album) },
+                                onOpenTap: { viewModel.showDetail(for: album) }
+                            )
+                        }
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.top, 17)
+                    .padding(.bottom, viewModel.isSelectionMode && !viewModel.selectedAlbumIDs.isEmpty ? 140 : 20)
+                    .transaction { transaction in
+                        transaction.animation = nil
                     }
                 }
-                .padding(.horizontal, 16)
-                .padding(.top, 17)
-                .padding(.bottom, viewModel.isSelectionMode && !viewModel.selectedAlbumIDs.isEmpty ? 140 : 20)
-                .transaction { transaction in
-                    transaction.animation = nil
-                }
+            }
+
+            if viewModel.albums.isEmpty {
+                AlbumCollectionEmptyView(onStartTap: viewModel.presentCreateAlbumSheet)
+                    .padding(.bottom, 80)
             }
         }
         .overlay(alignment: .topTrailing) {
@@ -148,7 +155,7 @@ struct AlbumView: View {
 
     private var selectionActionItems: [ActionBarItem] {
         [
-            .init(icon: .moveToShare, title: "공유집으로", action: viewModel.moveSelectedAlbumsToShare),
+            .init(icon: .moveToShare, title: "공유그룹으로", action: viewModel.moveSelectedAlbumsToShare),
             .init(icon: .delete, title: "삭제", action: viewModel.deleteSelectedAlbums)
         ]
     }
@@ -182,6 +189,47 @@ struct AlbumView: View {
                 }
             }
         }
+    }
+}
+
+private struct AlbumCollectionEmptyView: View {
+    let onStartTap: () -> Void
+
+    var body: some View {
+        VStack(spacing: 32) {
+            VStack(spacing: 10) {
+                illustration
+
+                Text("집을 만들어 사진을 보관해보세요!")
+                    .font(.t2_md)
+                    .foregroundStyle(.grey1000)
+                    .multilineTextAlignment(.center)
+            }
+
+            CommonButton(title: "시작하기", action: onStartTap)
+                .frame(width: 171)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private var illustration: some View {
+        ZStack {
+            Image(.albumFolder)
+                .resizable()
+                .scaledToFit()
+                .frame(width: 62, height: 56)
+                .offset(x: -12, y: 12)
+
+            Image(systemName: "hammer.fill")
+                .resizable()
+                .scaledToFit()
+                .foregroundStyle(.orange500)
+                .frame(width: 44, height: 44)
+                .rotationEffect(.degrees(-12))
+                .offset(x: 19, y: -12)
+        }
+        .frame(width: 96, height: 86)
+        .accessibilityHidden(true)
     }
 }
 
