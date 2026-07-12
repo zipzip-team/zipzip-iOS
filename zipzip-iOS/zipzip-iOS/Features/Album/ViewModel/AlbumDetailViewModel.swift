@@ -9,16 +9,16 @@ import Observation
 struct AlbumDetailActions {
     let onRename: (String) -> Void
     let onDelete: () -> Void
-    let onAddPhotos: ([UUID]) -> Void
+    let onAddPhotos: ([String]) -> Void
     let onDeletePhotos: ([UUID], PhotoDeletionAction) -> Void
-    let onMovePhotos: ([UUID], ShareDestination) -> Void
+    let onMovePhotos: ([UUID], [ShareDestination]) -> Void
 
     init(
         onRename: @escaping (String) -> Void = { _ in },
         onDelete: @escaping () -> Void = {},
-        onAddPhotos: @escaping ([UUID]) -> Void = { _ in },
+        onAddPhotos: @escaping ([String]) -> Void = { _ in },
         onDeletePhotos: @escaping ([UUID], PhotoDeletionAction) -> Void = { _, _ in },
-        onMovePhotos: @escaping ([UUID], ShareDestination) -> Void = { _, _ in }
+        onMovePhotos: @escaping ([UUID], [ShareDestination]) -> Void = { _, _ in }
     ) {
         self.onRename = onRename
         self.onDelete = onDelete
@@ -39,6 +39,7 @@ final class AlbumDetailViewModel {
     var albumTitleDraft = ""
 
     private(set) var selectedPhotoIDs: [UUID] = []
+    private var shouldPresentAlbumDeleteAlertAfterManagementDismissal = false
 
     private let actions: AlbumDetailActions
     private let onEditPhotoInfo: (UUID) -> Void
@@ -86,13 +87,14 @@ final class AlbumDetailViewModel {
         isPhotoPickerPresented = true
     }
 
-    func addPhotos(_ photoIDs: [UUID]) {
-        actions.onAddPhotos(photoIDs)
+    func addPhotos(_ localIdentifiers: [String]) {
+        actions.onAddPhotos(localIdentifiers)
     }
 
     func presentAlbumManagement(albumTitle: String) {
         exitSelectionMode()
         albumTitleDraft = albumTitle
+        shouldPresentAlbumDeleteAlertAfterManagementDismissal = false
         isAlbumManagementPresented = true
     }
 
@@ -111,7 +113,8 @@ final class AlbumDetailViewModel {
     }
 
     func presentAlbumDeleteAlert() {
-        isAlbumDeleteAlertPresented = true
+        shouldPresentAlbumDeleteAlertAfterManagementDismissal = true
+        isAlbumManagementPresented = false
     }
 
     func dismissAlbumDeleteAlert() {
@@ -124,6 +127,15 @@ final class AlbumDetailViewModel {
         actions.onDelete()
     }
 
+    func completeAlbumManagementDismissal() {
+        guard shouldPresentAlbumDeleteAlertAfterManagementDismissal else {
+            return
+        }
+
+        shouldPresentAlbumDeleteAlertAfterManagementDismissal = false
+        isAlbumDeleteAlertPresented = true
+    }
+
     func presentMoveSheet() {
         guard hasSelectedPhotos else {
             return
@@ -132,8 +144,8 @@ final class AlbumDetailViewModel {
         isMoveSheetPresented = true
     }
 
-    func completePhotoMove(to destination: ShareDestination) {
-        actions.onMovePhotos(selectedPhotoIDs, destination)
+    func completePhotoMove(to destinations: [ShareDestination]) {
+        actions.onMovePhotos(selectedPhotoIDs, destinations)
         isMoveSheetPresented = false
         exitSelectionMode()
     }
