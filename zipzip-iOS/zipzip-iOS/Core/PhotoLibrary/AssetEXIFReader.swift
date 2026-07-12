@@ -50,14 +50,15 @@ nonisolated enum AssetEXIFReader {
                     dataReceivedHandler: { data in
                         guard !box.isDone() else { return }
                         box.append(data)
-                        guard box.byteCount >= minParseBytes else { return }
+                        let atCap = box.byteCount >= maxStreamedBytes
+                        guard box.reachedParseThreshold(minBytes: minParseBytes) || atCap else { return }
 
                         if let info = parseDeviceInfo(from: box.buffer) {
                             box.finish {
                                 if let id = box.requestID() { manager.cancelDataRequest(id) }
                                 continuation.resume(returning: .resolved(make: info.make, model: info.model))
                             }
-                        } else if box.byteCount >= maxStreamedBytes {
+                        } else if atCap {
                             box.finish {
                                 if let id = box.requestID() { manager.cancelDataRequest(id) }
                                 continuation.resume(returning: .resolved(make: nil, model: nil))
@@ -106,6 +107,17 @@ private final class ResourceStreamBox: @unchecked Sendable {
     private var data = Data()
     private var storedRequestID: PHAssetResourceDataRequestID?
     private var isFinished = false
+    private var parseThreshold: Int?
+
+    /// 파싱 시도 간격을 점증시켜(임계값 도달 시 2배로) 콜백마다 전체 버퍼를 재파싱하지 않도록 한다.
+    func reachedParseThreshold(minBytes: Int) -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        let threshold = parseThreshold ?? minBytes
+        guard data.count >= threshold else { return false }
+        parseThreshold = threshold * 2
+        return true
+    }
 
     var buffer: Data {
         lock.lock()
