@@ -46,12 +46,7 @@ nonisolated struct PhotoSectionsProvider {
         filters: [AppliedFilter],
         registeredDeviceIDs: Set<Int>
     ) async -> [PhotoSection] {
-        // 등록된 기기의 사진만 노출한다.
-        let registeredPhotos = library.filter { photo in
-            guard let deviceID = photo.deviceID else { return false }
-            return registeredDeviceIDs.contains(deviceID)
-        }
-        return Self.makeSections(from: registeredPhotos, filters: filters)
+        Self.registeredSections(from: library, filters: filters, registeredDeviceIDs: registeredDeviceIDs)
     }
 
     func loadAlbumSections(albumID: Int) async throws -> [PhotoSection] {
@@ -75,13 +70,26 @@ nonisolated struct PhotoSectionsProvider {
         Self.makeSections(from: library, filters: filters)
     }
 
-    private static func makeSections(
+    /// 등록된 기기의 사진만 노출한 뒤 필터/그룹핑한다.
+    static func registeredSections(
+        from library: [FilterablePhoto],
+        filters: [AppliedFilter],
+        registeredDeviceIDs: Set<Int>
+    ) -> [PhotoSection] {
+        let registeredPhotos = library.filter { photo in
+            guard let deviceID = photo.deviceID else { return false }
+            return registeredDeviceIDs.contains(deviceID)
+        }
+        return makeSections(from: registeredPhotos, filters: filters)
+    }
+
+    static func makeSections(
         from photos: [FilterablePhoto],
         filters: [AppliedFilter]
     ) -> [PhotoSection] {
         var filtered = photos
         for filter in filters {
-            filtered = Self.apply(filter, to: filtered)
+            filtered = apply(filter, to: filtered)
         }
 
         let sorted = filtered.sorted { lhs, rhs in
@@ -99,7 +107,7 @@ nonisolated struct PhotoSectionsProvider {
 
     private static let recentPhotoLimit = 50
 
-    private static func makeFilterablePhotos(
+    static func makeFilterablePhotos(
         records: [PhotoRecord],
         devices: [DeviceRecord],
         places: [PlaceRecord]
@@ -195,6 +203,30 @@ nonisolated struct PhotoSectionsProvider {
                 return photos
             }
         }
+    }
+}
+
+/// 등록된 기기의 사진 섹션을 DB 관찰로 제공한다.
+/// `device.is_registered`/`photo`/`place` 변경 시 자동으로 재실행돼 사진 뷰가 갱신된다.
+nonisolated struct PhotoSectionsRequest: FetchKeyRequest {
+    let filters: [AppliedFilter]
+
+    init(filters: [AppliedFilter] = []) {
+        self.filters = filters
+    }
+
+    func fetch(_ db: Database) throws -> [PhotoSection] {
+        let records = try PhotoRecord.all.fetchAll(db)
+        let devices = try DeviceRecord.all.fetchAll(db)
+        let places = try PlaceRecord.all.fetchAll(db)
+
+        let registeredDeviceIDs = Set(devices.filter(\.isRegistered).map(\.id))
+        let library = PhotoSectionsProvider.makeFilterablePhotos(records: records, devices: devices, places: places)
+        return PhotoSectionsProvider.registeredSections(
+            from: library,
+            filters: filters,
+            registeredDeviceIDs: registeredDeviceIDs
+        )
     }
 }
 
