@@ -33,14 +33,10 @@ struct ShareSheet: View {
     var excludedAlbumIDs: Set<Album.ID> = []
     /// 완료 시 선택 순서대로 전달한다. 호출 화면은 사진 추가, 이동 등 필요한 동작을 결정한다.
     var onComplete: ([ShareDestination]) -> Void = { _ in }
-    var loadsAlbumsFromDatabase = false
 
     @State private var selection: BottomSheetTabSelection = .left
     @State private var selectedAlbumIDs: [Album.ID] = []
     @State private var targetShareAlbum: ShareAlbum?
-    @State private var fetchedAlbums: [Album]?
-
-    private let albumStore = AlbumStore()
 
     var body: some View {
         BottomSheet(
@@ -64,9 +60,6 @@ struct ShareSheet: View {
         .onChange(of: selection) { _, _ in
             targetShareAlbum = nil
             selectedAlbumIDs = []
-        }
-        .task {
-            await loadAlbumsIfNeeded()
         }
     }
 
@@ -136,25 +129,7 @@ struct ShareSheet: View {
     }
 
     private var personalAlbums: [Album] {
-        (fetchedAlbums ?? albums).filter { !excludedAlbumIDs.contains($0.id) }
-    }
-
-    @MainActor
-    private func loadAlbumsIfNeeded() async {
-        guard loadsAlbumsFromDatabase,
-              let storedAlbums = try? await albumStore.fetchAlbums()
-        else {
-            return
-        }
-
-        fetchedAlbums = storedAlbums.map {
-            Album(
-                id: $0.id,
-                name: $0.name,
-                count: $0.photoCount,
-                thumbnailLocalIdentifiers: $0.thumbnailLocalIdentifiers
-            )
-        }
+        albums.filter { !excludedAlbumIDs.contains($0.id) }
     }
 
     private var selectedDestinations: [ShareDestination] {

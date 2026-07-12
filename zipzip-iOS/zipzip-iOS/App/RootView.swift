@@ -27,6 +27,7 @@ struct RootView: View {
             .task {
                 guard hasCompletedOnboarding else { return }
                 photoSync.startIfNeeded()
+                await albumViewModel.loadAlbums()
             }
             .navigationDestination(for: Route.self) { route in
                 switch route {
@@ -54,6 +55,7 @@ struct RootView: View {
                 case let .photoDetail(photo):
                     PhotoDetailView(
                         photo: photo,
+                        albums: albumViewModel.shareDestinations,
                         onAddToAlbums: addPhotosToAlbums
                     )
                 case let .albumDetail(albumID):
@@ -64,6 +66,7 @@ struct RootView: View {
                 case let .albumPhotoDetail(albumID, photo):
                     PhotoDetailView(
                         photo: photo,
+                        albums: albumViewModel.shareDestinations,
                         deletionContext: .album,
                         excludedAlbumIDs: [albumID],
                         onDelete: { action in

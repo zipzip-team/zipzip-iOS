@@ -112,8 +112,7 @@ struct AlbumDetailView<Content: View>: View {
                 shareAlbums: ShareAlbum.samples,
                 onDismiss: { sheetDismiss() },
                 excludedAlbumIDs: [album.id],
-                onComplete: viewModel.completePhotoMove,
-                loadsAlbumsFromDatabase: true
+                onComplete: viewModel.completePhotoMove
             )
         }
         .bottomSheetAlert(

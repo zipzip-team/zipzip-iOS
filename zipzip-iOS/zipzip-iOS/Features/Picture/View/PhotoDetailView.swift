@@ -48,6 +48,7 @@ struct PhotoDetailView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     let photo: Photo
+    private let albums: [Album]
     let deletionContext: PhotoDeletionContext
     private let excludedAlbumIDs: Set<Album.ID>
     private let onDelete: (PhotoDeletionAction) -> Void
@@ -73,6 +74,7 @@ struct PhotoDetailView: View {
 
     init(
         photo: Photo,
+        albums: [Album] = Album.samples,
         deletionContext: PhotoDeletionContext = .gallery,
         excludedAlbumIDs: Set<Album.ID> = [],
         onDelete: @escaping (PhotoDeletionAction) -> Void = { _ in },
@@ -80,6 +82,7 @@ struct PhotoDetailView: View {
         onMoveToAlbums: @escaping ([Int], [ShareDestination]) -> Void = { _, _ in }
     ) {
         self.photo = photo
+        self.albums = albums
         self.deletionContext = deletionContext
         self.excludedAlbumIDs = excludedAlbumIDs
         self.onDelete = onDelete
@@ -177,7 +180,7 @@ struct PhotoDetailView: View {
         .statusBarHidden(isCommittedPhotoZoomed)
         .bottomSheet(isPresented: $showShareSheet, detents: [.full]) { dismiss in
             ShareSheet(
-                albums: Album.samples,
+                albums: albums,
                 sharedAlbums: Album.sharedSamples,
                 shareAlbums: ShareAlbum.samples,
                 onDismiss: { dismiss() },
@@ -197,8 +200,7 @@ struct PhotoDetailView: View {
                         onAddToAlbums([photo.localIdentifier], destinations)
                     }
                     dismiss()
-                },
-                loadsAlbumsFromDatabase: true
+                }
             )
         }
         .bottomSheetAlert(

@@ -86,7 +86,7 @@ struct FilteredPictureView: View {
         }
         .bottomSheet(isPresented: $showShareSheet, detents: [.full]) { dismiss in
             ShareSheet(
-                albums: Album.samples,
+                albums: albumViewModel.shareDestinations,
                 sharedAlbums: Album.sharedSamples,
                 shareAlbums: ShareAlbum.samples,
                 onDismiss: { dismiss() },
@@ -108,9 +108,8 @@ struct FilteredPictureView: View {
 
                         router.push(.albumDetail(albumID))
                     }
-                },
-                loadsAlbumsFromDatabase: true
-            )
+                    }
+                )
         }
         .bottomSheetAlert(
             isPresented: $pictureViewModel.showDeleteAlert,

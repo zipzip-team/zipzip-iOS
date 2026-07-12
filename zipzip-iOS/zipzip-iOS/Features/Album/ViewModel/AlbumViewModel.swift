@@ -249,9 +249,18 @@ final class AlbumViewModel {
     }
 
     func moveDestinations(excluding albumID: AlbumViewItem.ID) -> [Album] {
-        albums
-            .filter { $0.id != albumID }
-            .map { Album(id: $0.id, name: $0.name, count: $0.count) }
+        shareDestinations.filter { $0.id != albumID }
+    }
+
+    var shareDestinations: [Album] {
+        albums.map {
+            Album(
+                id: $0.id,
+                name: $0.name,
+                count: $0.count,
+                thumbnailLocalIdentifiers: $0.thumbnailLocalIdentifiers
+            )
+        }
     }
 
     func photoSections(for albumID: AlbumViewItem.ID) async -> [PhotoSection] {
