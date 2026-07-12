@@ -83,8 +83,9 @@
 | 기기 ID | `id` | INTEGER | PK |  |
 | 제조사 | `make` | TEXT |  | EXIF Make |
 | 모델 | `model` | TEXT |  | EXIF Model |
+| 등록 여부 | `is_registered` | INTEGER | NOT NULL DEFAULT 0 | 0/1 — 사용자가 온보딩·마이페이지에서 등록한 기기. 사진뷰·필터 후보는 등록 기기만 노출 |
 
-> `os_version` 제외(같은 기기가 OS 버전마다 다른 행으로 쪼개짐). `photo_count`는 `COUNT(*) GROUP BY device_id`로 **파생** → 실측 성능 문제 시에만 캐시 컬럼 도입.
+> 기기는 동기화 때 사진별 **EXIF Make/Model**로 get-or-create 한다(EXIF 기기 정보가 없는 사진은 `device`에 넣지 않고 `photo`로도 저장하지 않음). `os_version` 제외(같은 기기가 OS 버전마다 다른 행으로 쪼개짐). `photo_count`는 `COUNT(*) GROUP BY device_id`로 **파생**(기기 목록 사용 빈도순 정렬에 사용) → 실측 성능 문제 시에만 캐시 컬럼 도입.
 > 
 
 #### `place` — 장소 (필터 축)

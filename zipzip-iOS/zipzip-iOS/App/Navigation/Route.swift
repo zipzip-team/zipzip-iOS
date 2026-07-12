@@ -18,6 +18,17 @@ enum Route: Hashable {
     case filterResult([AppliedFilter])
     case photoInfoEdit(PhotoMetadata)
     case photoDetail(Photo)
+    case albumDetail(Int)
+    case albumPhotoDetail(albumID: Int, photo: Photo)
     case myPage
     case registeredDeviceManagement
+
+    var isAlbumRoute: Bool {
+        switch self {
+        case .albumDetail, .albumPhotoDetail:
+            true
+        default:
+            false
+        }
+    }
 }

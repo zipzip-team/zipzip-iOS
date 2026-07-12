@@ -6,7 +6,7 @@
 //
 
 import Foundation
-import Photos
+@preconcurrency import Photos
 import SQLiteData
 
 nonisolated struct SyncProgress {
@@ -18,6 +18,7 @@ nonisolated struct PhotoLibrarySyncService {
     @Dependency(\.defaultDatabase) private var database
 
     private static let chunkSize = 500
+    private static let maxConcurrentMetadataReads = 8
 
     func syncIfNeeded() -> AsyncThrowingStream<SyncProgress, Error> {
         AsyncThrowingStream { continuation in
@@ -53,21 +54,40 @@ nonisolated struct PhotoLibrarySyncService {
         let total = fetchResult.count
         let scanDate = Date()
 
-        let deviceID = try await database.write { db in
-            try Self.currentDeviceID(db)
-        }
-
+        var deviceCache: [DeviceKey: Int] = [:]
         var processed = 0
         while processed < total {
             try Task.checkCancellation()
             let upperBound = min(processed + Self.chunkSize, total)
-            let chunk = autoreleasepool {
-                fetchResult
-                    .objects(at: IndexSet(integersIn: processed ..< upperBound))
-                    .map(AssetMetadata.init)
+            let assets = autoreleasepool {
+                fetchResult.objects(at: IndexSet(integersIn: processed ..< upperBound))
             }
+            let chunk = await Self.loadMetadata(for: assets)
+
+            let neededKeys = Set(chunk.compactMap(Self.deviceKey)).subtracting(deviceCache.keys)
+            if !neededKeys.isEmpty {
+                let resolved = try await database.write { db in
+                    var map: [DeviceKey: Int] = [:]
+                    for key in neededKeys {
+                        map[key] = try Self.deviceID(for: key, db: db)
+                    }
+                    return map
+                }
+                deviceCache.merge(resolved) { current, _ in current }
+            }
+
+            // iCloud 전용 사진(devicePending)은 기기 미정으로 저장해 백필로 미룬다.
+            // 기기 정보가 없는 사진(스크린샷 등)은 저장하지 않는다.
+            let entries: [(AssetMetadata, Int?)] = chunk.compactMap { metadata in
+                if metadata.devicePending { return (metadata, nil) }
+                guard let key = Self.deviceKey(for: metadata),
+                      let deviceID = deviceCache[key]
+                else { return nil }
+                return (metadata, deviceID)
+            }
+
             try await database.write { db in
-                for metadata in chunk {
+                for (metadata, deviceID) in entries {
                     try Self.upsert(metadata, deviceID: deviceID, addedAt: scanDate, db: db)
                 }
             }
@@ -80,9 +100,35 @@ nonisolated struct PhotoLibrarySyncService {
         }
     }
 
+    /// 청크 내 자산들의 메타데이터를 제한된 동시성으로 병렬 로드한다(EXIF 읽기 포함).
+    private static func loadMetadata(for assets: [PHAsset]) async -> [AssetMetadata] {
+        await withTaskGroup(of: (Int, AssetMetadata).self) { group in
+            var results = [AssetMetadata?](repeating: nil, count: assets.count)
+            var next = 0
+
+            func addTask(at index: Int) {
+                let asset = assets[index]
+                group.addTask { (index, await AssetMetadata.load(from: asset)) }
+            }
+
+            while next < min(maxConcurrentMetadataReads, assets.count) {
+                addTask(at: next)
+                next += 1
+            }
+            while let (index, metadata) = await group.next() {
+                results[index] = metadata
+                if next < assets.count {
+                    addTask(at: next)
+                    next += 1
+                }
+            }
+            return results.compactMap { $0 }
+        }
+    }
+
     private static func upsert(
         _ metadata: AssetMetadata,
-        deviceID: Int,
+        deviceID: Int?,
         addedAt: Date,
         db: Database
     ) throws {
@@ -109,20 +155,33 @@ nonisolated struct PhotoLibrarySyncService {
             updates.longitude = excluded.longitude
             updates.width = excluded.width
             updates.height = excluded.height
+            updates.deviceID = excluded.deviceID
         }
         .execute(db)
     }
 
-    private static func currentDeviceID(_ db: Database) throws -> Int {
-        let model = deviceModelIdentifier()
+    // MARK: - Device Resolution
+
+    private struct DeviceKey: Hashable {
+        let make: String?
+        let model: String?
+    }
+
+    private static func deviceKey(for metadata: AssetMetadata) -> DeviceKey? {
+        if metadata.make == nil, metadata.model == nil { return nil }
+        return DeviceKey(make: metadata.make, model: metadata.model)
+    }
+
+    /// (make, model)에 해당하는 기기를 조회하고 없으면 생성해 id를 반환한다.
+    private static func deviceID(for key: DeviceKey, db: Database) throws -> Int {
         let existing = try DeviceRecord
-            .where { $0.make.eq("Apple") && $0.model.eq(model) }
+            .where { $0.make.is(key.make) && $0.model.is(key.model) }
             .fetchOne(db)
         if let existing {
             return existing.id
         }
         try DeviceRecord.insert {
-            DeviceRecord.Draft(make: "Apple", model: model)
+            DeviceRecord.Draft(make: key.make, model: key.model)
         }
         .execute(db)
         return Int(db.lastInsertedRowID)
@@ -145,14 +204,6 @@ nonisolated struct PhotoLibrarySyncService {
             SyncStateRecord.Draft(id: 1, changeToken: data.base64EncodedString())
         }
         .execute(db)
-    }
-
-    private static func deviceModelIdentifier() -> String {
-        var systemInfo = utsname()
-        uname(&systemInfo)
-        return withUnsafeBytes(of: &systemInfo.machine) { buffer in
-            String(decoding: buffer.prefix(while: { $0 != 0 }), as: UTF8.self)
-        }
     }
 }
 

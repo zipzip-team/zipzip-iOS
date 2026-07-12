@@ -34,16 +34,19 @@ struct AlbumPhotoPickerView: View {
         }
         .overlay(alignment: .topLeading) {
             cancelButton
-                .padding(.top, 19)
+                .padding(.top, 14)
                 .padding(.leading, 16)
         }
         .overlay(alignment: .topTrailing) {
             completionButton
-                .padding(.top, 19)
+                .padding(.top, 14)
                 .padding(.trailing, 16)
         }
         .navigationBarBackButtonHidden(true)
         .toolbarVisibility(.hidden, for: .navigationBar)
+        .task {
+            await viewModel.loadPhotos()
+        }
     }
 
     private var cancelButton: some View {
@@ -66,7 +69,6 @@ struct AlbumPhotoPickerView: View {
     NavigationStack {
         AlbumPhotoPickerView(
             viewModel: AlbumPhotoPickerViewModel(
-                sections: PhotoSection.sample,
                 onComplete: { _ in }
             )
         )

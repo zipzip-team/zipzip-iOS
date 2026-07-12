@@ -29,7 +29,7 @@ final class FilteredPictureViewModel {
     var showLocationSheet = false
     var pickerLocation = ""
     var showDateSheet = false
-    var pickerDate = Date()
+    var pickerDate: Date?
     var showEtcSheet = false
     var pickerEtc = ""
 
@@ -63,22 +63,29 @@ final class FilteredPictureViewModel {
     }
 
     func applyDevice(_ name: String) {
-        guard let index = appliedFilters.firstIndex(where: { $0.kind == .device }) else { return }
-        appliedFilters[index] = AppliedFilter(kind: .device, value: name)
+        applyFilter(kind: .device, value: name.isEmpty ? nil : name)
     }
 
     func applyLocation(_ name: String) {
-        guard let index = appliedFilters.firstIndex(where: { $0.kind == .location }) else { return }
-        appliedFilters[index] = AppliedFilter(kind: .location, value: name)
+        applyFilter(kind: .location, value: name.isEmpty ? nil : name)
     }
 
-    func applyDate(_ date: Date) {
-        guard let index = appliedFilters.firstIndex(where: { $0.kind == .date }) else { return }
-        appliedFilters[index] = AppliedFilter(kind: .date, value: AppliedFilter.dateText(date))
+    func applyDate(_ date: Date?) {
+        applyFilter(kind: .date, value: date.map(AppliedFilter.dateText))
     }
 
     func applyEtc(_ value: String) {
-        guard let index = appliedFilters.firstIndex(where: { $0.kind == .etc }) else { return }
-        appliedFilters[index] = AppliedFilter(kind: .etc, value: value)
+        applyFilter(kind: .etc, value: value.isEmpty ? nil : value)
+    }
+
+    private func applyFilter(kind: FilterKind, value: String?) {
+        guard let index = appliedFilters.firstIndex(where: { $0.kind == kind }) else { return }
+
+        guard let value else {
+            appliedFilters.remove(at: index)
+            return
+        }
+
+        appliedFilters[index] = AppliedFilter(kind: kind, value: value)
     }
 }

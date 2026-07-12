@@ -8,8 +8,19 @@
 import SwiftUI
 
 struct PictureView: View {
-    @Environment(Router.self) private var router
     let viewModel: PictureViewModel
+    let onOpenFilter: () -> Void
+    let onOpenPhoto: (Photo) -> Void
+
+    init(
+        viewModel: PictureViewModel,
+        onOpenFilter: @escaping () -> Void = {},
+        onOpenPhoto: @escaping (Photo) -> Void = { _ in }
+    ) {
+        self.viewModel = viewModel
+        self.onOpenFilter = onOpenFilter
+        self.onOpenPhoto = onOpenPhoto
+    }
 
     var body: some View {
         @Bindable var viewModel = viewModel
@@ -20,22 +31,28 @@ struct PictureView: View {
                     .foregroundStyle(.grey900)
                     .frame(height: 44)
                     .padding(.vertical, 4)
+                    .padding(.horizontal, 16)
                     .opacity(viewModel.isSelectionMode ? 0 : 1)
+
+                if !viewModel.isSelectionMode {
+                    PhotoRecommendationPlaceholder()
+                }
 
                 PhotoGallery(
                     sections: viewModel.sections,
+                    thumbnailImages: viewModel.thumbnailImages,
+                    loadThumbnail: viewModel.loadThumbnail,
                     isSelectionMode: viewModel.isSelectionMode,
                     selectedPhotoIDs: viewModel.selectedPhotoIDs,
                     onTapPhoto: viewModel.toggleSelection,
                     onLongPressPhoto: viewModel.handleLongPress,
-                    onOpenPhoto: { router.push(.photoDetail($0)) }
+                    onOpenPhoto: onOpenPhoto
                 )
+                .padding(.horizontal, 16)
             }
-            .padding(.horizontal, 16)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .background(Color.orange30.ignoresSafeArea())
-        .task { await viewModel.loadPhotos() }
         .overlay(alignment: .topTrailing) {
             if !viewModel.isSelectionMode {
                 floatingButton
@@ -62,7 +79,7 @@ struct PictureView: View {
 
     private var floatingButton: some View {
         RoundedIconButton(items: [
-            .init(id: "filter", icon: .filter, accessibilityLabel: "필터") { router.push(.filter) },
+            .init(id: "filter", icon: .filter, accessibilityLabel: "필터", action: onOpenFilter),
             .init(id: "selection", icon: .select, accessibilityLabel: "사진 선택") {
                 viewModel.enterSelectionMode()
             }
@@ -80,7 +97,14 @@ struct PictureView: View {
     }
 }
 
+private struct PhotoRecommendationPlaceholder: View {
+    var body: some View {
+        Color.grey100
+            .frame(height: 207)
+            .accessibilityHidden(true)
+    }
+}
+
 #Preview {
     PictureView(viewModel: PictureViewModel())
-        .environment(Router())
 }

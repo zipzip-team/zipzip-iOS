@@ -8,24 +8,35 @@
 import OSLog
 import SQLiteData
 import SwiftUI
+import UIKit
 
 @Observable
 final class PictureViewModel {
     @ObservationIgnored
-    @Dependency(\.photoSections) private var provider
+    @Fetch private var response: [PhotoSection]
 
     @ObservationIgnored
     @Dependency(\.photoDeletion) private var deletion
 
     private static let logger = Logger(subsystem: "com.zipzip.zipzip-iOS", category: "PictureSections")
 
-    @ObservationIgnored private var library: [FilterablePhoto]?
+    @ObservationIgnored private var loadingThumbnailIdentifiers: Set<String> = []
 
     var isSelectionMode = false
     private(set) var selectedPhotoIDs: [UUID] = []
     var showDeleteAlert = false
 
-    private(set) var sections: [PhotoSection] = []
+    private(set) var thumbnailImages: [String: UIImage] = [:]
+
+    private static let thumbnailSize = CGSize(width: 300, height: 300)
+
+    var sections: [PhotoSection] {
+        response
+    }
+
+    init(filters: [AppliedFilter] = []) {
+        _response = Fetch(wrappedValue: [], PhotoSectionsRequest(filters: filters))
+    }
 
     var firstSelectedMetadata: PhotoMetadata? {
         guard let firstID = selectedPhotoIDs.first else { return nil }
@@ -33,6 +44,10 @@ final class PictureViewModel {
             .flatMap(\.photos)
             .first { $0.id == firstID }?
             .metadata
+    }
+
+    var selectedPhotoLocalIdentifiers: [String] {
+        sections.localIdentifiers(for: selectedPhotoIDs)
     }
 
     func enterSelectionMode() {
@@ -43,16 +58,8 @@ final class PictureViewModel {
         showDeleteAlert = true
     }
 
-    private var selectedLocalIdentifiers: [String] {
-        let ids = Set(selectedPhotoIDs)
-        return sections
-            .flatMap(\.photos)
-            .filter { ids.contains($0.id) }
-            .map(\.localIdentifier)
-    }
-
     func deleteSelectedPhotos() async {
-        await deletePhotos(localIdentifiers: selectedLocalIdentifiers)
+        await deletePhotos(localIdentifiers: selectedPhotoLocalIdentifiers)
         cancelSelection()
     }
 
@@ -61,8 +68,6 @@ final class PictureViewModel {
         guard !localIdentifiers.isEmpty else { return false }
         do {
             try await deletion.delete(localIdentifiers: localIdentifiers)
-            library?.removeAll { localIdentifiers.contains($0.photo.localIdentifier) }
-            sections = await provider.sections(from: library ?? [], filters: [])
             return true
         } catch {
             Self.logger.error("failed to delete photos: \(error)")
@@ -75,19 +80,31 @@ final class PictureViewModel {
         selectedPhotoIDs = []
     }
 
-    func loadPhotos(filters: [AppliedFilter] = []) async {
+    func applyFilters(_ filters: [AppliedFilter]) async {
         do {
-            let library: [FilterablePhoto]
-            if let cached = self.library {
-                library = cached
-            } else {
-                library = try await provider.loadLibrary()
-                self.library = library
-            }
-            sections = await provider.sections(from: library, filters: filters)
+            try await $response.load(PhotoSectionsRequest(filters: filters))
         } catch {
             Self.logger.error("failed to load photo sections: \(error)")
         }
+    }
+
+    func loadThumbnail(for localIdentifier: String) async {
+        guard !localIdentifier.isEmpty,
+              thumbnailImages[localIdentifier] == nil,
+              !loadingThumbnailIdentifiers.contains(localIdentifier)
+        else {
+            return
+        }
+
+        loadingThumbnailIdentifiers.insert(localIdentifier)
+        defer { loadingThumbnailIdentifiers.remove(localIdentifier) }
+
+        let image = await PhotoThumbnailLoader.shared.thumbnail(
+            for: localIdentifier,
+            targetSize: Self.thumbnailSize
+        )
+        guard !Task.isCancelled, let image else { return }
+        thumbnailImages[localIdentifier] = image
     }
 
     func handleLongPress(_ id: UUID) {

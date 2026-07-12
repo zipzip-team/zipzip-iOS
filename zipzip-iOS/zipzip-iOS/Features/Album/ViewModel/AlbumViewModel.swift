@@ -7,8 +7,8 @@ import Foundation
 import Observation
 
 @Observable
+@MainActor
 final class AlbumViewModel {
-    var navigationPath: [AlbumRoute] = []
     var isSelectionMode = false
     var isDeleteAlertPresented = false
     var isCreateAlbumSheetPresented = false {
@@ -21,16 +21,34 @@ final class AlbumViewModel {
 
     var isShareAlbumSheetPresented = false
     var createAlbumName = ""
+    private(set) var isCreatingAlbum = false
 
     private(set) var selectedAlbumIDs: [AlbumViewItem.ID] = []
     private(set) var albums: [AlbumViewItem]
+    @ObservationIgnored private let albumStore: AlbumStore
+    @ObservationIgnored private let photoSectionsProvider: PhotoSectionsProvider
+    @ObservationIgnored private let loadsAlbumsFromDatabase: Bool
 
-    init(albums: [AlbumViewItem] = AlbumViewItem.samples) {
-        self.albums = albums
+    init(
+        albums: [AlbumViewItem]? = nil,
+        albumStore: AlbumStore = AlbumStore(),
+        photoSectionsProvider: PhotoSectionsProvider = PhotoSectionsProvider()
+    ) {
+        self.albums = albums ?? []
+        self.albumStore = albumStore
+        self.photoSectionsProvider = photoSectionsProvider
+        self.loadsAlbumsFromDatabase = albums == nil
     }
 
-    var isDetailPresented: Bool {
-        !navigationPath.isEmpty
+    var isCreateAlbumDisabled: Bool {
+        createAlbumName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isCreatingAlbum
+    }
+
+    func loadAlbums() async {
+        guard loadsAlbumsFromDatabase else { return }
+
+        guard let storedAlbums = try? await albumStore.fetchAlbums() else { return }
+        albums = storedAlbums.map(AlbumViewItem.init)
     }
 
     func enterSelectionMode() {
@@ -42,6 +60,10 @@ final class AlbumViewModel {
         isDeleteAlertPresented = false
         isShareAlbumSheetPresented = false
         isSelectionMode = false
+    }
+
+    func resetForTabChange() {
+        exitSelectionMode()
     }
 
     func presentCreateAlbumSheet() {
@@ -56,30 +78,30 @@ final class AlbumViewModel {
         createAlbumName = ""
     }
 
-    func createAlbum() {
+    func createAlbum() async -> AlbumViewItem? {
         let trimmedName = createAlbumName.trimmingCharacters(in: .whitespacesAndNewlines)
-        let album = AlbumViewItem(
-            id: UUID(),
-            name: trimmedName.isEmpty ? "집집 🏠" : trimmedName,
-            createdAt: .now,
-            count: 0,
-            photoIDs: []
-        )
+        guard !trimmedName.isEmpty, !isCreatingAlbum else { return nil }
 
-        albums.append(album)
+        isCreatingAlbum = true
+        defer { isCreatingAlbum = false }
+
+        guard let storedAlbum = try? await albumStore.createAlbum(name: trimmedName) else { return nil }
+        let album = AlbumViewItem(storedAlbum: storedAlbum)
+
+        albums.insert(album, at: 0)
         isCreateAlbumSheetPresented = false
-        navigationPath = [.detail(album.id)]
+        return album
     }
 
-    func showDetail(for album: AlbumViewItem) {
-        navigationPath.append(.detail(album.id))
+    func showDetail(for album: AlbumViewItem, router: Router) {
+        router.push(.albumDetail(album.id))
     }
 
-    func showPhotoDetail(_ photo: Photo, in albumID: AlbumViewItem.ID) {
-        navigationPath.append(.photoDetail(albumID: albumID, photo: photo))
+    func showPhotoDetail(_ photo: Photo, in albumID: AlbumViewItem.ID, router: Router) {
+        router.push(.albumPhotoDetail(albumID: albumID, photo: photo))
     }
 
-    func showPhotoInfoEdit(for photoID: UUID) {
+    func showPhotoInfoEdit(for photoID: UUID, router: Router) {
         guard let photo = PhotoSection.sample
             .flatMap(\.photos)
             .first(where: { $0.id == photoID })
@@ -87,7 +109,7 @@ final class AlbumViewModel {
             return
         }
 
-        navigationPath.append(.photoInfoEdit(photo.metadata))
+        router.push(.photoInfoEdit(photo.metadata))
     }
 
     func toggleSelection(for album: AlbumViewItem) {
@@ -114,11 +136,7 @@ final class AlbumViewModel {
         isShareAlbumSheetPresented = false
     }
 
-    func presentShareAlbumCreation() {
-        // 공유집 생성 화면이 구현되면 이 진입점을 연결한다.
-    }
-
-    func completeShareAlbumMove(to _: ShareAlbum, album _: Album) {
+    func completeShareAlbumMove(to _: ShareAlbum) {
         let movedAlbumIDs = Set(selectedAlbumIDs)
         albums.removeAll { movedAlbumIDs.contains($0.id) }
         exitSelectionMode()
@@ -137,29 +155,63 @@ final class AlbumViewModel {
     }
 
     func confirmSelectedAlbumDeletion() {
-        let idsToDelete = Set(selectedAlbumIDs)
-        albums.removeAll { idsToDelete.contains($0.id) }
-        exitSelectionMode()
+        let albumIDs = selectedAlbumIDs
+        Task {
+            guard await deleteAlbums(ids: albumIDs) else {
+                return
+            }
+
+            exitSelectionMode()
+        }
     }
 
     func album(for id: AlbumViewItem.ID) -> AlbumViewItem? {
         albums.first(where: { $0.id == id })
     }
 
-    func makeDetailViewModel(for albumID: AlbumViewItem.ID) -> AlbumDetailViewModel {
+    func makeDetailViewModel(for albumID: AlbumViewItem.ID, router: Router) -> AlbumDetailViewModel {
         AlbumDetailViewModel(
             actions: AlbumDetailActions(
-                onRename: { [weak self] in self?.renameAlbum(albumID, to: $0) },
-                onDelete: { [weak self] in self?.deleteAlbum(albumID) },
-                onAddPhotos: { [weak self] in self?.addPhotos($0, to: albumID) },
+                onRename: { [weak self] name in
+                    Task {
+                        await self?.renameAlbum(albumID, to: name)
+                    }
+                },
+                onDelete: { [weak self] in
+                    Task {
+                        guard await self?.deleteAlbums(
+                            ids: [albumID],
+                            beforeLocalStateUpdate: router.pop
+                        ) == true else {
+                            return
+                        }
+                    }
+                },
+                onAddPhotos: { [weak self] localIdentifiers in
+                    Task {
+                        await self?.addPhotos(
+                            localIdentifiers: localIdentifiers,
+                            to: [.album(albumID)]
+                        )
+                    }
+                },
                 onDeletePhotos: { [weak self] photoIDs, action in
                     self?.deletePhotos(photoIDs, from: albumID, action: action)
                 },
                 onMovePhotos: { [weak self] photoIDs, destination in
-                    self?.movePhotos(photoIDs, from: albumID, to: destination)
+                    Task {
+                        guard let self,
+                              await self.movePhotos(photoIDs, from: albumID, to: destination),
+                              let destinationAlbumID = destination.firstPersonalAlbumID
+                        else {
+                            return
+                        }
+
+                        router.push(.albumDetail(destinationAlbumID))
+                    }
                 }
             ),
-            onEditPhotoInfo: { [weak self] in self?.showPhotoInfoEdit(for: $0) }
+            onEditPhotoInfo: { [weak self] in self?.showPhotoInfoEdit(for: $0, router: router) }
         )
     }
 
@@ -168,105 +220,170 @@ final class AlbumViewModel {
         from albumID: AlbumViewItem.ID,
         action: PhotoDeletionAction
     ) {
-        if action == .deletePermanently {
-            for albumIndex in albums.indices {
-                removePhotos(photoIDs, fromAlbumAt: albumIndex)
+        Task {
+            guard let sections = try? await photoSectionsProvider.loadAlbumSections(albumID: albumID) else {
+                return
             }
-            return
-        }
 
-        guard let index = albums.firstIndex(where: { $0.id == albumID }) else {
-            return
-        }
+            let selectedPhotos = sections
+                .flatMap(\.photos)
+                .filter { photoIDs.contains($0.id) }
 
-        removePhotos(photoIDs, fromAlbumAt: index)
+            do {
+                switch action {
+                case .deletePermanently:
+                    try await albumStore.deletePhotos(
+                        localIdentifiers: selectedPhotos.map(\.localIdentifier)
+                    )
+                case .removeFromAlbum:
+                    try await albumStore.removeAlbumPhotos(
+                        ids: selectedPhotos.compactMap(\.albumPhotoID)
+                    )
+                }
+            } catch {
+                return
+            }
+
+            await loadAlbums()
+        }
     }
 
     func moveDestinations(excluding albumID: AlbumViewItem.ID) -> [Album] {
-        albums
-            .filter { $0.id != albumID }
-            .map { Album(id: $0.id, name: $0.name, count: $0.count) }
+        shareDestinations.filter { $0.id != albumID }
     }
 
-    func availablePhotoSections(excluding photoIDs: [UUID]) -> [PhotoSection] {
-        let excludedPhotoIDs = Set(photoIDs)
-
-        return PhotoSection.sample.compactMap { section in
-            let photos = section.photos.filter { !excludedPhotoIDs.contains($0.id) }
-            return photos.isEmpty ? nil : PhotoSection(title: section.title, photos: photos)
+    var shareDestinations: [Album] {
+        albums.map {
+            Album(
+                id: $0.id,
+                name: $0.name,
+                count: $0.count,
+                thumbnailLocalIdentifiers: $0.thumbnailLocalIdentifiers
+            )
         }
     }
 
-    func photoSections(for album: AlbumViewItem) -> [PhotoSection] {
-        let photoIDs = Set(album.photoIDs)
-
-        return PhotoSection.sample.compactMap { section in
-            let photos = section.photos.filter { photoIDs.contains($0.id) }
-            return photos.isEmpty ? nil : PhotoSection(title: section.title, photos: photos)
-        }
+    func photoSections(for albumID: AlbumViewItem.ID) async -> [PhotoSection] {
+        (try? await photoSectionsProvider.loadAlbumSections(albumID: albumID)) ?? []
     }
 
-    private func renameAlbum(_ albumID: AlbumViewItem.ID, to name: String) {
+    /// 사진 목록 화면에서 선택한 사진을 개인 사진집에 영구적으로 추가한다.
+    func addPhotos(localIdentifiers: [String], to destinations: [ShareDestination]) async -> Bool {
+        let albumIDs = destinations.compactMap { destination -> Album.ID? in
+            guard case let .album(albumID) = destination else {
+                return nil
+            }
+            return albumID
+        }
+
+        guard !albumIDs.isEmpty, !localIdentifiers.isEmpty else {
+            return false
+        }
+
+        do {
+            try await albumStore.addPhotos(localIdentifiers: localIdentifiers, to: albumIDs)
+        } catch {
+            return false
+        }
+
+        await loadAlbums()
+        return true
+    }
+
+    func moveAlbumPhotos(
+        ids: [Int],
+        from sourceAlbumID: AlbumViewItem.ID,
+        to destinations: [ShareDestination]
+    ) async -> Bool {
+        let destinationAlbumIDs = destinations.compactMap { destination -> Album.ID? in
+            guard case let .album(albumID) = destination else {
+                return nil
+            }
+            return albumID
+        }
+
+        guard !ids.isEmpty, !destinationAlbumIDs.isEmpty else {
+            return false
+        }
+
+        do {
+            try await albumStore.moveAlbumPhotos(
+                ids: ids,
+                from: sourceAlbumID,
+                to: destinationAlbumIDs
+            )
+        } catch {
+            return false
+        }
+
+        await loadAlbums()
+        return true
+    }
+
+    private func renameAlbum(_ albumID: AlbumViewItem.ID, to name: String) async {
+        if loadsAlbumsFromDatabase {
+            do {
+                try await albumStore.renameAlbum(id: albumID, name: name)
+            } catch {
+                return
+            }
+        }
+
         guard let index = albums.firstIndex(where: { $0.id == albumID }) else {
             return
         }
-
         albums[index].name = name
     }
 
-    private func deleteAlbum(_ albumID: AlbumViewItem.ID) {
-        albums.removeAll { $0.id == albumID }
-        navigationPath.removeAll()
-    }
-
-    private func addPhotos(_ photoIDs: [UUID], to albumID: AlbumViewItem.ID) {
-        guard let index = albums.firstIndex(where: { $0.id == albumID }) else {
-            return
+    private func deleteAlbums(
+        ids: [AlbumViewItem.ID],
+        beforeLocalStateUpdate: () -> Void = {}
+    ) async -> Bool {
+        let uniqueIDs = Array(Set(ids))
+        guard !uniqueIDs.isEmpty else {
+            return false
         }
 
-        let existingIDs = Set(albums[index].photoIDs)
-        let newIDs = photoIDs.filter { !existingIDs.contains($0) }
-        albums[index].photoIDs.append(contentsOf: newIDs)
-        albums[index].count += newIDs.count
+        if loadsAlbumsFromDatabase {
+            do {
+                try await albumStore.deleteAlbums(ids: uniqueIDs)
+            } catch {
+                return false
+            }
+        }
+
+        beforeLocalStateUpdate()
+        let idsToDelete = Set(uniqueIDs)
+        albums.removeAll { idsToDelete.contains($0.id) }
+        return true
     }
 
     private func movePhotos(
         _ photoIDs: [UUID],
         from albumID: AlbumViewItem.ID,
-        to destination: ShareDestination
-    ) {
-        if case let .album(destinationID) = destination,
-           let destinationIndex = albums.firstIndex(where: { $0.id == destinationID }) {
-            let destinationPhotoIDs = Set(albums[destinationIndex].photoIDs)
-            let movedPhotoIDs = photoIDs.filter { !destinationPhotoIDs.contains($0) }
-            albums[destinationIndex].photoIDs.append(contentsOf: movedPhotoIDs)
-            albums[destinationIndex].count += movedPhotoIDs.count
+        to destinations: [ShareDestination]
+    ) async -> Bool {
+        guard let sections = try? await photoSectionsProvider.loadAlbumSections(albumID: albumID) else {
+            return false
         }
 
-        deletePhotos(photoIDs, from: albumID, action: .removeFromAlbum)
+        let photosByID = Dictionary(uniqueKeysWithValues: sections.flatMap(\.photos).map { ($0.id, $0) })
+        let albumPhotoIDs = photoIDs.compactMap { photosByID[$0]?.albumPhotoID }
+        return await moveAlbumPhotos(
+            ids: albumPhotoIDs,
+            from: albumID,
+            to: destinations
+        )
     }
-
-    private func removePhotos(_ photoIDs: [UUID], fromAlbumAt index: Int) {
-        let idsToDelete = Set(photoIDs)
-        let previousCount = albums[index].photoIDs.count
-        albums[index].photoIDs.removeAll { idsToDelete.contains($0) }
-        let deletedCount = previousCount - albums[index].photoIDs.count
-        albums[index].count = max(0, albums[index].count - deletedCount)
-    }
-}
-
-enum AlbumRoute: Hashable {
-    case detail(AlbumViewItem.ID)
-    case photoDetail(albumID: AlbumViewItem.ID, photo: Photo)
-    case photoInfoEdit(PhotoMetadata)
 }
 
 struct AlbumViewItem: Identifiable, Equatable {
-    let id: UUID
+    let id: Int
     var name: String
     let createdAt: Date
     var count: Int
     var photoIDs: [UUID]
+    var thumbnailLocalIdentifiers: [String] = []
 
     var detailItem: AlbumDetailItem {
         AlbumDetailItem(
@@ -295,15 +412,26 @@ extension AlbumViewItem {
     }
 
     static let samples: [AlbumViewItem] = [
-        .init(id: UUID(), name: "우리 가족", createdAt: .now, count: 678, photoIDs: samplePhotoIDs(offset: 0)),
-        .init(id: UUID(), name: "집집 🏠", createdAt: .now, count: 234, photoIDs: samplePhotoIDs(offset: 2)),
-        .init(id: UUID(), name: "도쿄 여행 🍥", createdAt: .now, count: 456, photoIDs: samplePhotoIDs(offset: 4)),
-        .init(id: UUID(), name: "솝트", createdAt: .now, count: 1234, photoIDs: samplePhotoIDs(offset: 6)),
-        .init(id: UUID(), name: "호미c🐶", createdAt: .now, count: 45, photoIDs: samplePhotoIDs(offset: 8)),
-        .init(id: UUID(), name: "도쿄 여행b 🍥", createdAt: .now, count: 456, photoIDs: samplePhotoIDs(offset: 10)),
-        .init(id: UUID(), name: "솝트a", createdAt: .now, count: 1234, photoIDs: samplePhotoIDs(offset: 12)),
-        .init(id: UUID(), name: "호미c🐶", createdAt: .now, count: 45, photoIDs: samplePhotoIDs(offset: 14)),
-        .init(id: UUID(), name: "솝트b", createdAt: .now, count: 1234, photoIDs: samplePhotoIDs(offset: 16)),
-        .init(id: UUID(), name: "호미a🐶", createdAt: .now, count: 45, photoIDs: samplePhotoIDs(offset: 18))
+        .init(id: 1, name: "우리 가족", createdAt: .now, count: 678, photoIDs: samplePhotoIDs(offset: 0)),
+        .init(id: 2, name: "집집 🏠", createdAt: .now, count: 234, photoIDs: samplePhotoIDs(offset: 2)),
+        .init(id: 3, name: "도쿄 여행 🍥", createdAt: .now, count: 456, photoIDs: samplePhotoIDs(offset: 4)),
+        .init(id: 4, name: "솝트", createdAt: .now, count: 1234, photoIDs: samplePhotoIDs(offset: 6)),
+        .init(id: 5, name: "호미c🐶", createdAt: .now, count: 45, photoIDs: samplePhotoIDs(offset: 8)),
+        .init(id: 6, name: "도쿄 여행b 🍥", createdAt: .now, count: 456, photoIDs: samplePhotoIDs(offset: 10)),
+        .init(id: 7, name: "솝트a", createdAt: .now, count: 1234, photoIDs: samplePhotoIDs(offset: 12)),
+        .init(id: 8, name: "호미c🐶", createdAt: .now, count: 45, photoIDs: samplePhotoIDs(offset: 14)),
+        .init(id: 9, name: "솝트b", createdAt: .now, count: 1234, photoIDs: samplePhotoIDs(offset: 16)),
+        .init(id: 10, name: "호미a🐶", createdAt: .now, count: 45, photoIDs: samplePhotoIDs(offset: 18))
     ]
+
+    init(storedAlbum: StoredAlbum) {
+        self.init(
+            id: storedAlbum.id,
+            name: storedAlbum.name,
+            createdAt: storedAlbum.createdAt,
+            count: storedAlbum.photoCount,
+            photoIDs: [],
+            thumbnailLocalIdentifiers: storedAlbum.thumbnailLocalIdentifiers
+        )
+    }
 }

@@ -9,7 +9,11 @@ import SwiftUI
 
 struct RegisteredDeviceManagementView: View {
     @Environment(Router.self) private var router
-    @State private var viewModel = RegisteredDeviceManagementViewModel()
+    @State private var viewModel: RegisteredDeviceManagementViewModel
+
+    init(store: RegisteredDeviceStore) {
+        _viewModel = State(initialValue: RegisteredDeviceManagementViewModel(store: store))
+    }
 
     var body: some View {
         @Bindable var viewModel = viewModel
@@ -42,9 +46,12 @@ struct RegisteredDeviceManagementView: View {
                 viewModel.dismissDeleteAlert()
             },
             onPrimaryTap: {
-                viewModel.confirmDelete()
+                Task { await viewModel.confirmDelete() }
             }
         )
+        .task {
+            await viewModel.load()
+        }
     }
 
     @ViewBuilder
@@ -68,7 +75,9 @@ struct RegisteredDeviceManagementView: View {
                 RoundedIconButton(items: [
                     .init(id: "selection", icon: .select, accessibilityLabel: "") { viewModel.enterRemovingMode()
                     },
-                    .init(id: "add", icon: .plus, accessibilityLabel: "") { viewModel.enterRegisteringMode() }
+                    .init(id: "add", icon: .plus, accessibilityLabel: "") {
+                        Task { await viewModel.enterRegisteringMode() }
+                    }
                 ])
             }
         }
@@ -131,13 +140,13 @@ struct RegisteredDeviceManagementView: View {
     private var registrationActionBar: some View {
         ActionBar(items: [
             .init(icon: .plus, title: "등록", isDisabled: viewModel.isRegistrationDisabled) {
-                viewModel.registerSelectedDevices()
+                Task { await viewModel.registerSelectedDevices() }
             }
         ])
     }
 }
 
 #Preview {
-    RegisteredDeviceManagementView()
+    RegisteredDeviceManagementView(store: DefaultRegisteredDeviceStore())
         .environment(Router())
 }

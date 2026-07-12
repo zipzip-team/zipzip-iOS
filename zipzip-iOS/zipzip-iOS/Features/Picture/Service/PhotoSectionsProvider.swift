@@ -10,6 +10,7 @@ import SQLiteData
 
 struct FilterablePhoto {
     let photo: Photo
+    let deviceID: Int?
     let takenAt: Date?
     let addedAt: Date
     let addedDate: Date
@@ -25,35 +26,70 @@ nonisolated struct PhotoSectionsProvider {
             let devices = try DeviceRecord.all.fetchAll(db)
             let places = try PlaceRecord.all.fetchAll(db)
 
-            let deviceByID = Dictionary(uniqueKeysWithValues: devices.map { ($0.id, $0) })
-            let placeByID = Dictionary(uniqueKeysWithValues: places.map { ($0.id, $0) })
-
-            return records.map { record in
-                let device = record.deviceID.flatMap { deviceByID[$0] }
-                let filterDevice = DeviceModelCatalog.filterDevice(make: device?.make, model: device?.model)
-                let place = record.placeID.flatMap { placeByID[$0] }
-                let dateText = record.takenAt.map(AppliedFilter.dateText) ?? ""
-                let metadata = PhotoMetadata(
-                    deviceName: filterDevice.name,
-                    deviceType: filterDevice.type,
-                    location: place?.name ?? "",
-                    dateText: dateText
-                )
-                return FilterablePhoto(
-                    photo: Photo(localIdentifier: record.localIdentifier, metadata: metadata),
-                    takenAt: record.takenAt,
-                    addedAt: record.addedAt,
-                    addedDate: record.addedDate,
-                    hasLocation: record.placeID != nil
-                )
-            }
+            return Self.makeFilterablePhotos(records: records, devices: devices, places: places)
         }
     }
 
+    /// 등록된 기기 id 집합. library와 함께 한 번 로드해 캐시하는 용도.
+    func loadRegisteredDeviceIDs() async throws -> Set<Int> {
+        try await database.read { db in
+            let ids = try DeviceRecord
+                .where { $0.isRegistered.eq(true) }
+                .select(\.id)
+                .fetchAll(db)
+            return Set(ids)
+        }
+    }
+
+    func sections(
+        from library: [FilterablePhoto],
+        filters: [AppliedFilter],
+        registeredDeviceIDs: Set<Int>
+    ) async -> [PhotoSection] {
+        Self.registeredSections(from: library, filters: filters, registeredDeviceIDs: registeredDeviceIDs)
+    }
+
+    func loadAlbumSections(albumID: Int) async throws -> [PhotoSection] {
+        let albumPhotos = try await database.read { db in
+            let records = try PhotoRecord
+                .join(AlbumPhotoRecord.all) { $0.id.eq($1.photoID) }
+                .where { $1.albumID.eq(albumID) }
+                .order { photo, albumPhoto in (albumPhoto.addedAt.desc(), photo.id.desc()) }
+                .select { photo, albumPhoto in (photo, albumPhoto) }
+                .fetchAll(db)
+            let devices = try DeviceRecord.all.fetchAll(db)
+            let places = try PlaceRecord.all.fetchAll(db)
+
+            return Self.makeAlbumFilterablePhotos(records: records, devices: devices, places: places)
+        }
+
+        return await sections(from: albumPhotos, filters: [])
+    }
+
     func sections(from library: [FilterablePhoto], filters: [AppliedFilter]) async -> [PhotoSection] {
-        var filtered = library
+        Self.makeSections(from: library, filters: filters)
+    }
+
+    /// 등록된 기기의 사진만 노출한 뒤 필터/그룹핑한다.
+    static func registeredSections(
+        from library: [FilterablePhoto],
+        filters: [AppliedFilter],
+        registeredDeviceIDs: Set<Int>
+    ) -> [PhotoSection] {
+        let registeredPhotos = library.filter { photo in
+            guard let deviceID = photo.deviceID else { return false }
+            return registeredDeviceIDs.contains(deviceID)
+        }
+        return makeSections(from: registeredPhotos, filters: filters)
+    }
+
+    static func makeSections(
+        from photos: [FilterablePhoto],
+        filters: [AppliedFilter]
+    ) -> [PhotoSection] {
+        var filtered = photos
         for filter in filters {
-            filtered = Self.apply(filter, to: filtered)
+            filtered = apply(filter, to: filtered)
         }
 
         let sorted = filtered.sorted { lhs, rhs in
@@ -70,6 +106,73 @@ nonisolated struct PhotoSectionsProvider {
     }
 
     private static let recentPhotoLimit = 50
+
+    static func makeFilterablePhotos(
+        records: [PhotoRecord],
+        devices: [DeviceRecord],
+        places: [PlaceRecord]
+    ) -> [FilterablePhoto] {
+        let deviceByID = Dictionary(uniqueKeysWithValues: devices.map { ($0.id, $0) })
+        let placeByID = Dictionary(uniqueKeysWithValues: places.map { ($0.id, $0) })
+
+        return records.map {
+            makeFilterablePhoto(
+                record: $0,
+                deviceByID: deviceByID,
+                placeByID: placeByID
+            )
+        }
+    }
+
+    private static func makeAlbumFilterablePhotos(
+        records: [(PhotoRecord, AlbumPhotoRecord)],
+        devices: [DeviceRecord],
+        places: [PlaceRecord]
+    ) -> [FilterablePhoto] {
+        let deviceByID = Dictionary(uniqueKeysWithValues: devices.map { ($0.id, $0) })
+        let placeByID = Dictionary(uniqueKeysWithValues: places.map { ($0.id, $0) })
+
+        return records.map { photo, albumPhoto in
+            makeFilterablePhoto(
+                record: photo,
+                deviceByID: deviceByID,
+                placeByID: placeByID,
+                albumPhotoID: albumPhoto.id,
+                addedAt: albumPhoto.addedAt
+            )
+        }
+    }
+
+    private static func makeFilterablePhoto(
+        record: PhotoRecord,
+        deviceByID: [Int: DeviceRecord],
+        placeByID: [Int: PlaceRecord],
+        albumPhotoID: Int? = nil,
+        addedAt: Date? = nil
+    ) -> FilterablePhoto {
+        let device = record.deviceID.flatMap { deviceByID[$0] }
+        let filterDevice = DeviceModelCatalog.filterDevice(make: device?.make, model: device?.model)
+        let place = record.placeID.flatMap { placeByID[$0] }
+        let dateText = record.takenAt.map(AppliedFilter.dateText) ?? ""
+        let metadata = PhotoMetadata(
+            deviceName: filterDevice.name,
+            deviceType: filterDevice.type,
+            location: place?.name ?? "",
+            dateText: dateText
+        )
+        return FilterablePhoto(
+            photo: Photo(
+                localIdentifier: record.localIdentifier,
+                metadata: metadata,
+                albumPhotoID: albumPhotoID
+            ),
+            deviceID: record.deviceID,
+            takenAt: record.takenAt,
+            addedAt: addedAt ?? record.addedAt,
+            addedDate: record.addedDate,
+            hasLocation: record.placeID != nil
+        )
+    }
 
     private static func apply(_ filter: AppliedFilter, to photos: [FilterablePhoto]) -> [FilterablePhoto] {
         switch filter.kind {
@@ -100,6 +203,30 @@ nonisolated struct PhotoSectionsProvider {
                 return photos
             }
         }
+    }
+}
+
+/// 등록된 기기의 사진 섹션을 DB 관찰로 제공한다.
+/// `device.is_registered`/`photo`/`place` 변경 시 자동으로 재실행돼 사진 뷰가 갱신된다.
+nonisolated struct PhotoSectionsRequest: FetchKeyRequest {
+    let filters: [AppliedFilter]
+
+    init(filters: [AppliedFilter] = []) {
+        self.filters = filters
+    }
+
+    func fetch(_ db: Database) throws -> [PhotoSection] {
+        let records = try PhotoRecord.all.fetchAll(db)
+        let devices = try DeviceRecord.all.fetchAll(db)
+        let places = try PlaceRecord.all.fetchAll(db)
+
+        let registeredDeviceIDs = Set(devices.filter(\.isRegistered).map(\.id))
+        let library = PhotoSectionsProvider.makeFilterablePhotos(records: records, devices: devices, places: places)
+        return PhotoSectionsProvider.registeredSections(
+            from: library,
+            filters: filters,
+            registeredDeviceIDs: registeredDeviceIDs
+        )
     }
 }
 

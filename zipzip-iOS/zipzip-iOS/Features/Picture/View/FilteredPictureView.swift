@@ -14,9 +14,11 @@ struct FilteredPictureView: View {
     @State private var pictureViewModel = PictureViewModel()
     @State private var viewModel: FilteredPictureViewModel
     @State private var showShareSheet = false
+    private let albumViewModel: AlbumViewModel
 
-    init(appliedFilters: [AppliedFilter]) {
+    init(appliedFilters: [AppliedFilter], albumViewModel: AlbumViewModel) {
         _viewModel = State(initialValue: FilteredPictureViewModel(appliedFilters: appliedFilters))
+        self.albumViewModel = albumViewModel
     }
 
     var body: some View {
@@ -28,6 +30,8 @@ struct FilteredPictureView: View {
             ScrollView {
                 PhotoGallery(
                     sections: pictureViewModel.sections,
+                    thumbnailImages: pictureViewModel.thumbnailImages,
+                    loadThumbnail: pictureViewModel.loadThumbnail,
                     isSelectionMode: pictureViewModel.isSelectionMode,
                     selectedPhotoIDs: pictureViewModel.selectedPhotoIDs,
                     onTapPhoto: pictureViewModel.toggleSelection,
@@ -42,38 +46,71 @@ struct FilteredPictureView: View {
         .navigationBarBackButtonHidden(true)
         .task { await viewModel.loadOptions() }
         .task(id: viewModel.appliedFilters) {
-            await pictureViewModel.loadPhotos(filters: viewModel.appliedFilters)
+            await pictureViewModel.applyFilters(viewModel.appliedFilters)
         }
         .bottomSheet(isPresented: $viewModel.showDeviceSheet, detents: [.content]) { dismiss in
-            DeviceFilterSheet(devices: viewModel.options.devices, selected: $viewModel.pickerDevice) {
+            DeviceFilterSheet(
+                devices: viewModel.options.devices,
+                selected: $viewModel.pickerDevice,
+                onReset: { viewModel.pickerDevice = "" }
+            ) {
                 viewModel.applyDevice(viewModel.pickerDevice)
                 dismiss()
             }
         }
         .bottomSheet(isPresented: $viewModel.showLocationSheet, detents: [.content]) { dismiss in
-            LocationFilterSheet(locations: viewModel.options.locations, selected: $viewModel.pickerLocation) {
+            LocationFilterSheet(
+                locations: viewModel.options.locations,
+                selected: $viewModel.pickerLocation,
+                onReset: { viewModel.pickerLocation = "" }
+            ) {
                 viewModel.applyLocation(viewModel.pickerLocation)
                 dismiss()
             }
         }
         .bottomSheet(isPresented: $viewModel.showDateSheet, detents: [.height(dateSheetHeight)]) { dismiss in
-            DateFilterSheet(date: $viewModel.pickerDate) {
+            DateFilterSheet(date: $viewModel.pickerDate, onReset: {
+                viewModel.pickerDate = nil
+            }) {
                 viewModel.applyDate(viewModel.pickerDate)
                 dismiss()
             }
         }
         .bottomSheet(isPresented: $viewModel.showEtcSheet, detents: [.content]) { dismiss in
-            EtcFilterSheet(items: viewModel.options.etcItems, selected: $viewModel.pickerEtc) {
+            EtcFilterSheet(
+                items: viewModel.options.etcItems,
+                selected: $viewModel.pickerEtc,
+                onReset: { viewModel.pickerEtc = "" }
+            ) {
                 viewModel.applyEtc(viewModel.pickerEtc)
                 dismiss()
             }
         }
         .bottomSheet(isPresented: $showShareSheet, detents: [.full]) { dismiss in
             ShareSheet(
-                albums: Album.samples,
+                albums: albumViewModel.shareDestinations,
                 sharedAlbums: Album.sharedSamples,
                 shareAlbums: ShareAlbum.samples,
-                onDismiss: { dismiss() }
+                onDismiss: { dismiss() },
+                onComplete: { destinations in
+                    let localIdentifiers = pictureViewModel.selectedPhotoLocalIdentifiers
+                    Task {
+                        guard await albumViewModel.addPhotos(
+                            localIdentifiers: localIdentifiers,
+                            to: destinations
+                        ) else {
+                            return
+                        }
+
+                        dismiss()
+                        pictureViewModel.cancelSelection()
+                        guard let albumID = destinations.firstPersonalAlbumID else {
+                            return
+                        }
+
+                        router.push(.albumDetail(albumID))
+                    }
+                }
             )
         }
         .bottomSheetAlert(
@@ -149,9 +186,9 @@ struct FilteredPictureView: View {
             .first { $0.isKeyWindow }
         let screenHeight = window?.bounds.height ?? 0
         let topInset = window?.safeAreaInsets.top ?? 0
-        let backButtonArea: CGFloat = 48
-        let gap: CGFloat = 34
-        return max(screenHeight - topInset - backButtonArea - gap, 1)
+        let bottomInset = window?.safeAreaInsets.bottom ?? 0
+        let visibleContentBelowSafeArea: CGFloat = 169
+        return max(screenHeight - topInset - visibleContentBelowSafeArea - bottomInset, 1)
     }
 }
 
@@ -159,6 +196,6 @@ struct FilteredPictureView: View {
     FilteredPictureView(appliedFilters: [
         AppliedFilter(kind: .device, value: "iphone 6"),
         AppliedFilter(kind: .location, value: "오사카")
-    ])
-    .environment(Router())
+    ], albumViewModel: AlbumViewModel(albums: AlbumViewItem.samples))
+        .environment(Router())
 }

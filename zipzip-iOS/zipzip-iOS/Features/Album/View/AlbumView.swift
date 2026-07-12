@@ -8,6 +8,7 @@
 import SwiftUI
 
 struct AlbumView: View {
+    @Environment(Router.self) private var router
     @State private var viewModel: AlbumViewModel
 
     private let columns = [
@@ -20,27 +21,11 @@ struct AlbumView: View {
     }
 
     var body: some View {
-        NavigationStack(path: $viewModel.navigationPath) {
-            albumList
-                .toolbarVisibility(.hidden, for: .navigationBar)
-                .navigationDestination(for: AlbumRoute.self) { route in
-                    switch route {
-                    case let .detail(albumID):
-                        albumDetailDestination(for: albumID)
-                    case let .photoDetail(albumID, photo):
-                        PhotoDetailView(
-                            photo: photo,
-                            deletionContext: .album,
-                            onDelete: { action in
-                                viewModel.deletePhotos([photo.id], from: albumID, action: action)
-                                return true
-                            }
-                        )
-                    case let .photoInfoEdit(metadata):
-                        PhotoInfoEditView(metadata: metadata)
-                    }
-                }
-        }
+        albumList
+            .toolbarVisibility(.hidden, for: .navigationBar)
+            .task {
+                await viewModel.loadAlbums()
+            }
     }
 
     private var albumList: some View {
@@ -50,30 +35,36 @@ struct AlbumView: View {
 
             ScrollView(showsIndicators: false) {
                 AlbumTitleHeader(isVisible: !viewModel.isSelectionMode)
-                    .padding(.top, 15)
-                    .frame(height: 67, alignment: .bottom)
+                    .frame(height: 54, alignment: .bottom)
 
-                LazyVGrid(
-                    columns: columns,
-                    alignment: .center,
-                    spacing: 20
-                ) {
-                    ForEach(viewModel.albums) { album in
-                        AlbumGridCard(
-                            album: album,
-                            selectionNumber: viewModel.selectionNumber(for: album),
-                            isSelectionMode: viewModel.isSelectionMode,
-                            onSelectionTap: { viewModel.toggleSelection(for: album) },
-                            onOpenTap: { viewModel.showDetail(for: album) }
-                        )
+                if !viewModel.albums.isEmpty {
+                    LazyVGrid(
+                        columns: columns,
+                        alignment: .center,
+                        spacing: 20
+                    ) {
+                        ForEach(viewModel.albums) { album in
+                            AlbumGridCard(
+                                album: album,
+                                selectionNumber: viewModel.selectionNumber(for: album),
+                                isSelectionMode: viewModel.isSelectionMode,
+                                onSelectionTap: { viewModel.toggleSelection(for: album) },
+                                onOpenTap: { viewModel.showDetail(for: album, router: router) }
+                            )
+                        }
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.top, 17)
+                    .padding(.bottom, viewModel.isSelectionMode && !viewModel.selectedAlbumIDs.isEmpty ? 140 : 20)
+                    .transaction { transaction in
+                        transaction.animation = nil
                     }
                 }
-                .padding(.horizontal, 16)
-                .padding(.top, 17)
-                .padding(.bottom, viewModel.isSelectionMode && !viewModel.selectedAlbumIDs.isEmpty ? 140 : 20)
-                .transaction { transaction in
-                    transaction.animation = nil
-                }
+            }
+
+            if viewModel.albums.isEmpty {
+                AlbumCollectionEmptyView(onStartTap: viewModel.presentCreateAlbumSheet)
+                    .padding(.bottom, 80)
             }
         }
         .overlay(alignment: .topTrailing) {
@@ -81,7 +72,7 @@ struct AlbumView: View {
                 onSelectionTap: viewModel.enterSelectionMode,
                 onAddTap: viewModel.presentCreateAlbumSheet
             )
-            .padding(.top, 19)
+            .padding(.top, 14)
             .padding(.trailing, 16)
             .opacity(viewModel.isSelectionMode ? 0 : 1)
             .allowsHitTesting(!viewModel.isSelectionMode)
@@ -89,7 +80,7 @@ struct AlbumView: View {
         }
         .overlay(alignment: .topLeading) {
             RoundedTextButton(title: "취소", style: .cancel, action: viewModel.exitSelectionMode)
-                .padding(.top, 19)
+                .padding(.top, 14)
                 .padding(.leading, 16)
                 .opacity(viewModel.isSelectionMode ? 1 : 0)
                 .allowsHitTesting(viewModel.isSelectionMode)
@@ -126,63 +117,117 @@ struct AlbumView: View {
         ) { _ in
             BottomSheet(
                 leftItem: {
-                    AlbumSheetTextButton(title: "취소", action: viewModel.dismissCreateAlbumSheet)
+                    BottomSheetCloseButton(action: viewModel.dismissCreateAlbumSheet)
                 }
             ) {
                 AlbumCreateSheetContent(
                     albumName: $viewModel.createAlbumName,
+                    isCreateDisabled: viewModel.isCreateAlbumDisabled,
                     onDeleteTap: viewModel.resetCreateAlbumDraft,
-                    onCreateTap: viewModel.createAlbum
+                    onCreateTap: {
+                        Task {
+                            if let album = await viewModel.createAlbum() {
+                                router.push(.albumDetail(album.id))
+                            }
+                        }
+                    }
                 )
             }
         }
         .bottomSheet(isPresented: $viewModel.isShareAlbumSheetPresented, detents: [.full]) { _ in
             AlbumShareDestinationSheet(
                 shareAlbums: ShareAlbum.samples,
-                sharedAlbums: Album.sharedSamples,
                 onCancel: viewModel.dismissShareAlbumSheet,
-                onComplete: viewModel.completeShareAlbumMove,
-                onAddTap: viewModel.presentShareAlbumCreation
+                onComplete: viewModel.completeShareAlbumMove
             )
         }
     }
 
     private var selectionActionItems: [ActionBarItem] {
         [
-            .init(icon: .moveToShare, title: "공유집으로", action: viewModel.moveSelectedAlbumsToShare),
+            .init(icon: .moveToShare, title: "공유그룹으로", action: viewModel.moveSelectedAlbumsToShare),
             .init(icon: .delete, title: "삭제", action: viewModel.deleteSelectedAlbums)
         ]
     }
+}
 
-    @ViewBuilder private func albumDetailDestination(for albumID: AlbumViewItem.ID) -> some View {
-        if let album = viewModel.album(for: albumID) {
-            let detailViewModel = viewModel.makeDetailViewModel(for: albumID)
+struct AlbumDetailDestinationView: View {
+    @Environment(Router.self) private var router
+    @State private var photoSections: [PhotoSection] = []
+    @State private var lastKnownAlbum: AlbumViewItem?
 
-            if !album.hasPhotos {
-                AlbumDetailEmptyView(
-                    album: album.detailItem,
-                    viewModel: detailViewModel,
-                    moveAlbums: viewModel.moveDestinations(excluding: albumID),
-                    photoPickerSections: viewModel.availablePhotoSections(excluding: album.photoIDs)
-                )
-            } else {
-                AlbumDetailView(
-                    album: album.detailItem,
-                    viewModel: detailViewModel,
-                    moveAlbums: viewModel.moveDestinations(excluding: albumID),
-                    photoPickerSections: viewModel.availablePhotoSections(excluding: album.photoIDs)
-                ) { detailViewModel in
-                    AlbumDetailGalleryPlaceholderView(
-                        sections: viewModel.photoSections(for: album),
-                        photoCount: album.count,
-                        showsSelectionControls: detailViewModel.isSelectionMode,
-                        selectedPhotoIDs: detailViewModel.selectedPhotoIDs,
-                        onSelectPhoto: detailViewModel.togglePhotoSelection,
-                        onOpenPhoto: { viewModel.showPhotoDetail($0, in: albumID) }
+    let viewModel: AlbumViewModel
+    let albumID: AlbumViewItem.ID
+
+    init(viewModel: AlbumViewModel, albumID: AlbumViewItem.ID) {
+        self.viewModel = viewModel
+        self.albumID = albumID
+        _lastKnownAlbum = State(initialValue: viewModel.album(for: albumID))
+    }
+
+    var body: some View {
+        if let album = viewModel.album(for: albumID) ?? lastKnownAlbum {
+            let detailViewModel = viewModel.makeDetailViewModel(for: albumID, router: router)
+
+            Group {
+                if !album.hasPhotos {
+                    AlbumDetailEmptyView(
+                        album: album.detailItem,
+                        viewModel: detailViewModel,
+                        moveAlbums: viewModel.moveDestinations(excluding: albumID)
                     )
+                } else {
+                    AlbumDetailView(
+                        album: album.detailItem,
+                        viewModel: detailViewModel,
+                        moveAlbums: viewModel.moveDestinations(excluding: albumID)
+                    ) { detailViewModel in
+                        AlbumDetailGalleryPlaceholderView(
+                            sections: photoSections,
+                            photoCount: album.count,
+                            showsSelectionControls: detailViewModel.isSelectionMode,
+                            selectedPhotoIDs: detailViewModel.selectedPhotoIDs,
+                            onSelectPhoto: detailViewModel.togglePhotoSelection,
+                            onOpenPhoto: { viewModel.showPhotoDetail($0, in: albumID, router: router) }
+                        )
+                    }
+                }
+            }
+            .task(id: album.count) {
+                photoSections = await viewModel.photoSections(for: albumID)
+            }
+            .onChange(of: viewModel.album(for: albumID)) { _, album in
+                if let album {
+                    lastKnownAlbum = album
                 }
             }
         }
+    }
+}
+
+private struct AlbumCollectionEmptyView: View {
+    let onStartTap: () -> Void
+
+    var body: some View {
+        VStack(spacing: 32) {
+            VStack(spacing: 10) {
+                Image(.albumCollectionEmptyArtwork)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 96, height: 86)
+                    .accessibilityHidden(true)
+
+                Image(.albumCollectionEmptyDescription)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 257, height: 20)
+                    .accessibilityLabel("집을 만들어 사진을 보관해보세요!")
+            }
+
+            CommonButton(title: "시작하기", action: onStartTap)
+                .frame(width: 171)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
 
@@ -198,9 +243,6 @@ private struct AlbumGridCard: View {
             card
         }
         .buttonStyle(StaticButtonStyle())
-        .transaction { transaction in
-            transaction.animation = nil
-        }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("\(album.name), \(album.count)장")
         .accessibilityValue(isSelectionMode ? accessibilityValue : "")
@@ -211,7 +253,8 @@ private struct AlbumGridCard: View {
         AlbumCard(
             name: album.name,
             count: album.count,
-            state: state
+            state: state,
+            thumbnailLocalIdentifiers: album.thumbnailLocalIdentifiers
         )
     }
 
@@ -240,12 +283,6 @@ private struct AlbumGridCard: View {
     }
 }
 
-private struct StaticButtonStyle: ButtonStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-    }
-}
-
 private struct AlbumSheetTextButton: View {
     let title: String
     var isDisabled = false
@@ -267,6 +304,7 @@ private struct AlbumSheetTextButton: View {
 private struct AlbumCreateSheetContent: View {
     @Binding var albumName: String
 
+    let isCreateDisabled: Bool
     let onDeleteTap: () -> Void
     let onCreateTap: () -> Void
 
@@ -295,7 +333,7 @@ private struct AlbumCreateSheetContent: View {
 
                     CommonButton(
                         title: "생성",
-                        property1: .cta,
+                        property1: isCreateDisabled ? .disabled : .cta,
                         action: onCreateTap
                     )
                 }
@@ -312,30 +350,23 @@ private struct AlbumShareDestinationSheet: View {
     @Environment(AuthenticationState.self) private var authenticationState
 
     let shareAlbums: [ShareAlbum]
-    let sharedAlbums: [Album]
     let onCancel: () -> Void
-    let onComplete: (ShareAlbum, Album) -> Void
-    let onAddTap: () -> Void
+    let onComplete: (ShareAlbum) -> Void
 
-    @State private var selectedShareAlbum: ShareAlbum?
-    @State private var selectedAlbumID: Album.ID?
+    @State private var selectedShareAlbumID: ShareAlbum.ID?
 
     var body: some View {
         BottomSheet(
             leftItem: {
-                AlbumSheetTextButton(title: "취소", action: onCancel)
+                BottomSheetCloseButton(action: onCancel)
             },
             rightItem: {
                 if authenticationState.isLoggedIn {
-                    if selectedShareAlbum == nil {
-                        addButton
-                    } else {
-                        AlbumSheetTextButton(
-                            title: "완료",
-                            isDisabled: selectedAlbumID == nil,
-                            action: completeSelection
-                        )
-                    }
+                    AlbumSheetTextButton(
+                        title: "완료",
+                        isDisabled: selectedShareAlbumID == nil,
+                        action: completeSelection
+                    )
                 }
             }
         ) {
@@ -343,50 +374,27 @@ private struct AlbumShareDestinationSheet: View {
                 ShareLoginPrompt {
                     authenticationState.logIn()
                 }
-            } else if selectedShareAlbum == nil {
-                ShareAlbumList(albums: shareAlbums, onSelect: selectShareAlbum)
             } else {
-                AlbumSelectionGrid(
-                    albums: sharedAlbums,
-                    selectedAlbumID: selectedAlbumID,
-                    onSelect: selectAlbum
+                ShareAlbumList(
+                    albums: shareAlbums,
+                    selectedShareAlbumID: selectedShareAlbumID,
+                    showsChevron: false,
+                    onSelect: selectShareAlbum
                 )
             }
         }
     }
 
     private func selectShareAlbum(_ album: ShareAlbum) {
-        selectedShareAlbum = album
-        selectedAlbumID = nil
-    }
-
-    private func selectAlbum(_ album: Album) {
-        selectedAlbumID = album.id
+        selectedShareAlbumID = album.id
     }
 
     private func completeSelection() {
-        guard let selectedShareAlbum,
-              let selectedAlbum = sharedAlbums.first(where: { $0.id == selectedAlbumID })
-        else {
+        guard let selectedShareAlbum = shareAlbums.first(where: { $0.id == selectedShareAlbumID }) else {
             return
         }
 
-        onComplete(selectedShareAlbum, selectedAlbum)
-    }
-
-    private var addButton: some View {
-        Button(action: onAddTap) {
-            Image(.plus)
-                .renderingMode(.template)
-                .resizable()
-                .scaledToFit()
-                .foregroundStyle(.white00)
-                .frame(width: 24, height: 24)
-                .frame(width: 72, height: 48)
-                .contentShape(.rect)
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel("공유집 추가")
+        onComplete(selectedShareAlbum)
     }
 }
 
@@ -427,12 +435,20 @@ struct AlbumHeaderActionButton: View {
 }
 
 #Preview("Album View", traits: .fixedLayout(width: 390, height: 844)) {
-    AlbumViewPreview()
+    AlbumViewPreview(albums: AlbumViewItem.samples)
+}
+
+#Preview("Album View Empty", traits: .fixedLayout(width: 390, height: 844)) {
+    AlbumViewPreview(albums: [])
 }
 
 private struct AlbumViewPreview: View {
     @State private var selection: NavbarTab = .album
-    @State private var viewModel = AlbumViewModel()
+    @State private var viewModel = AlbumViewModel(albums: AlbumViewItem.samples)
+
+    init(albums: [AlbumViewItem]) {
+        _viewModel = State(initialValue: AlbumViewModel(albums: albums))
+    }
 
     var body: some View {
         AlbumView(viewModel: viewModel)
@@ -444,5 +460,6 @@ private struct AlbumViewPreview: View {
                 }
             }
             .environment(AuthenticationState())
+            .environment(Router())
     }
 }

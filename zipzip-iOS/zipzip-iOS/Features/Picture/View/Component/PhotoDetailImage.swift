@@ -9,11 +9,8 @@ import SwiftUI
 import UIKit
 
 struct PhotoDetailImage: View {
-    let localIdentifier: String
-
-    @State private var image: UIImage?
-
-    private static let targetSize = CGSize(width: 1600, height: 1600)
+    let image: UIImage?
+    let contentMode: ContentMode
 
     var body: some View {
         Color.clear
@@ -21,15 +18,8 @@ struct PhotoDetailImage: View {
                 if let image {
                     Image(uiImage: image)
                         .resizable()
-                        .scaledToFit()
+                        .aspectRatio(contentMode: contentMode)
                 }
-            }
-            .task(id: localIdentifier) {
-                guard !localIdentifier.isEmpty else { return }
-                image = await PhotoThumbnailLoader.shared.fullImage(
-                    for: localIdentifier,
-                    targetSize: Self.targetSize
-                )
             }
     }
 }

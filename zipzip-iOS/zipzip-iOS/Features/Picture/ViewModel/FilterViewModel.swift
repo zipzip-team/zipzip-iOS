@@ -48,7 +48,7 @@ final class FilterViewModel {
         selectedLocation = name
     }
 
-    func selectDate(_ date: Date) {
+    func selectDate(_ date: Date?) {
         selectedDate = date
     }
 

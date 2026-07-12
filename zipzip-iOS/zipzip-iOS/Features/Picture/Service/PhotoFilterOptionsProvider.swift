@@ -13,6 +13,7 @@ nonisolated struct PhotoFilterOptionsProvider {
     func load() async throws -> PhotoFilterOptions {
         try await database.read { db in
             let deviceRows = try DeviceRecord
+                .where { $0.isRegistered.eq(true) }
                 .group(by: \.id)
                 .join(PhotoRecord.all) { $1.deviceID.eq($0.id) }
                 .select { ($0.make, $0.model, $1.id.count()) }

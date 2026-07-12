@@ -9,8 +9,10 @@ import SwiftUI
 
 struct RootView: View {
     @Environment(Router.self) private var router
+    @Environment(DIContainer.self) private var container
     @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
     @State private var photoSync = PhotoSyncCoordinator()
+    @State private var albumViewModel = AlbumViewModel()
     @State private var pictureViewModel = PictureViewModel()
 
     var body: some View {
@@ -18,7 +20,7 @@ struct RootView: View {
         NavigationStack(path: $router.path) {
             Group {
                 if hasCompletedOnboarding {
-                    RootTabView(pictureViewModel: pictureViewModel)
+                    RootTabView(albumViewModel: albumViewModel, pictureViewModel: pictureViewModel)
                 } else {
                     SplashView()
                 }
@@ -26,6 +28,7 @@ struct RootView: View {
             .task {
                 guard hasCompletedOnboarding else { return }
                 photoSync.startIfNeeded()
+                await albumViewModel.loadAlbums()
             }
             .navigationDestination(for: Route.self) { route in
                 switch route {
@@ -40,25 +43,98 @@ struct RootView: View {
                 case .deviceLoading:
                     DeviceLoadingView()
                 case .deviceSelection:
-                    DeviceSelectionView()
+                    DeviceSelectionView(store: container.registeredDeviceStore)
                 case .filter:
                     FilterView()
                 case let .filterResult(filters):
-                    FilteredPictureView(appliedFilters: filters)
+                    FilteredPictureView(
+                        appliedFilters: filters,
+                        albumViewModel: albumViewModel
+                    )
                 case let .photoInfoEdit(metadata):
                     PhotoInfoEditView(metadata: metadata)
                 case let .photoDetail(photo):
-                    PhotoDetailView(photo: photo) { action in
-                        guard action == .deletePermanently else { return false }
-                        return await pictureViewModel.deletePhotos(localIdentifiers: [photo.localIdentifier])
-                    }
+                    PhotoDetailView(
+                        photo: photo,
+                        albums: albumViewModel.shareDestinations,
+                        onDelete: { action in
+                            guard action == .deletePermanently else { return false }
+                            return await pictureViewModel.deletePhotos(
+                                localIdentifiers: [photo.localIdentifier]
+                            )
+                        },
+                        onAddToAlbums: addPhotosToAlbums
+                    )
+                case let .albumDetail(albumID):
+                    AlbumDetailDestinationView(
+                        viewModel: albumViewModel,
+                        albumID: albumID
+                    )
+                case let .albumPhotoDetail(albumID, photo):
+                    PhotoDetailView(
+                        photo: photo,
+                        albums: albumViewModel.shareDestinations,
+                        deletionContext: .album,
+                        excludedAlbumIDs: [albumID],
+                        onDelete: { action in
+                            albumViewModel.deletePhotos([photo.id], from: albumID, action: action)
+                            return true
+                        },
+                        onAddToAlbums: addPhotosToAlbums,
+                        onMoveToAlbums: { albumPhotoIDs, destinations in
+                            moveAlbumPhotosToAlbums(
+                                ids: albumPhotoIDs,
+                                from: albumID,
+                                destinations: destinations
+                            )
+                        }
+                    )
                 case .myPage:
                     MyPageView()
                 case .registeredDeviceManagement:
-                    RegisteredDeviceManagementView()
+                    RegisteredDeviceManagementView(store: container.registeredDeviceStore)
                 }
             }
         }
         .environment(photoSync)
+    }
+
+    private func addPhotosToAlbums(
+        localIdentifiers: [String],
+        destinations: [ShareDestination]
+    ) {
+        Task {
+            guard await albumViewModel.addPhotos(
+                localIdentifiers: localIdentifiers,
+                to: destinations
+            ) else {
+                return
+            }
+
+            guard let albumID = destinations.firstPersonalAlbumID else {
+                return
+            }
+
+            router.push(.albumDetail(albumID))
+        }
+    }
+
+    private func moveAlbumPhotosToAlbums(
+        ids: [Int],
+        from sourceAlbumID: Album.ID,
+        destinations: [ShareDestination]
+    ) {
+        Task {
+            guard await albumViewModel.moveAlbumPhotos(
+                ids: ids,
+                from: sourceAlbumID,
+                to: destinations
+            ), let albumID = destinations.firstPersonalAlbumID
+            else {
+                return
+            }
+
+            router.push(.albumDetail(albumID))
+        }
     }
 }
