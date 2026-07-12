@@ -18,6 +18,7 @@ nonisolated enum AssetDeviceInfo: Equatable {
 
 nonisolated enum AssetEXIFReader {
     private static let maxStreamedBytes = 2 * 1024 * 1024
+    private static let minParseBytes = 128 * 1024
 
     static func deviceInfo(for asset: PHAsset) async -> AssetDeviceInfo {
         guard !asset.mediaSubtypes.contains(.photoScreenshot) else { return .resolved(make: nil, model: nil) }
@@ -42,7 +43,6 @@ nonisolated enum AssetEXIFReader {
 
         let manager = PHAssetResourceManager.default()
         let box = ResourceStreamBox()
-        let source = CGImageSourceCreateIncremental(nil)
 
         return await withTaskCancellationHandler {
             await withCheckedContinuation { (continuation: CheckedContinuation<AssetDeviceInfo, Never>) in
@@ -52,9 +52,9 @@ nonisolated enum AssetEXIFReader {
                     dataReceivedHandler: { data in
                         guard !box.isDone() else { return }
                         box.append(data)
-                        CGImageSourceUpdateData(source, box.buffer as CFData, false)
+                        guard box.byteCount >= minParseBytes else { return }
 
-                        if let info = parseDeviceInfo(from: source) {
+                        if let info = parseDeviceInfo(from: box.buffer) {
                             box.finish {
                                 if let id = box.requestID() { manager.cancelDataRequest(id) }
                                 continuation.resume(returning: .resolved(make: info.make, model: info.model))
@@ -72,8 +72,7 @@ nonisolated enum AssetEXIFReader {
                                 logger.error("failed to stream original for EXIF: \(error)")
                                 continuation.resume(returning: .unavailable)
                             } else {
-                                CGImageSourceUpdateData(source, box.buffer as CFData, true)
-                                let info = parseDeviceInfo(from: source)
+                                let info = parseDeviceInfo(from: box.buffer)
                                 continuation.resume(returning: .resolved(make: info?.make, model: info?.model))
                             }
                         }
@@ -86,8 +85,10 @@ nonisolated enum AssetEXIFReader {
         }
     }
 
-    private static func parseDeviceInfo(from source: CGImageSource) -> (make: String?, model: String?)? {
-        guard let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],
+    private static func parseDeviceInfo(from data: Data) -> (make: String?, model: String?)? {
+        let options = [kCGImageSourceShouldCache: false] as CFDictionary
+        guard let source = CGImageSourceCreateWithData(data as CFData, options),
+              let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],
               let tiff = properties[kCGImagePropertyTIFFDictionary] as? [CFString: Any]
         else { return nil }
 
