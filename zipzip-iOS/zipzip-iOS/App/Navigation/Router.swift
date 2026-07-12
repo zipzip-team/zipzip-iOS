@@ -21,14 +21,10 @@ final class Router {
     }
 
     func popToRoot() {
-<<<<<<< HEAD
-        path = []
-=======
         path.removeAll()
     }
 
     func removeAlbumRoutes() {
         path.removeAll(where: \.isAlbumRoute)
->>>>>>> origin/dev
     }
 }
