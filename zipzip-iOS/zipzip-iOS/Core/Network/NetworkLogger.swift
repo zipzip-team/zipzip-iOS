@@ -21,7 +21,7 @@ final class NetworkLogger: EventMonitor {
         let method = urlRequest.httpMethod ?? "UNKNOWN"
         let url = urlRequest.url?.absoluteString ?? "(no url)"
         let headers = prettyHeaders(urlRequest.headers)
-        let body = urlRequest.httpBody.flatMap { String(data: $0, encoding: .utf8) } ?? "(none)"
+        let body = NetworkSecretRedactor.redactBody(urlRequest.httpBody)
 
         logger.debug(
             """
@@ -42,7 +42,7 @@ final class NetworkLogger: EventMonitor {
         let duration = response.metrics.map { $0.taskInterval.duration * 1000 } ?? 0
         let durationText = String(format: "%.0fms", duration)
         let statusText = statusCode.map(String.init) ?? "-"
-        let body = response.data.flatMap { String(data: $0, encoding: .utf8) } ?? "(none)"
+        let body = NetworkSecretRedactor.redactBody(response.data)
 
         if let error = response.error {
             logger.error(

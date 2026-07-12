@@ -11,6 +11,12 @@ import SQLiteData
 
 private let logger = Logger(subsystem: "com.zipzip.zipzip-iOS", category: "Database")
 
+func prepareAppDependencies() {
+    prepareDependencies {
+        $0.defaultDatabase = try! appDatabase()
+    }
+}
+
 func appDatabase() throws -> any DatabaseWriter {
     @Dependency(\.context) var context
 

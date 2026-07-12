@@ -10,6 +10,7 @@ import Observation
 @MainActor
 @Observable
 final class DIContainer {
+    let authenticationState: AuthenticationState
     let networkProvider: NetworkProvider
     let registeredDeviceStore: RegisteredDeviceStore
 
@@ -17,7 +18,26 @@ final class DIContainer {
         networkProvider: NetworkProvider? = nil,
         registeredDeviceStore: RegisteredDeviceStore? = nil
     ) {
-        self.networkProvider = networkProvider ?? DefaultNetworkProvider()
+        let publicNetworkProvider = networkProvider ?? DefaultNetworkProvider()
+        let authAPI = DefaultAuthAPI(networkProvider: publicNetworkProvider)
+        let credentialStore = KeychainCredentialStore()
+        let credentialController = SessionCredentialController(
+            store: credentialStore,
+            authAPI: authAPI
+        )
+
+        let authenticationState = AuthenticationState(
+            authAPI: authAPI,
+            credentialController: credentialController
+        )
+        self.authenticationState = authenticationState
+        self.networkProvider = AuthenticatedNetworkProvider(
+            provider: publicNetworkProvider,
+            credentialController: credentialController,
+            onAuthenticationLost: { [weak authenticationState] in
+                authenticationState?.handleAuthenticationLost()
+            }
+        )
         self.registeredDeviceStore = registeredDeviceStore ?? DefaultRegisteredDeviceStore()
     }
 }

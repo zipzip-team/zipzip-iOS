@@ -427,5 +427,5 @@ private struct ShareImportHeader: View {
 #Preview("Share Group Detail", traits: .fixedLayout(width: 390, height: 844)) {
     let viewModel = ShareViewModel()
     ShareGroupDetailView(groupID: ShareAlbum.samples[0].id, viewModel: viewModel)
-        .environment(AuthenticationState())
+        .environment(AuthenticationState.preview(isLoggedIn: true))
 }
