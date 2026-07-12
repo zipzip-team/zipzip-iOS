@@ -61,8 +61,8 @@ struct RootView: View {
                         appliedFilters: filters,
                         albumViewModel: albumViewModel
                     )
-                case let .photoInfoEdit(metadata):
-                    PhotoInfoEditView(metadata: metadata)
+                case let .photoInfoEdit(metadata, localIdentifiers):
+                    PhotoInfoEditView(metadata: metadata, localIdentifiers: localIdentifiers)
                 case let .photoDetail(photo):
                     PhotoDetailView(
                         photo: photo,

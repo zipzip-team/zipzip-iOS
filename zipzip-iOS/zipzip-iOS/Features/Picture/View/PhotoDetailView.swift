@@ -245,6 +245,7 @@ struct PhotoDetailView: View {
     private var photoInfoEditView: some View {
         PhotoInfoEditContent(
             metadata: photo.metadata,
+            localIdentifiers: photo.localIdentifier.isEmpty ? [] : [photo.localIdentifier],
             showsHeader: false
         )
         .padding(.horizontal, 16)
