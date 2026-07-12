@@ -10,6 +10,7 @@ import SwiftUI
 struct RootView: View {
     @Environment(Router.self) private var router
     @Environment(DIContainer.self) private var container
+    @Environment(\.scenePhase) private var scenePhase
     @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
     @State private var photoSync = PhotoSyncCoordinator()
     @State private var albumViewModel = AlbumViewModel()
@@ -28,6 +29,10 @@ struct RootView: View {
                 guard hasCompletedOnboarding else { return }
                 photoSync.startIfNeeded()
                 await albumViewModel.loadAlbums()
+            }
+            .onChange(of: scenePhase) { _, newPhase in
+                guard hasCompletedOnboarding, newPhase == .active else { return }
+                photoSync.refresh()
             }
             .navigationDestination(for: Route.self) { route in
                 switch route {
