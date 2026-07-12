@@ -133,20 +133,14 @@ struct ShareView: View {
         if authenticationState.isLoggedIn {
             ShareGroupListView(viewModel: viewModel)
         } else {
-            ShareRootLoginView(onLogin: viewModel.showLogin)
+            ShareRootLoginView {
+                authenticationState.requestLogin(.share)
+            }
         }
     }
 
     @ViewBuilder private func destination(for route: ShareRoute) -> some View {
         switch route {
-        case .login:
-            ShareLoginView(
-                onBack: viewModel.goBack,
-                onAppleLogin: {
-                    authenticationState.logIn()
-                    viewModel.completeLogin()
-                }
-            )
         case let .group(groupID):
             ShareGroupDetailView(groupID: groupID, viewModel: viewModel)
         case let .album(groupID, albumID):
@@ -603,10 +597,7 @@ private struct ShareViewPreview: View {
     @State private var viewModel: ShareViewModel
 
     init(isLoggedIn: Bool, groups: [ShareAlbum]) {
-        let authenticationState = AuthenticationState()
-        if isLoggedIn {
-            authenticationState.logIn()
-        }
+        let authenticationState = AuthenticationState.preview(isLoggedIn: isLoggedIn)
         _authenticationState = State(initialValue: authenticationState)
         _viewModel = State(initialValue: ShareViewModel(groups: groups))
     }

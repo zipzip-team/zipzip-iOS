@@ -5,20 +5,26 @@
 //  Created by 성환 on 7/7/26.
 //
 
+import AuthenticationServices
 import SwiftUI
 
 struct RootView: View {
     @Environment(Router.self) private var router
     @Environment(DIContainer.self) private var container
+    @Environment(AuthenticationState.self) private var authenticationState
+    @Environment(\.scenePhase) private var scenePhase
     @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
     @State private var photoSync = PhotoSyncCoordinator()
     @State private var albumViewModel = AlbumViewModel()
 
     var body: some View {
         @Bindable var router = router
+        @Bindable var authenticationState = authenticationState
         NavigationStack(path: $router.path) {
             Group {
-                if hasCompletedOnboarding {
+                if authenticationState.isRestoring, hasCompletedOnboarding {
+                    SplashView(continuesOnboarding: false)
+                } else if hasCompletedOnboarding {
                     RootTabView(albumViewModel: albumViewModel)
                 } else {
                     SplashView()
@@ -89,6 +95,26 @@ struct RootView: View {
             }
         }
         .environment(photoSync)
+        .fullScreenCover(item: $authenticationState.loginIntent) { _ in
+            ShareLoginView()
+        }
+        .task {
+            await authenticationState.restore(
+                minimumDuration: hasCompletedOnboarding ? .seconds(2) : .zero
+            )
+            await authenticationState.checkAppleCredentialState()
+        }
+        .onChange(of: scenePhase) { _, phase in
+            guard phase == .active else { return }
+            Task { await authenticationState.checkAppleCredentialState() }
+        }
+        .onReceive(
+            NotificationCenter.default.publisher(
+                for: ASAuthorizationAppleIDProvider.credentialRevokedNotification
+            )
+        ) { _ in
+            Task { await authenticationState.handleAppleCredentialRevocation() }
+        }
     }
 
     private func addPhotosToAlbums(

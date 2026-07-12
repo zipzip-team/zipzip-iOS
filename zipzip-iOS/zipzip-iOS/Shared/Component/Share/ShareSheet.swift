@@ -82,7 +82,7 @@ struct ShareSheet: View {
         case .right:
             if !authenticationState.isLoggedIn {
                 ShareLoginPrompt {
-                    authenticationState.logIn()
+                    authenticationState.requestLogin(.share)
                 }
             } else if targetShareAlbum != nil {
                 AlbumSelectionGrid(
@@ -315,5 +315,5 @@ private struct ShareDestinationRow: View {
     )
     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
     .background(.black)
-    .environment(AuthenticationState())
+    .environment(AuthenticationState.preview())
 }
