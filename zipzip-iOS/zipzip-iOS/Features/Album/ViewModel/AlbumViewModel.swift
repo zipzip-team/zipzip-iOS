@@ -28,6 +28,7 @@ final class AlbumViewModel {
     @ObservationIgnored private let albumStore: AlbumStore
     @ObservationIgnored private let photoSectionsProvider: PhotoSectionsProvider
     @ObservationIgnored private let loadsAlbumsFromDatabase: Bool
+    @ObservationIgnored private var favoriteWriteTasks: [String: Task<Void, Never>] = [:]
 
     init(
         albums: [AlbumViewItem]? = nil,
@@ -276,14 +277,20 @@ final class AlbumViewModel {
         (try? await albumStore.isPhotoFavorite(localIdentifier: localIdentifier)) ?? false
     }
 
-    func setPhotoFavorite(localIdentifier: String, isFavorite: Bool) async {
-        do {
-            try await albumStore.setPhotoFavorite(localIdentifier: localIdentifier, isFavorite: isFavorite)
-        } catch {
-            return
-        }
+    /// 같은 사진에 대한 즐겨찾기 쓰기를 제출 순서대로 직렬화한다.
+    /// 연타 시 마지막 탭 의도가 DB 최종 상태와 일치하도록 보장한다.
+    func setPhotoFavorite(localIdentifier: String, isFavorite: Bool) {
+        let previous = favoriteWriteTasks[localIdentifier]
+        favoriteWriteTasks[localIdentifier] = Task { [weak self] in
+            await previous?.value
+            guard let self else { return }
 
-        await loadAlbums()
+            try? await albumStore.setPhotoFavorite(
+                localIdentifier: localIdentifier,
+                isFavorite: isFavorite
+            )
+            await loadAlbums()
+        }
     }
 
     func photoSections(for albumID: AlbumViewItem.ID) async -> [PhotoSection] {

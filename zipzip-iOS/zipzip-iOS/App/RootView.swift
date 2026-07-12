@@ -142,12 +142,10 @@ struct RootView: View {
     }
 
     private func togglePhotoFavorite(localIdentifier: String, isFavorite: Bool) {
-        Task {
-            await albumViewModel.setPhotoFavorite(
-                localIdentifier: localIdentifier,
-                isFavorite: isFavorite
-            )
-        }
+        albumViewModel.setPhotoFavorite(
+            localIdentifier: localIdentifier,
+            isFavorite: isFavorite
+        )
     }
 
     private func moveAlbumPhotosToAlbums(
