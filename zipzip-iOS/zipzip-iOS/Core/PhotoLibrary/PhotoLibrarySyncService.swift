@@ -45,14 +45,15 @@ nonisolated struct PhotoLibrarySyncService {
             try Self.loadChangeToken(db)
         }
         if let savedToken {
-            try await syncIncremental(since: savedToken, continuation)
+            try await syncIncremental(since: savedToken, status: status, continuation)
         } else {
-            try await importAll(continuation)
+            try await importAll(status: status, continuation)
         }
     }
 
     @concurrent
     private func importAll(
+        status: PHAuthorizationStatus,
         _ continuation: AsyncThrowingStream<SyncProgress, Error>.Continuation
     ) async throws {
         let baselineToken = PHPhotoLibrary.shared().currentChangeToken
@@ -79,10 +80,14 @@ nonisolated struct PhotoLibrarySyncService {
             continuation.yield(SyncProgress(processed: processed, total: total))
         }
 
-        let existingIdentifiers = try await database.read { db in
-            try PhotoRecord.select(\.localIdentifier).fetchAll(db)
+        // 전체 접근일 때만 fetch 결과가 라이브러리 전체를 대표한다.
+        // 제한된 접근(.limited)에서는 fetch가 허용된 일부만 반환하므로 prune하면 안 된다.
+        if status == .authorized {
+            let existingIdentifiers = try await database.read { db in
+                try PhotoRecord.select(\.localIdentifier).fetchAll(db)
+            }
+            try await deleteRecords(Array(Set(existingIdentifiers).subtracting(fetchedIdentifiers)))
         }
-        try await deleteRecords(Array(Set(existingIdentifiers).subtracting(fetchedIdentifiers)))
 
         try await database.write { db in
             try Self.saveChangeToken(baselineToken, db)
@@ -92,6 +97,7 @@ nonisolated struct PhotoLibrarySyncService {
     @concurrent
     private func syncIncremental(
         since token: PHPersistentChangeToken,
+        status: PHAuthorizationStatus,
         _ continuation: AsyncThrowingStream<SyncProgress, Error>.Continuation
     ) async throws {
         let library = PHPhotoLibrary.shared()
@@ -99,7 +105,7 @@ nonisolated struct PhotoLibrarySyncService {
         do {
             changes = try library.fetchPersistentChanges(since: token)
         } catch let error as PHPhotosError where error.code == .persistentChangeTokenExpired {
-            try await importAll(continuation)
+            try await importAll(status: status, continuation)
             return
         }
 
@@ -119,7 +125,7 @@ nonisolated struct PhotoLibrarySyncService {
                 latestToken = change.changeToken
             }
         } catch let error as PHPhotosError where error.code == .persistentChangeDetailsUnavailable {
-            try await importAll(continuation)
+            try await importAll(status: status, continuation)
             return
         }
 
@@ -165,7 +171,7 @@ nonisolated struct PhotoLibrarySyncService {
             continuation.yield(SyncProgress(processed: processed, total: total))
         }
     }
-    
+
     private func deleteRecords(_ identifiers: [String]) async throws {
         guard !identifiers.isEmpty else { return }
         try await database.write { db in
