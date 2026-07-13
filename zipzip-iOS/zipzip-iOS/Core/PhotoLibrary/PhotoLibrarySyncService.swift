@@ -80,8 +80,6 @@ nonisolated struct PhotoLibrarySyncService {
             continuation.yield(SyncProgress(processed: processed, total: total))
         }
 
-        // 전체 접근일 때만 fetch 결과가 라이브러리 전체를 대표한다.
-        // 제한된 접근(.limited)에서는 fetch가 허용된 일부만 반환하므로 prune하면 안 된다.
         if status == .authorized {
             let existingIdentifiers = try await database.read { db in
                 try PhotoRecord.select(\.localIdentifier).fetchAll(db)
