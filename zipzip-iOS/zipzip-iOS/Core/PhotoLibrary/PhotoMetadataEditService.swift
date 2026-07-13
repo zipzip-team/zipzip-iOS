@@ -101,7 +101,8 @@ nonisolated struct PhotoMetadataEditService {
                 localIdentifier: localIdentifier,
                 asset: asset,
                 data: modified,
-                uti: uti
+                uti: uti,
+                collections: Self.userAlbums(containing: asset)
             ))
         }
         guard !replacements.isEmpty else { return [:] }
@@ -115,7 +116,13 @@ nonisolated struct PhotoMetadataEditService {
                 creation.creationDate = replacement.asset.creationDate
                 creation.location = replacement.asset.location
                 creation.isFavorite = replacement.asset.isFavorite
-                replacement.placeholder.identifier = creation.placeholderForCreatedAsset?.localIdentifier
+                let placeholder = creation.placeholderForCreatedAsset
+                replacement.placeholder.identifier = placeholder?.localIdentifier
+                if let placeholder {
+                    for collection in replacement.collections {
+                        PHAssetCollectionChangeRequest(for: collection)?.addAssets([placeholder] as NSArray)
+                    }
+                }
             }
             PHAssetChangeRequest.deleteAssets(replacements.map(\.asset) as NSArray)
         }
@@ -158,6 +165,13 @@ nonisolated struct PhotoMetadataEditService {
         var assets: [PHAsset] = []
         result.enumerateObjects { asset, _, _ in assets.append(asset) }
         return assets
+    }
+
+    private static func userAlbums(containing asset: PHAsset) -> [PHAssetCollection] {
+        let result = PHAssetCollection.fetchAssetCollectionsContaining(asset, with: .album, options: nil)
+        var collections: [PHAssetCollection] = []
+        result.enumerateObjects { collection, _, _ in collections.append(collection) }
+        return collections
     }
 
     private static func findOrCreatePlace(
@@ -235,6 +249,7 @@ private struct AssetReplacement: @unchecked Sendable {
     let asset: PHAsset
     let data: Data
     let uti: String
+    let collections: [PHAssetCollection]
     let placeholder = PlaceholderBox()
 }
 
