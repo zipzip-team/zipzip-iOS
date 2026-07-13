@@ -23,10 +23,14 @@ struct PhotoInfoEditContent: View {
         metadata: PhotoMetadata,
         localIdentifiers: [String] = [],
         showsHeader: Bool = true,
+        onLocalIdentifiersChange: @escaping ([String]) -> Void = { _ in },
         viewModel: PhotoInfoEditViewModel? = nil
     ) {
         _metadata = State(initialValue: metadata)
-        _viewModel = State(initialValue: viewModel ?? PhotoInfoEditViewModel(localIdentifiers: localIdentifiers))
+        _viewModel = State(initialValue: viewModel ?? PhotoInfoEditViewModel(
+            localIdentifiers: localIdentifiers,
+            onIdentifiersChanged: onLocalIdentifiersChange
+        ))
         self.showsHeader = showsHeader
     }
 

@@ -26,10 +26,16 @@ final class PhotoInfoEditViewModel {
     @ObservationIgnored private var deviceRecords: [DeviceRecord] = []
     @ObservationIgnored private var localIdentifiers: [String]
     @ObservationIgnored private var saveTask: Task<Void, Never>?
+    @ObservationIgnored private let onIdentifiersChanged: ([String]) -> Void
 
-    init(devices: [FilterDevice] = [], localIdentifiers: [String] = []) {
+    init(
+        devices: [FilterDevice] = [],
+        localIdentifiers: [String] = [],
+        onIdentifiersChanged: @escaping ([String]) -> Void = { _ in }
+    ) {
         self.devices = devices
         self.localIdentifiers = localIdentifiers
+        self.onIdentifiersChanged = onIdentifiersChanged
     }
 
     func load() async {
@@ -87,6 +93,7 @@ final class PhotoInfoEditViewModel {
             )
             if !mapping.isEmpty {
                 localIdentifiers = localIdentifiers.map { mapping[$0] ?? $0 }
+                onIdentifiersChanged(localIdentifiers)
             }
         } catch {
             Self.logger.error("failed to update device: \(error)")
