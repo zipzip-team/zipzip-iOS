@@ -108,6 +108,7 @@ nonisolated struct PhotoMetadataEditService {
         guard !replacements.isEmpty else { return [:] }
 
         try await PHPhotoLibrary.shared().performChanges {
+            var deletableAssets: [PHAsset] = []
             for replacement in replacements {
                 let creation = PHAssetCreationRequest.forAsset()
                 let resourceOptions = PHAssetResourceCreationOptions()
@@ -116,15 +117,16 @@ nonisolated struct PhotoMetadataEditService {
                 creation.creationDate = replacement.asset.creationDate
                 creation.location = replacement.asset.location
                 creation.isFavorite = replacement.asset.isFavorite
-                let placeholder = creation.placeholderForCreatedAsset
-                replacement.placeholder.identifier = placeholder?.localIdentifier
-                if let placeholder {
-                    for collection in replacement.collections {
-                        PHAssetCollectionChangeRequest(for: collection)?.addAssets([placeholder] as NSArray)
-                    }
+                guard let placeholder = creation.placeholderForCreatedAsset else { continue }
+                replacement.placeholder.identifier = placeholder.localIdentifier
+                for collection in replacement.collections {
+                    PHAssetCollectionChangeRequest(for: collection)?.addAssets([placeholder] as NSArray)
                 }
+                deletableAssets.append(replacement.asset)
             }
-            PHAssetChangeRequest.deleteAssets(replacements.map(\.asset) as NSArray)
+            if !deletableAssets.isEmpty {
+                PHAssetChangeRequest.deleteAssets(deletableAssets as NSArray)
+            }
         }
 
         return try await database.write { db in
