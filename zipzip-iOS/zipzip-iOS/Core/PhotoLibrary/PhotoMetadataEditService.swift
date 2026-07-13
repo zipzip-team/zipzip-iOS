@@ -97,12 +97,17 @@ nonisolated struct PhotoMetadataEditService {
                 logger.error("device edit: metadata rewrite failed")
                 continue
             }
+            let collections = Self.userAlbums(containing: asset)
+            guard collections.allSatisfy({ $0.canPerform(.addContent) }) else {
+                logger.error("device edit: uneditable album membership, skipping \(localIdentifier)")
+                continue
+            }
             replacements.append(AssetReplacement(
                 localIdentifier: localIdentifier,
                 asset: asset,
                 data: modified,
                 uti: uti,
-                collections: Self.userAlbums(containing: asset)
+                collections: collections
             ))
         }
         guard !replacements.isEmpty else { return [:] }
