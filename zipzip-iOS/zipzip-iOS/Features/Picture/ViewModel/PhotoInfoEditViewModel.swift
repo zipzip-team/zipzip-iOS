@@ -25,6 +25,7 @@ final class PhotoInfoEditViewModel {
 
     @ObservationIgnored private var deviceRecords: [DeviceRecord] = []
     @ObservationIgnored private var localIdentifiers: [String]
+    @ObservationIgnored private var saveTask: Task<Void, Never>?
 
     init(devices: [FilterDevice] = [], localIdentifiers: [String] = []) {
         self.devices = devices
@@ -45,7 +46,31 @@ final class PhotoInfoEditViewModel {
         }
     }
 
-    func saveDevice(name: String) async {
+    func saveDevice(name: String) {
+        let previous = saveTask
+        saveTask = Task { [weak self] in
+            await previous?.value
+            await self?.runSaveDevice(name: name)
+        }
+    }
+
+    func saveLocation(name: String, latitude: Double?, longitude: Double?) {
+        let previous = saveTask
+        saveTask = Task { [weak self] in
+            await previous?.value
+            await self?.runSaveLocation(name: name, latitude: latitude, longitude: longitude)
+        }
+    }
+
+    func saveDate(_ date: Date) {
+        let previous = saveTask
+        saveTask = Task { [weak self] in
+            await previous?.value
+            await self?.runSaveDate(date)
+        }
+    }
+
+    private func runSaveDevice(name: String) async {
         guard !localIdentifiers.isEmpty else { return }
         guard let record = deviceRecords.first(where: {
             DeviceModelCatalog.filterDevice(make: $0.make, model: $0.model).name == name
@@ -68,7 +93,7 @@ final class PhotoInfoEditViewModel {
         }
     }
 
-    func saveLocation(name: String, latitude: Double?, longitude: Double?) async {
+    private func runSaveLocation(name: String, latitude: Double?, longitude: Double?) async {
         guard !localIdentifiers.isEmpty else { return }
         do {
             try await metadataEdit.updateLocation(
@@ -82,7 +107,7 @@ final class PhotoInfoEditViewModel {
         }
     }
 
-    func saveDate(_ date: Date) async {
+    private func runSaveDate(_ date: Date) async {
         guard !localIdentifiers.isEmpty else { return }
         do {
             try await metadataEdit.updateDate(localIdentifiers: localIdentifiers, date: date)

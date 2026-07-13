@@ -149,7 +149,7 @@ struct PhotoInfoEditContent: View {
             location: metadata.location,
             dateText: metadata.dateText
         )
-        Task { await viewModel.saveDevice(name: name) }
+        viewModel.saveDevice(name: name)
     }
 
     private func applyLocation(_ name: String, latitude: Double?, longitude: Double?) {
@@ -159,7 +159,7 @@ struct PhotoInfoEditContent: View {
             location: name,
             dateText: metadata.dateText
         )
-        Task { await viewModel.saveLocation(name: name, latitude: latitude, longitude: longitude) }
+        viewModel.saveLocation(name: name, latitude: latitude, longitude: longitude)
     }
 
     private func applyDate(_ date: Date) {
@@ -169,7 +169,7 @@ struct PhotoInfoEditContent: View {
             location: metadata.location,
             dateText: AppliedFilter.dateText(date)
         )
-        Task { await viewModel.saveDate(date) }
+        viewModel.saveDate(date)
     }
 }
 
