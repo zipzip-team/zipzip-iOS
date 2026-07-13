@@ -17,6 +17,7 @@ struct RootView: View {
     @State private var photoSync = PhotoSyncCoordinator()
     @State private var albumViewModel = AlbumViewModel()
     @State private var pictureViewModel = PictureViewModel()
+    @State private var shareViewModel = ShareViewModel()
 
     var body: some View {
         @Bindable var router = router
@@ -26,7 +27,11 @@ struct RootView: View {
                 if authenticationState.isRestoring, hasCompletedOnboarding {
                     SplashView(continuesOnboarding: false)
                 } else if hasCompletedOnboarding {
-                    RootTabView(albumViewModel: albumViewModel, pictureViewModel: pictureViewModel)
+                    RootTabView(
+                        albumViewModel: albumViewModel,
+                        pictureViewModel: pictureViewModel,
+                        shareViewModel: shareViewModel
+                    )
                 } else {
                     SplashView()
                 }
@@ -102,6 +107,16 @@ struct RootView: View {
                         loadIsFavorite: { await albumViewModel.isPhotoFavorited(localIdentifier: $0) },
                         onToggleFavorite: togglePhotoFavorite
                     )
+                case let .shareGroup(groupID):
+                    ShareGroupDetailView(groupID: groupID, viewModel: shareViewModel)
+                case let .shareAlbum(groupID, albumID):
+                    ShareAlbumDetailDestinationView(
+                        groupID: groupID,
+                        albumID: albumID,
+                        viewModel: shareViewModel
+                    )
+                case let .shareImport(groupID):
+                    ShareImportView(groupID: groupID, viewModel: shareViewModel)
                 case .myPage:
                     MyPageView()
                 case .registeredDeviceManagement:

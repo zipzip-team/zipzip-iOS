@@ -11,15 +11,19 @@ struct RootTabView: View {
     @Environment(Router.self) private var router
     let pictureViewModel: PictureViewModel
     @State private var selection: NavbarTab = .main
-    @State private var loaded: Set<NavbarTab> = [.main]
-    @State private var shareViewModel = ShareViewModel()
     @State private var showShareSheet = false
 
     let albumViewModel: AlbumViewModel
+    let shareViewModel: ShareViewModel
 
-    init(albumViewModel: AlbumViewModel, pictureViewModel: PictureViewModel) {
+    init(
+        albumViewModel: AlbumViewModel,
+        pictureViewModel: PictureViewModel,
+        shareViewModel: ShareViewModel
+    ) {
         self.albumViewModel = albumViewModel
         self.pictureViewModel = pictureViewModel
+        self.shareViewModel = shareViewModel
     }
 
     var body: some View {
@@ -27,16 +31,6 @@ struct RootTabView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .safeAreaInset(edge: .bottom, spacing: 0) {
                 bottomBar
-            }
-            .onChange(of: selection) { _, newValue in
-                loaded.insert(newValue)
-                if newValue != .album {
-                    albumViewModel.resetForTabChange()
-                    router.removeAlbumRoutes()
-                }
-                if newValue != .share {
-                    shareViewModel.resetTransientUI()
-                }
             }
             .bottomSheet(isPresented: $showShareSheet, detents: [.full]) { dismiss in
                 ShareSheet(
@@ -60,9 +54,7 @@ struct RootTabView: View {
                                 return
                             }
 
-                            selection = .album
-                            router.removeAlbumRoutes()
-                            router.push(.albumDetail(albumID))
+                            selectTab(.album, path: [.albumDetail(albumID)])
                         }
                     }
                 )
@@ -90,7 +82,7 @@ struct RootTabView: View {
             .padding(.bottom, 28)
             .ignoresSafeArea(.container, edges: .bottom)
         } else if showsNavbar {
-            Navbar(selection: $selection)
+            Navbar(selection: selection, onSelect: selectTab)
                 .padding(.bottom, 28)
                 .ignoresSafeArea(.container, edges: .bottom)
         }
@@ -99,25 +91,16 @@ struct RootTabView: View {
     private var showsNavbar: Bool {
         switch selection {
         case .album:
-            !albumViewModel.isSelectionMode && !router.path.contains(where: \.isAlbumRoute)
+            !albumViewModel.isSelectionMode && router.path.last?.isAlbumRoute != true
         case .share:
-            !shareViewModel.hidesRootNavbar
+            !shareViewModel.isAddMode && router.path.last?.isShareRoute != true
         default:
             true
         }
     }
 
     private var content: some View {
-        ZStack {
-            ForEach(NavbarTab.allCases, id: \.self) { tab in
-                if loaded.contains(tab) {
-                    page(for: tab)
-                        .opacity(selection == tab ? 1 : 0)
-                        .allowsHitTesting(selection == tab)
-                        .accessibilityHidden(selection != tab)
-                }
-            }
-        }
+        page(for: selection)
     }
 
     @ViewBuilder private func page(for tab: NavbarTab) -> some View {
@@ -132,5 +115,25 @@ struct RootTabView: View {
         case .album: AlbumView(viewModel: albumViewModel)
         case .share: ShareView(viewModel: shareViewModel)
         }
+    }
+
+    private func selectTab(_ newSelection: NavbarTab) {
+        selectTab(newSelection, path: [])
+    }
+
+    private func selectTab(_ newSelection: NavbarTab, path: [Route]) {
+        guard selection != newSelection || router.path != path else {
+            return
+        }
+
+        if newSelection != .album {
+            albumViewModel.resetForTabChange()
+        }
+        if newSelection != .share {
+            shareViewModel.resetTransientUI()
+        }
+
+        router.replacePath(with: path)
+        selection = newSelection
     }
 }

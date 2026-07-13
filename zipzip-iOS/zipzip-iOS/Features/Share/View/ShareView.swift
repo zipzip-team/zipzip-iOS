@@ -10,128 +10,124 @@ import UIKit
 
 struct ShareView: View {
     @Environment(AuthenticationState.self) private var authenticationState
-    @State private var viewModel: ShareViewModel
-
-    init(viewModel: ShareViewModel) {
-        _viewModel = State(initialValue: viewModel)
-    }
+    @Environment(Router.self) private var router
+    let viewModel: ShareViewModel
 
     var body: some View {
-        NavigationStack(path: $viewModel.navigationPath) {
-            rootContent
-                .toolbarVisibility(.hidden, for: .navigationBar)
-                .navigationDestination(for: ShareRoute.self) { route in
-                    destination(for: route)
-                }
-        }
-        .bottomSheet(
-            isPresented: $viewModel.isJoinSheetPresented,
-            detents: [.height(552)],
-            initialDetent: .height(552),
-            showsDragIndicator: .visible,
-            expandsToLargestDetentOnScroll: false
-        ) { _ in
-            ShareEntryFormSheet(
-                title: "공유 그룹 입장하기",
-                placeholder: "코드 입력",
-                value: $viewModel.joinCode,
-                onCancel: { viewModel.isJoinSheetPresented = false },
-                onConfirm: viewModel.confirmJoinCode
-            )
-        }
-        .bottomSheet(
-            isPresented: $viewModel.isCreateSheetPresented,
-            detents: [.height(552)],
-            initialDetent: .height(552),
-            showsDragIndicator: .visible,
-            expandsToLargestDetentOnScroll: false
-        ) { _ in
-            ShareEntryFormSheet(
-                title: "공유 그룹 생성하기",
-                placeholder: "공유 그룹 이름",
-                value: $viewModel.groupNameDraft,
-                onCancel: { viewModel.isCreateSheetPresented = false },
-                onConfirm: viewModel.createGroup
-            )
-        }
-        .bottomSheet(
-            isPresented: $viewModel.isJoinConfirmationPresented,
-            detents: [.height(477)],
-            initialDetent: .height(477),
-            showsDragIndicator: .visible,
-            expandsToLargestDetentOnScroll: false
-        ) { _ in
-            ShareJoinConfirmationSheet(
-                group: viewModel.pendingJoinGroup,
-                onCancel: viewModel.cancelJoinConfirmation,
-                onConfirm: viewModel.completeJoin
-            )
-        }
-        .bottomSheet(
-            isPresented: $viewModel.isInviteSheetPresented,
-            detents: [.height(552)],
-            initialDetent: .height(552),
-            showsDragIndicator: .visible,
-            expandsToLargestDetentOnScroll: false
-        ) { _ in
-            ShareInvitationSheet(
-                code: viewModel.inviteCode,
-                onPrevious: {
-                    viewModel.isInviteSheetPresented = false
-                    viewModel.isCreateSheetPresented = true
-                },
-                onComplete: viewModel.completeInvitation
-            )
-        }
-        .bottomSheet(
-            isPresented: $viewModel.isCommentsPresented,
-            detents: [.height(562)],
-            initialDetent: .height(562),
-            showsDragIndicator: .visible,
-            expandsToLargestDetentOnScroll: false
-        ) { _ in
-            ShareCommentsSheet(
-                comment: $viewModel.commentDraft,
-                onClose: { viewModel.isCommentsPresented = false }
-            )
-        }
-        .bottomSheet(
-            isPresented: $viewModel.isAlbumManagementPresented,
-            detents: [.height(549)],
-            initialDetent: .height(549),
-            showsDragIndicator: .visible,
-            expandsToLargestDetentOnScroll: false
-        ) { _ in
-            ShareAlbumManagementSheet(
-                albumName: $viewModel.albumNameDraft,
-                onClose: viewModel.dismissAlbumManagement,
-                onDelete: viewModel.deleteManagedAlbum,
-                onComplete: viewModel.completeAlbumManagement
-            )
-        }
-        .bottomSheet(
-            isPresented: $viewModel.isShareManagementPresented,
-            detents: [.full],
-            initialDetent: .full,
-            showsDragIndicator: .visible,
-            expandsToLargestDetentOnScroll: false
-        ) { _ in
-            if let group = viewModel.managedShareGroup {
-                ShareGroupManagementSheet(
-                    group: group,
-                    groupName: $viewModel.shareGroupNameDraft,
-                    inviteCode: viewModel.inviteCode,
-                    onClose: viewModel.dismissShareManagement,
-                    onComplete: viewModel.completeShareManagement,
-                    onLeave: viewModel.leaveManagedShareGroup
+        @Bindable var viewModel = viewModel
+        rootContent
+            .toolbarVisibility(.hidden, for: .navigationBar)
+            .bottomSheet(
+                isPresented: $viewModel.isJoinSheetPresented,
+                detents: [.height(552)],
+                initialDetent: .height(552),
+                showsDragIndicator: .visible,
+                expandsToLargestDetentOnScroll: false
+            ) { _ in
+                ShareEntryFormSheet(
+                    title: "공유 그룹 입장하기",
+                    placeholder: "코드 입력",
+                    value: $viewModel.joinCode,
+                    onCancel: { viewModel.isJoinSheetPresented = false },
+                    onConfirm: viewModel.confirmJoinCode
                 )
             }
-        }
+            .bottomSheet(
+                isPresented: $viewModel.isCreateSheetPresented,
+                detents: [.height(552)],
+                initialDetent: .height(552),
+                showsDragIndicator: .visible,
+                expandsToLargestDetentOnScroll: false
+            ) { _ in
+                ShareEntryFormSheet(
+                    title: "공유 그룹 생성하기",
+                    placeholder: "공유 그룹 이름",
+                    value: $viewModel.groupNameDraft,
+                    onCancel: { viewModel.isCreateSheetPresented = false },
+                    onConfirm: viewModel.createGroup
+                )
+            }
+            .bottomSheet(
+                isPresented: $viewModel.isJoinConfirmationPresented,
+                detents: [.height(477)],
+                initialDetent: .height(477),
+                showsDragIndicator: .visible,
+                expandsToLargestDetentOnScroll: false
+            ) { _ in
+                ShareJoinConfirmationSheet(
+                    group: viewModel.pendingJoinGroup,
+                    onCancel: viewModel.cancelJoinConfirmation,
+                    onConfirm: viewModel.completeJoin
+                )
+            }
+            .bottomSheet(
+                isPresented: $viewModel.isInviteSheetPresented,
+                detents: [.height(552)],
+                initialDetent: .height(552),
+                showsDragIndicator: .visible,
+                expandsToLargestDetentOnScroll: false
+            ) { _ in
+                ShareInvitationSheet(
+                    code: viewModel.inviteCode,
+                    onPrevious: {
+                        viewModel.isInviteSheetPresented = false
+                        viewModel.isCreateSheetPresented = true
+                    },
+                    onComplete: viewModel.completeInvitation
+                )
+            }
+            .bottomSheet(
+                isPresented: $viewModel.isCommentsPresented,
+                detents: [.height(562)],
+                initialDetent: .height(562),
+                showsDragIndicator: .visible,
+                expandsToLargestDetentOnScroll: false
+            ) { _ in
+                ShareCommentsSheet(
+                    comment: $viewModel.commentDraft,
+                    onClose: { viewModel.isCommentsPresented = false }
+                )
+            }
+            .bottomSheet(
+                isPresented: $viewModel.isAlbumManagementPresented,
+                detents: [.height(549)],
+                initialDetent: .height(549),
+                showsDragIndicator: .visible,
+                expandsToLargestDetentOnScroll: false
+            ) { _ in
+                ShareAlbumManagementSheet(
+                    albumName: $viewModel.albumNameDraft,
+                    onClose: viewModel.dismissAlbumManagement,
+                    onDelete: viewModel.deleteManagedAlbum,
+                    onComplete: viewModel.completeAlbumManagement
+                )
+            }
+            .bottomSheet(
+                isPresented: $viewModel.isShareManagementPresented,
+                detents: [.full],
+                initialDetent: .full,
+                showsDragIndicator: .visible,
+                expandsToLargestDetentOnScroll: false
+            ) { _ in
+                if let group = viewModel.managedShareGroup {
+                    ShareGroupManagementSheet(
+                        group: group,
+                        groupName: $viewModel.shareGroupNameDraft,
+                        inviteCode: viewModel.inviteCode,
+                        onClose: viewModel.dismissShareManagement,
+                        onComplete: viewModel.completeShareManagement,
+                        onLeave: leaveManagedShareGroup
+                    )
+                }
+            }
     }
 
     @ViewBuilder private var rootContent: some View {
         if authenticationState.isLoggedIn {
-            ShareGroupListView(viewModel: viewModel)
+            ShareGroupListView(
+                viewModel: viewModel,
+                onOpenGroup: { router.push(.shareGroup($0)) }
+            )
         } else {
             ShareRootLoginView {
                 authenticationState.requestLogin(.share)
@@ -139,42 +135,56 @@ struct ShareView: View {
         }
     }
 
-    @ViewBuilder private func destination(for route: ShareRoute) -> some View {
-        switch route {
-        case let .group(groupID):
-            ShareGroupDetailView(groupID: groupID, viewModel: viewModel)
-        case let .album(groupID, albumID):
-            if let group = viewModel.group(withID: groupID),
-               let album = viewModel.album(groupID: groupID, albumID: albumID) {
-                AlbumDetailView(
-                    album: .init(
-                        id: album.id,
-                        title: album.name,
-                        createdAt: group.date,
-                        photoCount: album.count
-                    ),
-                    viewModel: sharedAlbumDetailViewModel(
-                        groupID: groupID,
-                        albumID: albumID
-                    )
-                ) { detailViewModel in
-                    AlbumDetailGalleryPlaceholderView(
-                        photoCount: album.count,
-                        showsSelectionControls: detailViewModel.isSelectionMode,
-                        selectedPhotoIDs: detailViewModel.selectedPhotoIDs,
-                        onSelectPhoto: detailViewModel.togglePhotoSelection
-                    )
-                }
+    private func leaveManagedShareGroup() {
+        guard viewModel.leaveManagedShareGroup() else {
+            return
+        }
+        router.popToRoot()
+    }
+}
+
+struct ShareAlbumDetailDestinationView: View {
+    @Environment(Router.self) private var router
+    let groupID: ShareAlbum.ID
+    let albumID: Album.ID
+    let viewModel: ShareViewModel
+
+    var body: some View {
+        if let group = viewModel.group(withID: groupID),
+           let album = viewModel.album(groupID: groupID, albumID: albumID) {
+            AlbumDetailView(
+                album: .init(
+                    id: album.id,
+                    title: album.name,
+                    createdAt: group.date,
+                    photoCount: album.count
+                ),
+                viewModel: detailViewModel
+            ) { detailViewModel in
+                AlbumDetailGalleryPlaceholderView(
+                    photoCount: album.count,
+                    showsSelectionControls: detailViewModel.isSelectionMode,
+                    selectedPhotoIDs: detailViewModel.selectedPhotoIDs,
+                    onSelectPhoto: detailViewModel.togglePhotoSelection
+                )
             }
-        case let .importContent(groupID):
-            ShareImportView(groupID: groupID, viewModel: viewModel)
+        } else {
+            ContentUnavailableView("사진집을 찾을 수 없어요", systemImage: "photo.on.rectangle")
+                .navigationBarBackButtonHidden(true)
+                .toolbarVisibility(.hidden, for: .navigationBar)
+                .overlay(alignment: .topLeading) {
+                    RoundedIconButton(items: [
+                        .init(id: "missing-share-album-back", icon: .iconChevronLeft, accessibilityLabel: "뒤로가기") {
+                            router.pop()
+                        }
+                    ])
+                    .padding(.top, 14)
+                    .padding(.leading, 16)
+                }
         }
     }
 
-    private func sharedAlbumDetailViewModel(
-        groupID: ShareAlbum.ID,
-        albumID: Album.ID
-    ) -> AlbumDetailViewModel {
+    private var detailViewModel: AlbumDetailViewModel {
         AlbumDetailViewModel(
             actions: .init(
                 onRename: { name in
@@ -182,7 +192,7 @@ struct ShareView: View {
                 },
                 onDelete: {
                     viewModel.removeAlbums([albumID], from: groupID)
-                    viewModel.goBack()
+                    router.pop()
                 }
             )
         )
@@ -191,6 +201,7 @@ struct ShareView: View {
 
 private struct ShareGroupListView: View {
     let viewModel: ShareViewModel
+    let onOpenGroup: (ShareAlbum.ID) -> Void
 
     var body: some View {
         ZStack {
@@ -204,7 +215,7 @@ private struct ShareGroupListView: View {
                     LazyVStack(spacing: 12) {
                         ForEach(viewModel.groups) { group in
                             Button {
-                                viewModel.showGroup(group)
+                                onOpenGroup(group.id)
                             } label: {
                                 ShareAlbumCard(
                                     thumbnail: nil,
@@ -605,5 +616,6 @@ private struct ShareViewPreview: View {
     var body: some View {
         ShareView(viewModel: viewModel)
             .environment(authenticationState)
+            .environment(Router())
     }
 }

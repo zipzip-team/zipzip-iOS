@@ -8,7 +8,8 @@
 import SwiftUI
 
 struct Navbar: View {
-    @Binding var selection: NavbarTab
+    let selection: NavbarTab
+    let onSelect: (NavbarTab) -> Void
     @Namespace private var namespace
 
     var body: some View {
@@ -26,7 +27,7 @@ struct Navbar: View {
         let isSelected = selection == tab
         return Button {
             withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                selection = tab
+                onSelect(tab)
             }
         } label: {
             EmptyView()
@@ -69,6 +70,6 @@ private struct NavbarItemButtonStyle: ButtonStyle {
 
 #Preview {
     @Previewable @State var selection: NavbarTab = .main
-    Navbar(selection: $selection)
+    Navbar(selection: selection) { selection = $0 }
         .padding()
 }

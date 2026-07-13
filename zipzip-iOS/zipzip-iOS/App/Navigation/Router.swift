@@ -8,6 +8,7 @@
 import SwiftUI
 
 @Observable
+@MainActor
 final class Router {
     var path: [Route] = []
 
@@ -24,7 +25,7 @@ final class Router {
         path.removeAll()
     }
 
-    func removeAlbumRoutes() {
-        path.removeAll(where: \.isAlbumRoute)
+    func replacePath(with routes: [Route]) {
+        path = routes
     }
 }
