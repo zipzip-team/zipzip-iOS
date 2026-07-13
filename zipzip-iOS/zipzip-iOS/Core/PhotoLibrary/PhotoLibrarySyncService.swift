@@ -64,6 +64,7 @@ nonisolated struct PhotoLibrarySyncService {
         let scanDate = Date()
 
         var deviceCache: [DeviceKey: Int] = [:]
+        var fetchedIdentifiers: Set<String> = []
         var processed = 0
         while processed < total {
             try Task.checkCancellation()
@@ -71,18 +72,23 @@ nonisolated struct PhotoLibrarySyncService {
             let assets = autoreleasepool {
                 fetchResult.objects(at: IndexSet(integersIn: processed ..< upperBound))
             }
+            fetchedIdentifiers.formUnion(assets.map(\.localIdentifier))
             let chunk = await Self.loadMetadata(for: assets)
             try await persist(chunk, scanDate: scanDate, deviceCache: &deviceCache)
             processed = upperBound
             continuation.yield(SyncProgress(processed: processed, total: total))
         }
 
+        let existingIdentifiers = try await database.read { db in
+            try PhotoRecord.select(\.localIdentifier).fetchAll(db)
+        }
+        try await deleteRecords(Array(Set(existingIdentifiers).subtracting(fetchedIdentifiers)))
+
         try await database.write { db in
             try Self.saveChangeToken(baselineToken, db)
         }
     }
 
-    /// 저장된 토큰 이후의 변경분(추가·수정)만 반영한다. 토큰이 만료됐으면 전체 재임포트로 폴백한다.
     @concurrent
     private func syncIncremental(
         since token: PHPersistentChangeToken,
@@ -98,18 +104,27 @@ nonisolated struct PhotoLibrarySyncService {
         }
 
         var changedIdentifiers: Set<String> = []
+        var deletedIdentifiers: Set<String> = []
         var latestToken: PHPersistentChangeToken?
         do {
             for change in changes {
                 try Task.checkCancellation()
                 let details = try change.changeDetails(for: .asset)
-                changedIdentifiers.formUnion(details.insertedLocalIdentifiers)
-                changedIdentifiers.formUnion(details.updatedLocalIdentifiers)
+                let changed = Set(details.insertedLocalIdentifiers)
+                    .union(details.updatedLocalIdentifiers)
+                changedIdentifiers.formUnion(changed)
+                deletedIdentifiers.subtract(changed)
+                changedIdentifiers.subtract(details.deletedLocalIdentifiers)
+                deletedIdentifiers.formUnion(details.deletedLocalIdentifiers)
                 latestToken = change.changeToken
             }
         } catch let error as PHPhotosError where error.code == .persistentChangeDetailsUnavailable {
             try await importAll(continuation)
             return
+        }
+
+        if !deletedIdentifiers.isEmpty {
+            try await deleteRecords(Array(deletedIdentifiers))
         }
 
         if !changedIdentifiers.isEmpty {
@@ -150,10 +165,23 @@ nonisolated struct PhotoLibrarySyncService {
             continuation.yield(SyncProgress(processed: processed, total: total))
         }
     }
+    
+    private func deleteRecords(_ identifiers: [String]) async throws {
+        guard !identifiers.isEmpty else { return }
+        try await database.write { db in
+            var index = 0
+            while index < identifiers.count {
+                let upperBound = min(index + Self.chunkSize, identifiers.count)
+                let slice = Array(identifiers[index ..< upperBound])
+                try PhotoRecord
+                    .delete()
+                    .where { $0.localIdentifier.in(slice) }
+                    .execute(db)
+                index = upperBound
+            }
+        }
+    }
 
-    /// 청크의 기기 정보를 해석해 저장한다.
-    /// iCloud 전용 사진(devicePending)은 기기 미정으로 저장해 백필로 미룬다.
-    /// 기기 정보가 없는 사진(스크린샷 등)은 저장하지 않는다.
     private func persist(
         _ chunk: [AssetMetadata],
         scanDate: Date,
@@ -186,7 +214,6 @@ nonisolated struct PhotoLibrarySyncService {
         }
     }
 
-    /// 청크 내 자산들의 메타데이터를 제한된 동시성으로 병렬 로드한다(EXIF 읽기 포함).
     private static func loadMetadata(for assets: [PHAsset]) async -> [AssetMetadata] {
         await withTaskGroup(of: (Int, AssetMetadata).self) { group in
             var results = [AssetMetadata?](repeating: nil, count: assets.count)
@@ -258,7 +285,6 @@ nonisolated struct PhotoLibrarySyncService {
         return DeviceKey(make: metadata.make, model: metadata.model)
     }
 
-    /// (make, model)에 해당하는 기기를 조회하고 없으면 생성해 id를 반환한다.
     private static func deviceID(for key: DeviceKey, db: Database) throws -> Int {
         let existing = try DeviceRecord
             .where { $0.make.is(key.make) && $0.model.is(key.model) }
