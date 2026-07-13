@@ -123,6 +123,9 @@ final class AlbumViewModel {
         }
 
         let localIdentifiers = orderedPhotos.map(\.localIdentifier).filter { !$0.isEmpty }
+        guard !localIdentifiers.isEmpty else {
+            return
+        }
         router.push(.photoInfoEdit(metadata: firstPhoto.metadata, localIdentifiers: localIdentifiers))
     }
 
