@@ -12,11 +12,13 @@ import SwiftUI
 struct LocationSearchSheet: View {
     @Binding var selected: String
     let onCancel: () -> Void
-    let onDone: () -> Void
+    let onDone: (String, Double?, Double?) -> Void
 
     @Dependency(\.photoFilterOptions) private var filterOptions
     @State private var locations: [String] = []
     @State private var query = ""
+    @State private var pendingCompletion: MKLocalSearchCompletion?
+    @State private var isCompleting = false
     @State private var searchModel = LocationSearchModel()
 
     var body: some View {
@@ -25,7 +27,15 @@ struct LocationSearchSheet: View {
                 BottomSheetCloseButton(action: onCancel)
             },
             rightItem: {
-                headerButton(title: "완료", action: onDone)
+                headerButton(title: "완료") {
+                    guard !isCompleting else { return }
+                    Task {
+                        isCompleting = true
+                        await complete()
+                        isCompleting = false
+                    }
+                }
+                .disabled(isCompleting)
             }
         ) {
             VStack(alignment: .leading, spacing: 16) {
@@ -62,7 +72,7 @@ struct LocationSearchSheet: View {
             HStack(spacing: 8) {
                 ForEach(locations, id: \.self) { location in
                     Button {
-                        select(location)
+                        selectSaved(location)
                     } label: {
                         Text(location)
                             .font(.b2_sb)
@@ -82,7 +92,7 @@ struct LocationSearchSheet: View {
             LazyVStack(spacing: 0) {
                 ForEach(searchModel.results, id: \.self) { result in
                     Button {
-                        select(result.title)
+                        selectResult(result)
                     } label: {
                         resultCard(title: result.title, subtitle: result.subtitle)
                     }
@@ -112,9 +122,31 @@ struct LocationSearchSheet: View {
         .contentShape(.rect)
     }
 
-    private func select(_ location: String) {
+    private func selectSaved(_ location: String) {
         selected = location
         query = location
+        pendingCompletion = nil
+    }
+
+    private func selectResult(_ result: MKLocalSearchCompletion) {
+        selected = result.title
+        query = result.title
+        pendingCompletion = result
+    }
+
+    private func complete() async {
+        guard let completion = pendingCompletion else {
+            onDone(selected, nil, nil)
+            return
+        }
+        guard let coordinate = await resolveCoordinate(for: completion) else { return }
+        onDone(selected, coordinate.latitude, coordinate.longitude)
+    }
+
+    private func resolveCoordinate(for completion: MKLocalSearchCompletion) async -> CLLocationCoordinate2D? {
+        let request = MKLocalSearch.Request(completion: completion)
+        let response = try? await MKLocalSearch(request: request).start()
+        return response?.mapItems.first?.placemark.coordinate
     }
 
     private func loadLocations() async {
@@ -127,7 +159,7 @@ struct LocationSearchSheet: View {
     LocationSearchSheet(
         selected: .constant("오사카"),
         onCancel: {},
-        onDone: {}
+        onDone: { _, _, _ in }
     )
     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
     .background(.black)

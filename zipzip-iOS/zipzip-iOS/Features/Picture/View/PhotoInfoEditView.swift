@@ -11,10 +11,11 @@ struct PhotoInfoEditView: View {
     @Environment(\.dismiss) private var dismiss
 
     let metadata: PhotoMetadata
+    let localIdentifiers: [String]
 
     var body: some View {
         ScrollView {
-            PhotoInfoEditContent(metadata: metadata)
+            PhotoInfoEditContent(metadata: metadata, localIdentifiers: localIdentifiers)
                 .padding(.horizontal, 16)
                 .padding(.top, 78)
         }
@@ -37,5 +38,5 @@ struct PhotoInfoEditView: View {
 }
 
 #Preview {
-    PhotoInfoEditView(metadata: PhotoMetadata.samples[0])
+    PhotoInfoEditView(metadata: PhotoMetadata.samples[0], localIdentifiers: [])
 }

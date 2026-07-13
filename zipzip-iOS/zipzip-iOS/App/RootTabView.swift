@@ -79,7 +79,10 @@ struct RootTabView: View {
                 ) { showShareSheet = true },
                 .init(icon: .metadata, title: "정보 수정") {
                     if let metadata = pictureViewModel.firstSelectedMetadata {
-                        router.push(.photoInfoEdit(metadata))
+                        router.push(.photoInfoEdit(
+                            metadata: metadata,
+                            localIdentifiers: pictureViewModel.selectedPhotoLocalIdentifiers
+                        ))
                     }
                 },
                 .init(icon: .delete, title: "삭제") { pictureViewModel.requestDelete() }

@@ -21,11 +21,16 @@ struct PhotoInfoEditContent: View {
 
     init(
         metadata: PhotoMetadata,
+        localIdentifiers: [String] = [],
         showsHeader: Bool = true,
-        viewModel: PhotoInfoEditViewModel = PhotoInfoEditViewModel()
+        onLocalIdentifiersChange: @escaping ([String]) -> Void = { _ in },
+        viewModel: PhotoInfoEditViewModel? = nil
     ) {
         _metadata = State(initialValue: metadata)
-        _viewModel = State(initialValue: viewModel)
+        _viewModel = State(initialValue: viewModel ?? PhotoInfoEditViewModel(
+            localIdentifiers: localIdentifiers,
+            onIdentifiersChanged: onLocalIdentifiersChange
+        ))
         self.showsHeader = showsHeader
     }
 
@@ -73,8 +78,8 @@ struct PhotoInfoEditContent: View {
             LocationSearchSheet(
                 selected: $pickerLocation,
                 onCancel: { dismiss() },
-                onDone: {
-                    applyLocation(pickerLocation)
+                onDone: { name, latitude, longitude in
+                    applyLocation(name, latitude: latitude, longitude: longitude)
                     dismiss()
                 }
             )
@@ -148,15 +153,17 @@ struct PhotoInfoEditContent: View {
             location: metadata.location,
             dateText: metadata.dateText
         )
+        viewModel.saveDevice(name: name)
     }
 
-    private func applyLocation(_ name: String) {
+    private func applyLocation(_ name: String, latitude: Double?, longitude: Double?) {
         metadata = PhotoMetadata(
             deviceName: metadata.deviceName,
             deviceType: metadata.deviceType,
             location: name,
             dateText: metadata.dateText
         )
+        viewModel.saveLocation(name: name, latitude: latitude, longitude: longitude)
     }
 
     private func applyDate(_ date: Date) {
@@ -166,6 +173,7 @@ struct PhotoInfoEditContent: View {
             location: metadata.location,
             dateText: AppliedFilter.dateText(date)
         )
+        viewModel.saveDate(date)
     }
 }
 

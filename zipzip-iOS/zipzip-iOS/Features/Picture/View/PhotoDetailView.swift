@@ -47,11 +47,11 @@ struct PhotoDetailView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    let photo: Photo
+    @State private var photo: Photo
     private let albums: [Album]
     let deletionContext: PhotoDeletionContext
     private let excludedAlbumIDs: Set<Album.ID>
-    private let onDelete: (PhotoDeletionAction) async -> Bool
+    private let onDelete: (PhotoDeletionAction, Photo) async -> Bool
     private let onAddToAlbums: ([String], [ShareDestination]) -> Void
     private let onMoveToAlbums: ([Int], [ShareDestination]) -> Void
     private let loadIsFavorite: (String) async -> Bool
@@ -80,13 +80,13 @@ struct PhotoDetailView: View {
         albums: [Album] = Album.samples,
         deletionContext: PhotoDeletionContext = .gallery,
         excludedAlbumIDs: Set<Album.ID> = [],
-        onDelete: @escaping (PhotoDeletionAction) async -> Bool = { _ in true },
+        onDelete: @escaping (PhotoDeletionAction, Photo) async -> Bool = { _, _ in true },
         onAddToAlbums: @escaping ([String], [ShareDestination]) -> Void = { _, _ in },
         onMoveToAlbums: @escaping ([Int], [ShareDestination]) -> Void = { _, _ in },
         loadIsFavorite: @escaping (String) async -> Bool = { _ in false },
         onToggleFavorite: @escaping (String, Bool) -> Void = { _, _ in }
     ) {
-        self.photo = photo
+        _photo = State(initialValue: photo)
         self.albums = albums
         self.deletionContext = deletionContext
         self.excludedAlbumIDs = excludedAlbumIDs
@@ -245,7 +245,9 @@ struct PhotoDetailView: View {
     private var photoInfoEditView: some View {
         PhotoInfoEditContent(
             metadata: photo.metadata,
-            showsHeader: false
+            localIdentifiers: photo.localIdentifier.isEmpty ? [] : [photo.localIdentifier],
+            showsHeader: false,
+            onLocalIdentifiersChange: updatePhotoIdentifier
         )
         .padding(.horizontal, 16)
         .padding(.top, 24)
@@ -462,10 +464,23 @@ struct PhotoDetailView: View {
     private func completeDeletion(_ action: PhotoDeletionAction) {
         showDeleteAlert = false
         Task {
-            if await onDelete(action) {
+            if await onDelete(action, photo) {
                 dismiss()
             }
         }
+    }
+
+    private func updatePhotoIdentifier(_ identifiers: [String]) {
+        guard let newIdentifier = identifiers.first,
+              newIdentifier != photo.localIdentifier
+        else {
+            return
+        }
+        photo = Photo(
+            localIdentifier: newIdentifier,
+            metadata: photo.metadata,
+            albumPhotoID: photo.albumPhotoID
+        )
     }
 }
 

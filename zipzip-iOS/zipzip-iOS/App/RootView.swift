@@ -61,16 +61,16 @@ struct RootView: View {
                         appliedFilters: filters,
                         albumViewModel: albumViewModel
                     )
-                case let .photoInfoEdit(metadata):
-                    PhotoInfoEditView(metadata: metadata)
+                case let .photoInfoEdit(metadata, localIdentifiers):
+                    PhotoInfoEditView(metadata: metadata, localIdentifiers: localIdentifiers)
                 case let .photoDetail(photo):
                     PhotoDetailView(
                         photo: photo,
                         albums: albumViewModel.shareDestinations,
-                        onDelete: { action in
+                        onDelete: { action, currentPhoto in
                             guard action == .deletePermanently else { return false }
                             return await pictureViewModel.deletePhotos(
-                                localIdentifiers: [photo.localIdentifier]
+                                localIdentifiers: [currentPhoto.localIdentifier]
                             )
                         },
                         onAddToAlbums: addPhotosToAlbums,
@@ -88,8 +88,8 @@ struct RootView: View {
                         albums: albumViewModel.shareDestinations,
                         deletionContext: .album,
                         excludedAlbumIDs: [albumID],
-                        onDelete: { action in
-                            await albumViewModel.deletePhotos([photo.id], from: albumID, action: action)
+                        onDelete: { action, currentPhoto in
+                            await albumViewModel.deletePhotos([currentPhoto.id], from: albumID, action: action)
                         },
                         onAddToAlbums: addPhotosToAlbums,
                         onMoveToAlbums: { albumPhotoIDs, destinations in

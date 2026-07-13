@@ -108,15 +108,25 @@ final class AlbumViewModel {
         router.push(.albumPhotoDetail(albumID: albumID, photo: photo))
     }
 
-    func showPhotoInfoEdit(for photoID: UUID, router: Router) {
-        guard let photo = PhotoSection.sample
-            .flatMap(\.photos)
-            .first(where: { $0.id == photoID })
-        else {
+    func showPhotoInfoEdit(for photoIDs: [UUID], from albumID: AlbumViewItem.ID, router: Router) async {
+        guard let sections = try? await photoSectionsProvider.loadAlbumSections(albumID: albumID) else {
             return
         }
 
-        router.push(.photoInfoEdit(photo.metadata))
+        let photosByID = Dictionary(
+            sections.flatMap(\.photos).map { ($0.id, $0) },
+            uniquingKeysWith: { first, _ in first }
+        )
+        let orderedPhotos = photoIDs.compactMap { photosByID[$0] }
+        guard let firstPhoto = orderedPhotos.first else {
+            return
+        }
+
+        let localIdentifiers = orderedPhotos.map(\.localIdentifier).filter { !$0.isEmpty }
+        guard !localIdentifiers.isEmpty else {
+            return
+        }
+        router.push(.photoInfoEdit(metadata: firstPhoto.metadata, localIdentifiers: localIdentifiers))
     }
 
     func toggleSelection(for album: AlbumViewItem) {
@@ -222,7 +232,9 @@ final class AlbumViewModel {
                     }
                 }
             ),
-            onEditPhotoInfo: { [weak self] in self?.showPhotoInfoEdit(for: $0, router: router) }
+            onEditPhotoInfo: { [weak self] photoIDs in
+                Task { await self?.showPhotoInfoEdit(for: photoIDs, from: albumID, router: router) }
+            }
         )
     }
 

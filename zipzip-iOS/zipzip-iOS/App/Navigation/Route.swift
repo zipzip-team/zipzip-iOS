@@ -16,7 +16,7 @@ enum Route: Hashable {
     case deviceSelection
     case filter
     case filterResult([AppliedFilter])
-    case photoInfoEdit(PhotoMetadata)
+    case photoInfoEdit(metadata: PhotoMetadata, localIdentifiers: [String])
     case photoDetail(Photo)
     case albumDetail(Int)
     case albumPhotoDetail(albumID: Int, photo: Photo)
