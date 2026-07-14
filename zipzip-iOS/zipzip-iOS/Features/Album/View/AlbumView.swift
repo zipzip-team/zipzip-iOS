@@ -454,7 +454,7 @@ private struct AlbumViewPreview: View {
         AlbumView(viewModel: viewModel)
             .safeAreaInset(edge: .bottom, spacing: 0) {
                 if !viewModel.isSelectionMode {
-                    Navbar(selection: $selection)
+                    Navbar(selection: selection) { selection = $0 }
                         .padding(.bottom, 28)
                         .ignoresSafeArea(.container, edges: .bottom)
                 }

@@ -71,7 +71,7 @@ zipzip-iOS/
     │   ├── Info.plist
     │   └── Navigation/              # 화면 전환(라우팅)
     │       ├── Route.swift          # 화면 경로 정의(enum)
-    │       └── Router.swift         # @Observable, NavigationPath 관리 (push/pop/popToRoot)
+    │       └── Router.swift         # @Observable, [Route] 경로 관리 (push/pop/replace)
     │
     ├── Core/                        # 앱 전반에서 재사용되는 핵심 인프라
     │   ├── DI/
@@ -99,3 +99,7 @@ zipzip-iOS/
     └── Resources/                   # 에셋 & 리소스
         └── Assets.xcassets/         # AppIcon, AccentColor
 ```
+
+## 📚 Architecture Docs
+
+- [Navigation 운영 정책](docs/navigation-policy.md)

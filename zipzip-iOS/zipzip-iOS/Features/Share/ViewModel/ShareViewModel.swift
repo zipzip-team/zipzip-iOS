@@ -6,12 +6,6 @@
 import Foundation
 import Observation
 
-enum ShareRoute: Hashable {
-    case group(ShareAlbum.ID)
-    case album(groupID: ShareAlbum.ID, albumID: Album.ID)
-    case importContent(ShareAlbum.ID)
-}
-
 enum ShareImportSelection: Hashable {
     case photos
     case albums
@@ -23,9 +17,9 @@ struct ShareAlbumManagementTarget: Equatable {
 }
 
 @Observable
+@MainActor
 final class ShareViewModel {
     var groups: [ShareAlbum]
-    var navigationPath: [ShareRoute] = []
 
     var isAddMode = false
     var isJoinSheetPresented = false
@@ -48,12 +42,12 @@ final class ShareViewModel {
     private(set) var albumManagementTarget: ShareAlbumManagementTarget?
     private(set) var managedShareGroup: ShareAlbum?
 
-    init(groups: [ShareAlbum] = ShareAlbum.samples) {
-        self.groups = groups
+    init() {
+        self.groups = ShareAlbum.samples
     }
 
-    var hidesRootNavbar: Bool {
-        isAddMode || !navigationPath.isEmpty
+    init(groups: [ShareAlbum]) {
+        self.groups = groups
     }
 
     func group(withID id: ShareAlbum.ID) -> ShareAlbum? {
@@ -70,25 +64,6 @@ final class ShareViewModel {
 
     func exitAddMode() {
         isAddMode = false
-    }
-
-    func showGroup(_ group: ShareAlbum) {
-        navigationPath.append(.group(group.id))
-    }
-
-    func showAlbum(_ album: Album, in groupID: ShareAlbum.ID) {
-        navigationPath.append(.album(groupID: groupID, albumID: album.id))
-    }
-
-    func showImport(for groupID: ShareAlbum.ID) {
-        navigationPath.append(.importContent(groupID))
-    }
-
-    func goBack() {
-        guard !navigationPath.isEmpty else {
-            return
-        }
-        navigationPath.removeLast()
     }
 
     func presentJoinSheet() {
@@ -157,14 +132,15 @@ final class ShareViewModel {
         isAddMode = false
     }
 
-    func addAlbums(_ albums: [Album], to groupID: ShareAlbum.ID) {
+    @discardableResult
+    func addAlbums(_ albums: [Album], to groupID: ShareAlbum.ID) -> Bool {
         guard let groupIndex = groups.firstIndex(where: { $0.id == groupID }) else {
-            return
+            return false
         }
 
         let existingIDs = Set(groups[groupIndex].albums.map(\.id))
         groups[groupIndex].albums.append(contentsOf: albums.filter { !existingIDs.contains($0.id) })
-        goBack()
+        return true
     }
 
     func removeAlbums(_ albumIDs: Set<Album.ID>, from groupID: ShareAlbum.ID) {
@@ -254,13 +230,14 @@ final class ShareViewModel {
         dismissShareManagement()
     }
 
-    func leaveManagedShareGroup() {
+    @discardableResult
+    func leaveManagedShareGroup() -> Bool {
         guard let managedShareGroup else {
-            return
+            return false
         }
         groups.removeAll { $0.id == managedShareGroup.id }
         dismissShareManagement()
-        navigationPath.removeAll()
+        return true
     }
 
     func dismissShareManagement() {
@@ -269,7 +246,6 @@ final class ShareViewModel {
 
     func resetTransientUI() {
         isAddMode = false
-        navigationPath.removeAll()
         isJoinSheetPresented = false
         isJoinConfirmationPresented = false
         isCreateSheetPresented = false

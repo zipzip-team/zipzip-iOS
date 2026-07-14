@@ -6,6 +6,7 @@
 import SwiftUI
 
 struct ShareGroupDetailView: View {
+    @Environment(Router.self) private var router
     let groupID: ShareAlbum.ID
     let viewModel: ShareViewModel
 
@@ -30,7 +31,7 @@ struct ShareGroupDetailView: View {
 
                     if group.albums.isEmpty {
                         ShareGroupEmptyContent {
-                            viewModel.showImport(for: groupID)
+                            router.push(.shareImport(groupID))
                         }
                         .frame(minHeight: 500)
                     } else {
@@ -73,7 +74,7 @@ struct ShareGroupDetailView: View {
                         enterSelectionMode()
                     },
                     .init(id: "import-shared-content", icon: .createStroke, accessibilityLabel: "사진 불러오기") {
-                        viewModel.showImport(for: groupID)
+                        router.push(.shareImport(groupID))
                     },
                     .init(id: "open-comments", icon: .chatStroke, accessibilityLabel: "댓글") {
                         viewModel.isCommentsPresented = true
@@ -119,7 +120,7 @@ struct ShareGroupDetailView: View {
         } else {
             RoundedIconButton(items: [
                 .init(id: "share-group-back", icon: .iconChevronLeft, accessibilityLabel: "뒤로가기") {
-                    viewModel.goBack()
+                    router.pop()
                 }
             ])
         }
@@ -155,7 +156,7 @@ struct ShareGroupDetailView: View {
                 selectedAlbumIDs.append(album.id)
             }
         } else {
-            viewModel.showAlbum(album, in: groupID)
+            router.push(.shareAlbum(groupID: groupID, albumID: album.id))
         }
     }
 
@@ -273,6 +274,7 @@ private struct ShareGroupEmptyContent: View {
 }
 
 struct ShareImportView: View {
+    @Environment(Router.self) private var router
     let groupID: ShareAlbum.ID
     let viewModel: ShareViewModel
 
@@ -293,7 +295,7 @@ struct ShareImportView: View {
             VStack(spacing: 0) {
                 ShareImportHeader(
                     selection: $selection,
-                    onCancel: viewModel.goBack,
+                    onCancel: router.pop,
                     onComplete: completeImport
                 )
 
@@ -354,28 +356,30 @@ struct ShareImportView: View {
     }
 
     private func completeImport() {
+        let albums: [Album]
         switch selection {
         case .photos:
             guard !selectedPhotoIDs.isEmpty else {
                 return
             }
-            viewModel.addAlbums(
-                [
-                    Album(
-                        id: nextAvailableAlbumID,
-                        name: "새 사진집",
-                        count: selectedPhotoIDs.count
-                    )
-                ],
-                to: groupID
-            )
+            albums = [
+                Album(
+                    id: nextAvailableAlbumID,
+                    name: "새 사진집",
+                    count: selectedPhotoIDs.count
+                )
+            ]
         case .albums:
-            let albums = Album.samples.filter { selectedAlbumIDs.contains($0.id) }
+            albums = Album.samples.filter { selectedAlbumIDs.contains($0.id) }
             guard !albums.isEmpty else {
                 return
             }
-            viewModel.addAlbums(albums, to: groupID)
         }
+
+        guard viewModel.addAlbums(albums, to: groupID) else {
+            return
+        }
+        router.pop()
     }
 
     private var nextAvailableAlbumID: Album.ID {
@@ -428,4 +432,5 @@ private struct ShareImportHeader: View {
     let viewModel = ShareViewModel()
     ShareGroupDetailView(groupID: ShareAlbum.samples[0].id, viewModel: viewModel)
         .environment(AuthenticationState.preview(isLoggedIn: true))
+        .environment(Router())
 }
