@@ -9,7 +9,6 @@ import SwiftUI
 
 struct RootTabView: View {
     @Environment(Router.self) private var router
-    @Environment(DIContainer.self) private var container
     let pictureViewModel: PictureViewModel
     @State private var selection: NavbarTab = .main
     @State private var showShareSheet = false
@@ -119,10 +118,7 @@ struct RootTabView: View {
     }
 
     private func loadSharedAlbums(groupID: ShareAlbum.ID) async {
-        await shareViewModel.loadSharedAlbums(
-            groupID: groupID,
-            using: DefaultShareGroupAPI(networkProvider: container.networkProvider)
-        )
+        await shareViewModel.loadSharedAlbums(groupID: groupID)
     }
 
     private func selectTab(_ newSelection: NavbarTab) {

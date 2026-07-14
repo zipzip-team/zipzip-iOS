@@ -20,7 +20,7 @@ struct ShareAlbumManagementTarget: Equatable {
 @MainActor
 final class ShareViewModel {
     private(set) var groups: [ShareAlbum]
-    private let store: SharedGroupStore
+    private let repository: ShareGroupRepository
 
     var isAddMode = false
     var isJoinSheetPresented = false
@@ -63,14 +63,14 @@ final class ShareViewModel {
     private var visibleGroupIDs: [ShareAlbum.ID]?
     private var visibleSharedAlbumIDs: [ShareAlbum.ID: [SharedAlbum.ID]] = [:]
 
-    init(store: SharedGroupStore = SharedGroupStore()) {
+    init(repository: ShareGroupRepository) {
         self.groups = []
-        self.store = store
+        self.repository = repository
     }
 
-    init(groups: [ShareAlbum], store: SharedGroupStore = SharedGroupStore()) {
+    init(groups: [ShareAlbum], repository: ShareGroupRepository) {
         self.groups = groups
-        self.store = store
+        self.repository = repository
         self.hasLoadedGroups = true
     }
 
@@ -94,7 +94,7 @@ final class ShareViewModel {
         inviteCodes[groupID] != nil
     }
 
-    func loadGroups(using api: ShareGroupAPI, refresh: Bool = false) async {
+    func loadGroups(refresh: Bool = false) async {
         guard !isLoadingGroups, !isLoadingMoreGroups else { return }
         guard refresh || !hasLoadedGroups else { return }
 
@@ -102,14 +102,13 @@ final class ShareViewModel {
         defer { isLoadingGroups = false }
 
         if !refresh, !hasLoadedGroups {
-            try? await reloadGroupsFromDatabase()
+            try? await reloadGroups()
         }
 
         do {
-            let page = try await api.fetchGroups(cursor: nil, size: 20)
-            try await store.upsertGroupSummaries(page.items)
-            visibleGroupIDs = page.items.map(\.id)
-            try await reloadGroupsFromDatabase()
+            let page = try await repository.syncGroups(cursor: nil, size: 20)
+            visibleGroupIDs = page.itemIDs
+            try await reloadGroups()
             nextGroupCursor = page.nextCursor
             groupsHaveNextPage = page.hasNext
             hasLoadedGroups = true
@@ -118,7 +117,7 @@ final class ShareViewModel {
         }
     }
 
-    func loadMoreGroupsIfNeeded(currentGroupID: ShareAlbum.ID, using api: ShareGroupAPI) async {
+    func loadMoreGroupsIfNeeded(currentGroupID: ShareAlbum.ID) async {
         guard groups.last?.id == currentGroupID,
               groupsHaveNextPage,
               let nextGroupCursor,
@@ -132,20 +131,19 @@ final class ShareViewModel {
         defer { isLoadingMoreGroups = false }
 
         do {
-            let page = try await api.fetchGroups(cursor: nextGroupCursor, size: 20)
-            try await store.upsertGroupSummaries(page.items)
+            let page = try await repository.syncGroups(cursor: nextGroupCursor, size: 20)
             var groupIDs = visibleGroupIDs ?? groups.map(\.id)
-            for id in page.items.map(\.id) where !groupIDs.contains(id) {
+            for id in page.itemIDs where !groupIDs.contains(id) {
                 groupIDs.append(id)
             }
             visibleGroupIDs = groupIDs
-            try await reloadGroupsFromDatabase()
+            try await reloadGroups()
             self.nextGroupCursor = page.nextCursor
             groupsHaveNextPage = page.hasNext
         } catch {}
     }
 
-    func loadGroup(id: ShareAlbum.ID, using api: ShareGroupAPI, refresh: Bool = false) async {
+    func loadGroup(id: ShareAlbum.ID, refresh: Bool = false) async {
         guard !loadingGroupDetailIDs.contains(id) else { return }
         guard refresh || !loadedGroupDetailIDs.contains(id) else { return }
 
@@ -153,23 +151,21 @@ final class ShareViewModel {
         defer { loadingGroupDetailIDs.remove(id) }
 
         do {
-            let detail = try await api.fetchGroup(id: id)
-            try await store.upsertGroupDetail(detail)
+            try await repository.syncGroup(id: id)
             if var groupIDs = visibleGroupIDs, !groupIDs.contains(id) {
                 groupIDs.append(id)
                 visibleGroupIDs = groupIDs
             }
-            try await reloadGroupsFromDatabase()
+            try await reloadGroups()
             loadedGroupDetailIDs.insert(id)
             refreshManagedGroupIfNeeded(id: id)
-        } catch let error as NetworkError where error.serverCode == "SHARED_GROUP_NOT_FOUND" {
-            await removeRemoteGroup(id: id)
+        } catch ShareGroupRepositoryError.groupNotFound {
+            await removeMissingGroup(id: id)
         } catch {}
     }
 
     func loadSharedAlbums(
         groupID: ShareAlbum.ID,
-        using api: ShareGroupAPI,
         refresh: Bool = false
     ) async {
         guard !loadingSharedAlbumGroupIDs.contains(groupID),
@@ -183,21 +179,23 @@ final class ShareViewModel {
         defer { loadingSharedAlbumGroupIDs.remove(groupID) }
 
         do {
-            let page = try await api.fetchSharedAlbums(groupID: groupID, cursor: nil, size: 20)
-            try await store.upsertSharedAlbums(page.items, groupID: groupID)
-            visibleSharedAlbumIDs[groupID] = page.items.map(\.id)
-            try await reloadGroupsFromDatabase()
+            let page = try await repository.syncSharedAlbums(
+                groupID: groupID,
+                cursor: nil,
+                size: 20
+            )
+            visibleSharedAlbumIDs[groupID] = page.itemIDs
+            try await reloadGroups()
             updateSharedAlbumPageState(page, groupID: groupID)
             loadedSharedAlbumGroupIDs.insert(groupID)
-        } catch let error as NetworkError where error.serverCode == "SHARED_GROUP_NOT_FOUND" {
-            await removeRemoteGroup(id: groupID)
+        } catch ShareGroupRepositoryError.groupNotFound {
+            await removeMissingGroup(id: groupID)
         } catch {}
     }
 
     func loadMoreSharedAlbumsIfNeeded(
         groupID: ShareAlbum.ID,
-        currentAlbumID: SharedAlbum.ID,
-        using api: ShareGroupAPI
+        currentAlbumID: SharedAlbum.ID
     ) async {
         guard group(withID: groupID)?.albums.last?.id == currentAlbumID,
               sharedAlbumHasNextPage[groupID] == true,
@@ -212,19 +210,22 @@ final class ShareViewModel {
         defer { loadingMoreSharedAlbumGroupIDs.remove(groupID) }
 
         do {
-            let page = try await api.fetchSharedAlbums(groupID: groupID, cursor: cursor, size: 20)
-            try await store.upsertSharedAlbums(page.items, groupID: groupID)
+            let page = try await repository.syncSharedAlbums(
+                groupID: groupID,
+                cursor: cursor,
+                size: 20
+            )
             var albumIDs = visibleSharedAlbumIDs[groupID] ?? group(withID: groupID)?.albums.map(\.id) ?? []
-            for id in page.items.map(\.id) where !albumIDs.contains(id) {
+            for id in page.itemIDs where !albumIDs.contains(id) {
                 albumIDs.append(id)
             }
             visibleSharedAlbumIDs[groupID] = albumIDs
-            try await reloadGroupsFromDatabase()
+            try await reloadGroups()
             updateSharedAlbumPageState(page, groupID: groupID)
         } catch {}
     }
 
-    func loadInviteCode(groupID: ShareAlbum.ID, using api: ShareGroupAPI) async {
+    func loadInviteCode(groupID: ShareAlbum.ID) async {
         guard inviteCodes[groupID] == nil,
               !loadingInviteCodeGroupIDs.contains(groupID)
         else {
@@ -235,16 +236,9 @@ final class ShareViewModel {
         defer { loadingInviteCodeGroupIDs.remove(groupID) }
 
         do {
-            if let storedInviteCode = try await store.fetchInviteCode(groupID: groupID) {
-                inviteCodes[groupID] = storedInviteCode
-                return
-            }
-
-            let response = try await api.fetchInviteCode(groupID: groupID)
-            try await store.updateInviteCode(response)
-            inviteCodes[groupID] = try await store.fetchInviteCode(groupID: groupID)
-        } catch let error as NetworkError where error.serverCode == "SHARED_GROUP_NOT_FOUND" {
-            await removeRemoteGroup(id: groupID)
+            inviteCodes[groupID] = try await repository.inviteCode(groupID: groupID)
+        } catch ShareGroupRepositoryError.groupNotFound {
+            await removeMissingGroup(id: groupID)
         } catch {}
     }
 
@@ -305,7 +299,7 @@ final class ShareViewModel {
         isCreateSheetPresented = true
     }
 
-    func createGroup(using api: ShareGroupAPI) async {
+    func createGroup() async {
         let trimmedName = groupNameDraft.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedName.isEmpty, !isCreatingGroup else { return }
 
@@ -322,17 +316,19 @@ final class ShareViewModel {
         defer { isCreatingGroup = false }
 
         do {
-            let response = try await api.createGroup(name: trimmedName, idempotencyKey: idempotencyKey)
-            try await store.upsertCreatedGroup(response)
+            let createdGroup = try await repository.createGroup(
+                name: trimmedName,
+                idempotencyKey: idempotencyKey
+            )
             if var groupIDs = visibleGroupIDs {
-                groupIDs.removeAll { $0 == response.id }
-                groupIDs.insert(response.id, at: 0)
+                groupIDs.removeAll { $0 == createdGroup.id }
+                groupIDs.insert(createdGroup.id, at: 0)
                 visibleGroupIDs = groupIDs
             }
-            try await reloadGroupsFromDatabase()
+            try await reloadGroups()
             hasLoadedGroups = true
-            inviteCode = try await store.fetchInviteCode(groupID: response.id) ?? ""
-            inviteCodes[response.id] = inviteCode
+            inviteCode = createdGroup.inviteCode
+            inviteCodes[createdGroup.id] = inviteCode
             groupCreationName = nil
             groupCreationIdempotencyKey = nil
             isCreateSheetPresented = false
@@ -414,57 +410,18 @@ final class ShareViewModel {
         dismissAlbumManagement()
     }
 
-    private func makeGroup(from stored: StoredSharedGroup) -> ShareAlbum {
-        ShareAlbum(
-            id: stored.id,
-            name: stored.name,
-            date: stored.date,
-            memberCount: stored.memberCount,
-            currentUserRole: ShareGroupRole(rawValue: stored.role) ?? .participant,
-            albums: stored.albums.map(makeSharedAlbum),
-            sharedAlbumCount: stored.sharedAlbumCount,
-            photoCount: stored.photoCount,
-            createdBy: makeUser(
-                id: stored.createdByUserID,
-                displayName: stored.createdByDisplayName
-            ),
-            updatedAt: stored.updatedAt
-        )
-    }
-
-    private func makeSharedAlbum(from stored: StoredSharedAlbum) -> SharedAlbum {
-        SharedAlbum(
-            id: stored.id,
-            sharedGroupID: stored.sharedGroupID,
-            name: stored.name,
-            count: stored.photoCount,
-            createdBy: makeUser(
-                id: stored.createdByUserID,
-                displayName: stored.createdByDisplayName
-            ),
-            isCreator: stored.isCreator,
-            createdAt: stored.createdAt,
-            updatedAt: stored.updatedAt
-        )
-    }
-
-    private func makeUser(id: UUID?, displayName: String?) -> ShareGroupUser? {
-        guard id != nil || displayName != nil else { return nil }
-        return ShareGroupUser(id: id, displayName: displayName)
-    }
-
-    private func reloadGroupsFromDatabase() async throws {
-        let storedGroups = try await store.fetchGroups()
+    private func reloadGroups() async throws {
+        let storedGroups = try await repository.groups()
         let storedByID = Dictionary(uniqueKeysWithValues: storedGroups.map { ($0.id, $0) })
-        let orderedGroups: [StoredSharedGroup]
+        let orderedGroups: [ShareAlbum]
         if let visibleGroupIDs {
             orderedGroups = visibleGroupIDs.compactMap { storedByID[$0] }
         } else {
             orderedGroups = storedGroups
         }
 
-        groups = orderedGroups.map { stored in
-            var group = makeGroup(from: stored)
+        groups = orderedGroups.map { storedGroup in
+            var group = storedGroup
             if let albumIDs = visibleSharedAlbumIDs[group.id] {
                 let albumsByID = Dictionary(uniqueKeysWithValues: group.albums.map { ($0.id, $0) })
                 group.albums = albumIDs.compactMap { albumsByID[$0] }
@@ -478,7 +435,7 @@ final class ShareViewModel {
     }
 
     private func updateSharedAlbumPageState(
-        _ page: SharedAlbumListPageResponse,
+        _ page: ShareGroupRepositoryPage,
         groupID: ShareAlbum.ID
     ) {
         if let nextCursor = page.nextCursor {
@@ -494,11 +451,11 @@ final class ShareViewModel {
         managedShareGroup = group(withID: id)
     }
 
-    private func removeRemoteGroup(id: ShareAlbum.ID) async {
-        try? await store.deleteGroup(id: id)
+    private func removeMissingGroup(id: ShareAlbum.ID) async {
+        try? await repository.deleteGroup(id: id)
         visibleGroupIDs?.removeAll { $0 == id }
         visibleSharedAlbumIDs.removeValue(forKey: id)
-        try? await reloadGroupsFromDatabase()
+        try? await reloadGroups()
         loadedGroupDetailIDs.remove(id)
         loadedSharedAlbumGroupIDs.remove(id)
         sharedAlbumNextCursors.removeValue(forKey: id)

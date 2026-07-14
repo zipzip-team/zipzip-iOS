@@ -7,7 +7,6 @@ import SwiftUI
 
 struct ShareGroupDetailView: View {
     @Environment(Router.self) private var router
-    @Environment(DIContainer.self) private var container
     let groupID: ShareAlbum.ID
     let viewModel: ShareViewModel
     let personalAlbums: [Album]
@@ -54,8 +53,7 @@ struct ShareGroupDetailView: View {
                                 .task {
                                     await viewModel.loadMoreSharedAlbumsIfNeeded(
                                         groupID: groupID,
-                                        currentAlbumID: album.id,
-                                        using: DefaultShareGroupAPI(networkProvider: container.networkProvider)
+                                        currentAlbumID: album.id
                                     )
                                 }
                             }
@@ -116,10 +114,7 @@ struct ShareGroupDetailView: View {
                 shareAlbums: viewModel.groups,
                 onDismiss: { dismiss() },
                 onOpenShareAlbum: { groupID in
-                    await viewModel.loadSharedAlbums(
-                        groupID: groupID,
-                        using: DefaultShareGroupAPI(networkProvider: container.networkProvider)
-                    )
+                    await viewModel.loadSharedAlbums(groupID: groupID)
                 },
                 onComplete: { _ in exitSelectionMode() }
             )
@@ -127,9 +122,8 @@ struct ShareGroupDetailView: View {
         .navigationBarBackButtonHidden(true)
         .toolbarVisibility(.hidden, for: .navigationBar)
         .task(id: groupID) {
-            let api = DefaultShareGroupAPI(networkProvider: container.networkProvider)
-            async let groupRequest: Void = viewModel.loadGroup(id: groupID, using: api)
-            async let albumRequest: Void = viewModel.loadSharedAlbums(groupID: groupID, using: api)
+            async let groupRequest: Void = viewModel.loadGroup(id: groupID)
+            async let albumRequest: Void = viewModel.loadSharedAlbums(groupID: groupID)
             _ = await(groupRequest, albumRequest)
         }
     }
@@ -420,10 +414,14 @@ private struct ShareImportHeader: View {
 #if DEBUG
     #Preview("Share Group Detail", traits: .fixedLayout(width: 390, height: 844)) {
         let group = ShareAlbum(name: "집집팟", date: .now, memberCount: 4)
-        let viewModel = ShareViewModel(groups: [group])
+        let container = DIContainer()
+        let viewModel = ShareViewModel(
+            groups: [group],
+            repository: container.shareGroupRepository
+        )
         ShareGroupDetailView(groupID: group.id, viewModel: viewModel, personalAlbums: [])
             .environment(AuthenticationState.preview(isLoggedIn: true))
-            .environment(DIContainer())
+            .environment(container)
             .environment(Router())
     }
 #endif

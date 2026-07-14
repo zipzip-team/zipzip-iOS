@@ -10,7 +10,6 @@ import UIKit
 
 struct ShareView: View {
     @Environment(AuthenticationState.self) private var authenticationState
-    @Environment(DIContainer.self) private var container
     @Environment(Router.self) private var router
     let viewModel: ShareViewModel
 
@@ -48,9 +47,7 @@ struct ShareView: View {
                     onCancel: { viewModel.isCreateSheetPresented = false },
                     onConfirm: {
                         Task {
-                            await viewModel.createGroup(
-                                using: DefaultShareGroupAPI(networkProvider: container.networkProvider)
-                            )
+                            await viewModel.createGroup()
                         }
                     }
                 )
@@ -124,18 +121,13 @@ struct ShareView: View {
                         onLeave: leaveManagedShareGroup
                     )
                     .task(id: group.id) {
-                        await viewModel.loadInviteCode(
-                            groupID: group.id,
-                            using: DefaultShareGroupAPI(networkProvider: container.networkProvider)
-                        )
+                        await viewModel.loadInviteCode(groupID: group.id)
                     }
                 }
             }
             .task(id: authenticationState.isLoggedIn) {
                 if authenticationState.isLoggedIn {
-                    await viewModel.loadGroups(
-                        using: DefaultShareGroupAPI(networkProvider: container.networkProvider)
-                    )
+                    await viewModel.loadGroups()
                 } else {
                     viewModel.resetRemoteData()
                 }
@@ -201,7 +193,6 @@ struct ShareAlbumDetailDestinationView: View {
 }
 
 private struct ShareGroupListView: View {
-    @Environment(DIContainer.self) private var container
     let viewModel: ShareViewModel
     let onOpenGroup: (ShareAlbum.ID) -> Void
 
@@ -230,10 +221,7 @@ private struct ShareGroupListView: View {
                             .buttonStyle(StaticButtonStyle())
                             .accessibilityLabel("\(group.name), \(group.memberCount)명")
                             .task {
-                                await viewModel.loadMoreGroupsIfNeeded(
-                                    currentGroupID: group.id,
-                                    using: DefaultShareGroupAPI(networkProvider: container.networkProvider)
-                                )
+                                await viewModel.loadMoreGroupsIfNeeded(currentGroupID: group.id)
                             }
                         }
                     }
@@ -242,10 +230,7 @@ private struct ShareGroupListView: View {
                     .padding(.bottom, viewModel.isAddMode ? 130 : 24)
                 }
                 .refreshable {
-                    await viewModel.loadGroups(
-                        using: DefaultShareGroupAPI(networkProvider: container.networkProvider),
-                        refresh: true
-                    )
+                    await viewModel.loadGroups(refresh: true)
                 }
             }
         }
@@ -627,8 +612,15 @@ private struct ShareAlbumManagementSheet: View {
 
         init(isLoggedIn: Bool, groups: [ShareAlbum]) {
             let authenticationState = AuthenticationState.preview(isLoggedIn: isLoggedIn)
+            let container = DIContainer()
             _authenticationState = State(initialValue: authenticationState)
-            _viewModel = State(initialValue: ShareViewModel(groups: groups))
+            _viewModel = State(
+                initialValue: ShareViewModel(
+                    groups: groups,
+                    repository: container.shareGroupRepository
+                )
+            )
+            _container = State(initialValue: container)
         }
 
         var body: some View {

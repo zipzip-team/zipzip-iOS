@@ -10,7 +10,6 @@ import UIKit
 
 struct FilteredPictureView: View {
     @Environment(Router.self) private var router
-    @Environment(DIContainer.self) private var container
 
     @State private var pictureViewModel = PictureViewModel()
     @State private var viewModel: FilteredPictureViewModel
@@ -139,10 +138,7 @@ struct FilteredPictureView: View {
     }
 
     private func loadSharedAlbums(groupID: ShareAlbum.ID) async {
-        await shareViewModel.loadSharedAlbums(
-            groupID: groupID,
-            using: DefaultShareGroupAPI(networkProvider: container.networkProvider)
-        )
+        await shareViewModel.loadSharedAlbums(groupID: groupID)
     }
 
     private var topBar: some View {
@@ -210,10 +206,15 @@ struct FilteredPictureView: View {
 }
 
 #Preview {
-    FilteredPictureView(appliedFilters: [
-        AppliedFilter(kind: .device, value: "iphone 6"),
-        AppliedFilter(kind: .location, value: "오사카")
-    ], albumViewModel: AlbumViewModel(albums: AlbumViewItem.samples), shareViewModel: ShareViewModel())
-        .environment(DIContainer())
-        .environment(Router())
+    let container = DIContainer()
+    FilteredPictureView(
+        appliedFilters: [
+            AppliedFilter(kind: .device, value: "iphone 6"),
+            AppliedFilter(kind: .location, value: "오사카")
+        ],
+        albumViewModel: AlbumViewModel(albums: AlbumViewItem.samples),
+        shareViewModel: ShareViewModel(repository: container.shareGroupRepository)
+    )
+    .environment(container)
+    .environment(Router())
 }

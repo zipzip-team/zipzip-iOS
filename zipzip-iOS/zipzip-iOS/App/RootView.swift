@@ -17,7 +17,13 @@ struct RootView: View {
     @State private var photoSync = PhotoSyncCoordinator()
     @State private var albumViewModel = AlbumViewModel()
     @State private var pictureViewModel = PictureViewModel()
-    @State private var shareViewModel = ShareViewModel()
+    @State private var shareViewModel: ShareViewModel
+
+    init(shareGroupRepository: ShareGroupRepository) {
+        _shareViewModel = State(
+            initialValue: ShareViewModel(repository: shareGroupRepository)
+        )
+    }
 
     var body: some View {
         @Bindable var router = router
@@ -150,9 +156,7 @@ struct RootView: View {
         }
         .task(id: authenticationState.isLoggedIn) {
             if authenticationState.isLoggedIn {
-                await shareViewModel.loadGroups(
-                    using: DefaultShareGroupAPI(networkProvider: container.networkProvider)
-                )
+                await shareViewModel.loadGroups()
             } else {
                 shareViewModel.resetRemoteData()
             }

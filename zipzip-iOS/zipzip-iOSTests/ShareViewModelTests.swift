@@ -10,11 +10,17 @@ final class ShareViewModelTests: XCTestCase {
             inviteCode: "ZZ7K9P2Q"
         )
         let store = try makeStore()
-        let viewModel = ShareViewModel(groups: [], store: store)
+        let viewModel = ShareViewModel(
+            groups: [],
+            repository: makeRepository(
+                api: StubShareGroupAPI(createResponse: response),
+                store: store
+            )
+        )
         viewModel.presentCreateSheet()
         viewModel.groupNameDraft = "우리 가족"
 
-        await viewModel.createGroup(using: StubShareGroupAPI(createResponse: response))
+        await viewModel.createGroup()
 
         XCTAssertFalse(viewModel.isCreateSheetPresented)
         XCTAssertTrue(viewModel.isInviteSheetPresented)
@@ -24,11 +30,10 @@ final class ShareViewModelTests: XCTestCase {
         let storedGroups = try await store.fetchGroups()
         XCTAssertEqual(storedGroups.map(\.id), [response.id])
 
-        let restoredViewModel = ShareViewModel(store: store)
-        await restoredViewModel.loadInviteCode(
-            groupID: response.id,
-            using: UnavailableShareGroupAPI()
+        let restoredViewModel = ShareViewModel(
+            repository: makeRepository(api: UnavailableShareGroupAPI(), store: store)
         )
+        await restoredViewModel.loadInviteCode(groupID: response.id)
         XCTAssertEqual(restoredViewModel.inviteCode(for: response.id), response.inviteCode)
 
         viewModel.completeInvitation()
@@ -80,12 +85,14 @@ final class ShareViewModelTests: XCTestCase {
                 hasNext: false
             )
         )
-        let viewModel = ShareViewModel(store: try makeStore())
+        let viewModel = ShareViewModel(
+            repository: makeRepository(api: api, store: try makeStore())
+        )
 
-        await viewModel.loadGroups(using: api)
-        await viewModel.loadGroup(id: groupID, using: api)
-        await viewModel.loadSharedAlbums(groupID: groupID, using: api)
-        await viewModel.loadInviteCode(groupID: groupID, using: api)
+        await viewModel.loadGroups()
+        await viewModel.loadGroup(id: groupID)
+        await viewModel.loadSharedAlbums(groupID: groupID)
+        await viewModel.loadInviteCode(groupID: groupID)
 
         let group = try XCTUnwrap(viewModel.group(withID: groupID))
         XCTAssertEqual(group.currentUserRole, .participant)
@@ -115,9 +122,11 @@ final class ShareViewModelTests: XCTestCase {
                 hasNext: false
             )
         )
-        let viewModel = ShareViewModel(store: try makeStore())
+        let viewModel = ShareViewModel(
+            repository: makeRepository(api: api, store: try makeStore())
+        )
 
-        await viewModel.loadGroups(using: api)
+        await viewModel.loadGroups()
         viewModel.resetRemoteData()
 
         XCTAssertTrue(viewModel.groups.isEmpty)
@@ -160,10 +169,12 @@ final class ShareViewModelTests: XCTestCase {
                 hasNext: false
             )
         )
-        let viewModel = ShareViewModel(store: try makeStore())
+        let viewModel = ShareViewModel(
+            repository: makeRepository(api: api, store: try makeStore())
+        )
 
-        await viewModel.loadGroups(using: api)
-        await viewModel.loadMoreGroupsIfNeeded(currentGroupID: firstID, using: api)
+        await viewModel.loadGroups()
+        await viewModel.loadMoreGroupsIfNeeded(currentGroupID: firstID)
 
         XCTAssertEqual(viewModel.groups.map(\.id), [firstID, secondID])
     }
@@ -173,7 +184,6 @@ final class ShareViewModelTests: XCTestCase {
         let groupID = try XCTUnwrap(UUID(uuidString: "11111111-1111-1111-1111-111111111111"))
         let albumID = try XCTUnwrap(UUID(uuidString: "33333333-3333-3333-3333-333333333333"))
         let store = try makeStore()
-        let onlineViewModel = ShareViewModel(store: store)
         let api = StubShareGroupAPI(
             groupListResponse: ShareGroupListPageResponse(
                 items: [ShareGroupSummaryResponse(
@@ -203,12 +213,17 @@ final class ShareViewModelTests: XCTestCase {
                 hasNext: false
             )
         )
+        let onlineViewModel = ShareViewModel(
+            repository: makeRepository(api: api, store: store)
+        )
 
-        await onlineViewModel.loadGroups(using: api)
-        await onlineViewModel.loadSharedAlbums(groupID: groupID, using: api)
+        await onlineViewModel.loadGroups()
+        await onlineViewModel.loadSharedAlbums(groupID: groupID)
 
-        let offlineViewModel = ShareViewModel(store: store)
-        await offlineViewModel.loadGroups(using: UnavailableShareGroupAPI())
+        let offlineViewModel = ShareViewModel(
+            repository: makeRepository(api: UnavailableShareGroupAPI(), store: store)
+        )
+        await offlineViewModel.loadGroups()
 
         XCTAssertEqual(offlineViewModel.groups.map(\.id), [groupID])
         XCTAssertEqual(offlineViewModel.group(withID: groupID)?.albums.map(\.id), [albumID])
@@ -217,6 +232,14 @@ final class ShareViewModelTests: XCTestCase {
 
     private func makeStore() throws -> SharedGroupStore {
         SharedGroupStore(database: try appDatabase())
+    }
+
+    @MainActor
+    private func makeRepository(
+        api: ShareGroupAPI,
+        store: SharedGroupStore
+    ) -> ShareGroupRepository {
+        DefaultShareGroupRepository(api: api, store: store)
     }
 }
 

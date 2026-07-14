@@ -155,7 +155,6 @@ struct AlbumView: View {
 
 struct AlbumDetailDestinationView: View {
     @Environment(Router.self) private var router
-    @Environment(DIContainer.self) private var container
     @State private var photoSections: [PhotoSection] = []
     @State private var lastKnownAlbum: AlbumViewItem?
 
@@ -214,10 +213,7 @@ struct AlbumDetailDestinationView: View {
     }
 
     private func loadSharedAlbums(groupID: ShareAlbum.ID) async {
-        await shareViewModel.loadSharedAlbums(
-            groupID: groupID,
-            using: DefaultShareGroupAPI(networkProvider: container.networkProvider)
-        )
+        await shareViewModel.loadSharedAlbums(groupID: groupID)
     }
 }
 
@@ -462,13 +458,19 @@ struct AlbumHeaderActionButton: View {
     private struct AlbumViewPreview: View {
         @State private var selection: NavbarTab = .album
         @State private var viewModel = AlbumViewModel(albums: AlbumViewItem.samples)
+        @State private var shareViewModel: ShareViewModel
 
         init(albums: [AlbumViewItem]) {
             _viewModel = State(initialValue: AlbumViewModel(albums: albums))
+            _shareViewModel = State(
+                initialValue: ShareViewModel(
+                    repository: DIContainer().shareGroupRepository
+                )
+            )
         }
 
         var body: some View {
-            AlbumView(viewModel: viewModel, shareViewModel: ShareViewModel())
+            AlbumView(viewModel: viewModel, shareViewModel: shareViewModel)
                 .safeAreaInset(edge: .bottom, spacing: 0) {
                     if !viewModel.isSelectionMode {
                         Navbar(selection: selection) { selection = $0 }

@@ -46,7 +46,6 @@ enum PhotoDeletionAction {
 struct PhotoDetailView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @Environment(DIContainer.self) private var container
 
     @State private var photo: Photo
     private let albums: [Album]
@@ -236,10 +235,7 @@ struct PhotoDetailView: View {
 
     private func loadSharedAlbums(groupID: ShareAlbum.ID) async {
         guard let shareViewModel else { return }
-        await shareViewModel.loadSharedAlbums(
-            groupID: groupID,
-            using: DefaultShareGroupAPI(networkProvider: container.networkProvider)
-        )
+        await shareViewModel.loadSharedAlbums(groupID: groupID)
     }
 
     private var deleteAlertContent: PhotoDeleteAlertContent {
