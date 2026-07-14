@@ -3,7 +3,7 @@ import XCTest
 
 final class ShareViewModelTests: XCTestCase {
     @MainActor
-    func testCreateGroupUsesResponseForInvitationAndGroup() async throws {
+    func testCreateGroupImmediatelyAddsResponseToGroups() async throws {
         let response = CreateSharedGroupResponse(
             id: try XCTUnwrap(UUID(uuidString: "11111111-1111-1111-1111-111111111111")),
             name: "우리 가족",
@@ -17,9 +17,12 @@ final class ShareViewModelTests: XCTestCase {
 
         XCTAssertFalse(viewModel.isCreateSheetPresented)
         XCTAssertTrue(viewModel.isInviteSheetPresented)
-        XCTAssertEqual(viewModel.pendingCreatedGroup?.id, response.id)
-        XCTAssertEqual(viewModel.pendingCreatedGroup?.name, response.name)
+        XCTAssertEqual(viewModel.groups.map(\.id), [response.id])
+        XCTAssertEqual(viewModel.groups.map(\.name), [response.name])
         XCTAssertEqual(viewModel.inviteCode, response.inviteCode)
+
+        viewModel.completeInvitation()
+        XCTAssertEqual(viewModel.groups.count, 1)
     }
 }
 

@@ -34,13 +34,12 @@ final class ShareViewModel {
 
     var joinCode = ""
     var groupNameDraft = ""
-    var inviteCode = "# 3d2dsd322d32d23"
+    var inviteCode = ""
     var commentDraft = ""
     var albumNameDraft = ""
     var shareGroupNameDraft = ""
 
     private(set) var pendingJoinGroup: ShareAlbum?
-    private(set) var pendingCreatedGroup: ShareAlbum?
     private(set) var albumManagementTarget: ShareAlbumManagementTarget?
     private(set) var managedShareGroup: ShareAlbum?
     private var groupCreationName: String?
@@ -137,13 +136,14 @@ final class ShareViewModel {
                 name: trimmedName,
                 idempotencyKey: idempotencyKey
             )
-            pendingCreatedGroup = ShareAlbum(
+            let createdGroup = ShareAlbum(
                 id: response.id,
                 name: response.name,
                 date: .now,
                 memberCount: 1,
                 currentUserRole: .admin
             )
+            groups.append(createdGroup)
             inviteCode = response.inviteCode
             groupCreationName = nil
             groupCreationIdempotencyKey = nil
@@ -157,10 +157,6 @@ final class ShareViewModel {
     }
 
     func completeInvitation() {
-        if let pendingCreatedGroup {
-            groups.append(pendingCreatedGroup)
-        }
-        pendingCreatedGroup = nil
         isInviteSheetPresented = false
         isAddMode = false
     }
@@ -286,7 +282,6 @@ final class ShareViewModel {
         isCommentsPresented = false
         isShareManagementPresented = false
         pendingJoinGroup = nil
-        pendingCreatedGroup = nil
         managedShareGroup = nil
         dismissAlbumManagement()
     }
