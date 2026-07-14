@@ -213,6 +213,20 @@ func appDatabase() throws -> any DatabaseWriter {
         .execute(db)
     }
 
+    migrator.registerMigration("Track device resolution pending") { db in
+        try #sql(
+            #"ALTER TABLE "photo" ADD COLUMN "device_pending" INTEGER NOT NULL DEFAULT 0"#
+        )
+        .execute(db)
+
+        try #sql(
+            #"UPDATE "photo" SET "device_pending" = 1 WHERE "device_id" IS NULL"#
+        )
+        .execute(db)
+
+        try #sql(#"CREATE INDEX "idx_photo_device_pending" ON "photo"("device_pending")"#).execute(db)
+    }
+
     do {
         try migrator.migrate(database)
         return database

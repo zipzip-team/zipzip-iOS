@@ -26,7 +26,7 @@ nonisolated struct DeviceBackfillService {
 
         let pending = try await database.read { db in
             try PhotoRecord
-                .where { $0.deviceID.is(nil) }
+                .where { $0.devicePending.eq(true) }
                 .select { ($0.id, $0.localIdentifier) }
                 .fetchAll(db)
         }
@@ -60,11 +60,16 @@ nonisolated struct DeviceBackfillService {
             let resolvedCount = try await database.write { db in
                 var count = 0
                 for (photoID, info) in results {
-                    guard case let .resolved(make, model) = info,
-                          let deviceID = cache[DeviceKey(make: make, model: model)]
-                    else { continue }
+                    // .pending(원본 다운로드 실패)은 device_pending을 유지해 다음 실행에 재시도한다.
+                    guard case let .resolved(make, model) = info else { continue }
+                    let deviceID: Int? = (make != nil || model != nil)
+                        ? cache[DeviceKey(make: make, model: model)]
+                        : nil
                     try PhotoRecord
-                        .update { $0.deviceID = #bind(deviceID) }
+                        .update {
+                            $0.deviceID = #bind(deviceID)
+                            $0.devicePending = false
+                        }
                         .where { $0.id.eq(photoID) }
                         .execute(db)
                     count += 1
