@@ -162,6 +162,10 @@ private struct BottomSheetPresentationModifier<SheetContent: View>: ViewModifier
             }
             .onReceive(NotificationCenter.default
                 .publisher(for: UIResponder.keyboardWillChangeFrameNotification)) { notification in
+                    guard isPresented, resolvedSizes.count > 1 else {
+                        return
+                    }
+
                     guard keyboardOverlapsScreen(notification) else {
                         return
                     }
