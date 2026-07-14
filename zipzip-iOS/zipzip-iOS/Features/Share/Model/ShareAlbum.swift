@@ -7,18 +7,28 @@
 
 import Foundation
 
-enum ShareGroupRole: Hashable {
-    case admin
-    case participant
+enum ShareGroupRole: String, Hashable {
+    case admin = "HOST"
+    case participant = "MEMBER"
 }
 
+struct ShareGroupUser: Hashable {
+    let id: UUID?
+    let displayName: String?
+}
+
+/// 공유 그룹 화면에서 사용하는 그룹 모델.
 struct ShareAlbum: Identifiable, Hashable {
     let id: UUID
     var name: String
-    let date: Date
-    let memberCount: Int
-    let currentUserRole: ShareGroupRole
-    var albums: [Album]
+    var date: Date
+    var memberCount: Int
+    var currentUserRole: ShareGroupRole
+    var albums: [SharedAlbum]
+    var sharedAlbumCount: Int
+    var photoCount: Int
+    var createdBy: ShareGroupUser?
+    var updatedAt: Date
 
     init(
         id: UUID = UUID(),
@@ -26,7 +36,11 @@ struct ShareAlbum: Identifiable, Hashable {
         date: Date,
         memberCount: Int,
         currentUserRole: ShareGroupRole = .admin,
-        albums: [Album] = []
+        albums: [SharedAlbum] = [],
+        sharedAlbumCount: Int = 0,
+        photoCount: Int = 0,
+        createdBy: ShareGroupUser? = nil,
+        updatedAt: Date? = nil
     ) {
         self.id = id
         self.name = name
@@ -34,67 +48,20 @@ struct ShareAlbum: Identifiable, Hashable {
         self.memberCount = memberCount
         self.currentUserRole = currentUserRole
         self.albums = albums
+        self.sharedAlbumCount = sharedAlbumCount
+        self.photoCount = photoCount
+        self.createdBy = createdBy
+        self.updatedAt = updatedAt ?? date
     }
 }
 
-extension ShareAlbum {
-    /// 실제 데이터 연동 전까지 사용하는 더미 데이터.
-    static let samples: [ShareAlbum] = [
-        ShareAlbum(
-            name: "집집팟",
-            date: date(2026, 7, 2),
-            memberCount: 4,
-            albums: Album.sharedSamples
-        ),
-        ShareAlbum(
-            name: "알콩달콩",
-            date: date(2026, 7, 3),
-            memberCount: 1,
-            currentUserRole: .participant,
-            albums: Array(Album.sharedSamples.prefix(4))
-        ),
-        ShareAlbum(
-            name: "하늘바람",
-            date: date(2026, 7, 3),
-            memberCount: 5,
-            albums: Array(Album.sharedSamples.prefix(3))
-        ),
-        ShareAlbum(
-            name: "달빛소리",
-            date: date(2026, 7, 4),
-            memberCount: 2,
-            albums: Array(Album.sharedSamples.prefix(2))
-        ),
-        ShareAlbum(
-            name: "별무리",
-            date: date(2026, 7, 4),
-            memberCount: 8,
-            albums: Array(Album.sharedSamples.prefix(4))
-        ),
-        ShareAlbum(
-            name: "꽃길만걷자",
-            date: date(2026, 7, 5),
-            memberCount: 3,
-            albums: Array(Album.sharedSamples.prefix(3))
-        )
-    ]
-
-    private static func date(_ year: Int, _ month: Int, _ day: Int) -> Date {
-        var components = DateComponents()
-        components.year = year
-        components.month = month
-        components.day = day
-        return Calendar.current.date(from: components) ?? Date()
-    }
-}
-
-extension Album {
-    /// 공유집에서 사용하는 앨범 더미 데이터. (사진집 앨범과 다른 세트)
-    static let sharedSamples: [Album] = [
-        Album(id: 101, name: "여름 바다", count: 320),
-        Album(id: 102, name: "캠핑 기록", count: 88),
-        Album(id: 103, name: "주말 나들이", count: 512),
-        Album(id: 104, name: "생일 모음", count: 147),
-        Album(id: 105, name: "동네 한바퀴", count: 63)
-    ]
+struct SharedAlbum: Identifiable, Hashable {
+    let id: UUID
+    let sharedGroupID: UUID
+    var name: String
+    var count: Int
+    let createdBy: ShareGroupUser?
+    let isCreator: Bool
+    let createdAt: Date
+    var updatedAt: Date
 }

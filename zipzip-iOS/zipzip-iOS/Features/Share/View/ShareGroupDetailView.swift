@@ -7,11 +7,13 @@ import SwiftUI
 
 struct ShareGroupDetailView: View {
     @Environment(Router.self) private var router
+    @Environment(DIContainer.self) private var container
     let groupID: ShareAlbum.ID
     let viewModel: ShareViewModel
+    let personalAlbums: [Album]
 
     @State private var isSelectionMode = false
-    @State private var selectedAlbumIDs: [Album.ID] = []
+    @State private var selectedAlbumIDs: [SharedAlbum.ID] = []
     @State private var isDeleteAlertPresented = false
     @State private var isMoveSheetPresented = false
 
@@ -29,7 +31,7 @@ struct ShareGroupDetailView: View {
                 ScrollView(showsIndicators: false) {
                     ShareGroupHero(group: group)
 
-                    if group.albums.isEmpty {
+                    if group.albums.isEmpty, viewModel.hasLoadedSharedAlbums(groupID: groupID) {
                         ShareGroupEmptyContent {
                             router.push(.shareImport(groupID))
                         }
@@ -49,6 +51,13 @@ struct ShareGroupDetailView: View {
                                 .buttonStyle(StaticButtonStyle())
                                 .accessibilityLabel("\(album.name), \(album.count)장")
                                 .accessibilityValue(accessibilityValue(for: album))
+                                .task {
+                                    await viewModel.loadMoreSharedAlbumsIfNeeded(
+                                        groupID: groupID,
+                                        currentAlbumID: album.id,
+                                        using: DefaultShareGroupAPI(networkProvider: container.networkProvider)
+                                    )
+                                }
                             }
                         }
                         .padding(.horizontal, 16)
@@ -103,15 +112,26 @@ struct ShareGroupDetailView: View {
         )
         .bottomSheet(isPresented: $isMoveSheetPresented, detents: [.full]) { dismiss in
             ShareSheet(
-                albums: Album.samples,
-                sharedAlbums: Album.sharedSamples,
+                albums: personalAlbums,
                 shareAlbums: viewModel.groups,
                 onDismiss: { dismiss() },
+                onOpenShareAlbum: { groupID in
+                    await viewModel.loadSharedAlbums(
+                        groupID: groupID,
+                        using: DefaultShareGroupAPI(networkProvider: container.networkProvider)
+                    )
+                },
                 onComplete: { _ in exitSelectionMode() }
             )
         }
         .navigationBarBackButtonHidden(true)
         .toolbarVisibility(.hidden, for: .navigationBar)
+        .task(id: groupID) {
+            let api = DefaultShareGroupAPI(networkProvider: container.networkProvider)
+            async let groupRequest: Void = viewModel.loadGroup(id: groupID, using: api)
+            async let albumRequest: Void = viewModel.loadSharedAlbums(groupID: groupID, using: api)
+            _ = await(groupRequest, albumRequest)
+        }
     }
 
     @ViewBuilder private var leadingButton: some View {
@@ -136,19 +156,19 @@ struct ShareGroupDetailView: View {
             .init(
                 icon: .moveToAlbum,
                 title: "사진집으로",
-                isDisabled: selectedAlbumIDs.isEmpty,
+                isDisabled: true,
                 action: { isMoveSheetPresented = true }
             ),
             .init(
                 icon: .delete,
                 title: "삭제",
-                isDisabled: selectedAlbumIDs.isEmpty,
+                isDisabled: true,
                 action: { isDeleteAlertPresented = true }
             )
         ]
     }
 
-    private func handleAlbumTap(_ album: Album) {
+    private func handleAlbumTap(_ album: SharedAlbum) {
         if isSelectionMode {
             if let index = selectedAlbumIDs.firstIndex(of: album.id) {
                 selectedAlbumIDs.remove(at: index)
@@ -160,7 +180,7 @@ struct ShareGroupDetailView: View {
         }
     }
 
-    private func albumState(for album: Album) -> AlbumFolderState {
+    private func albumState(for album: SharedAlbum) -> AlbumFolderState {
         guard isSelectionMode else {
             return .plain
         }
@@ -170,7 +190,7 @@ struct ShareGroupDetailView: View {
         return .deselected
     }
 
-    private func accessibilityValue(for album: Album) -> String {
+    private func accessibilityValue(for album: SharedAlbum) -> String {
         guard isSelectionMode else {
             return ""
         }
@@ -192,7 +212,6 @@ struct ShareGroupDetailView: View {
     }
 
     private func deleteSelectedAlbums() {
-        viewModel.removeAlbums(Set(selectedAlbumIDs), from: groupID)
         isDeleteAlertPresented = false
         exitSelectionMode()
     }
@@ -277,6 +296,8 @@ struct ShareImportView: View {
     @Environment(Router.self) private var router
     let groupID: ShareAlbum.ID
     let viewModel: ShareViewModel
+    let albums: [Album]
+    let photoSections: [PhotoSection]
 
     @State private var selection: ShareImportSelection = .albums
     @State private var selectedAlbumIDs: Set<Album.ID> = []
@@ -303,7 +324,7 @@ struct ShareImportView: View {
                 case .photos:
                     ScrollView(showsIndicators: false) {
                         PhotoGallery(
-                            sections: PhotoSection.sample,
+                            sections: photoSections,
                             isSelectionMode: true,
                             selectedPhotoIDs: selectedPhotoIDs,
                             onTapPhoto: togglePhoto
@@ -315,7 +336,7 @@ struct ShareImportView: View {
                 case .albums:
                     ScrollView(showsIndicators: false) {
                         LazyVGrid(columns: columns, spacing: 20) {
-                            ForEach(Album.samples) { album in
+                            ForEach(albums) { album in
                                 Button {
                                     toggleAlbum(album)
                                 } label: {
@@ -355,39 +376,7 @@ struct ShareImportView: View {
         }
     }
 
-    private func completeImport() {
-        let albums: [Album]
-        switch selection {
-        case .photos:
-            guard !selectedPhotoIDs.isEmpty else {
-                return
-            }
-            albums = [
-                Album(
-                    id: nextAvailableAlbumID,
-                    name: "새 사진집",
-                    count: selectedPhotoIDs.count
-                )
-            ]
-        case .albums:
-            albums = Album.samples.filter { selectedAlbumIDs.contains($0.id) }
-            guard !albums.isEmpty else {
-                return
-            }
-        }
-
-        guard viewModel.addAlbums(albums, to: groupID) else {
-            return
-        }
-        router.pop()
-    }
-
-    private var nextAvailableAlbumID: Album.ID {
-        let existingIDs = viewModel.groups
-            .flatMap(\.albums)
-            .map(\.id)
-        return (existingIDs.max() ?? 0) + 1
-    }
+    private func completeImport() {}
 }
 
 private struct ShareImportHeader: View {
@@ -429,8 +418,10 @@ private struct ShareImportHeader: View {
 }
 
 #Preview("Share Group Detail", traits: .fixedLayout(width: 390, height: 844)) {
-    let viewModel = ShareViewModel()
-    ShareGroupDetailView(groupID: ShareAlbum.samples[0].id, viewModel: viewModel)
+    let group = ShareAlbum(name: "집집팟", date: .now, memberCount: 4)
+    let viewModel = ShareViewModel(groups: [group])
+    ShareGroupDetailView(groupID: group.id, viewModel: viewModel, personalAlbums: [])
         .environment(AuthenticationState.preview(isLoggedIn: true))
+        .environment(DIContainer())
         .environment(Router())
 }

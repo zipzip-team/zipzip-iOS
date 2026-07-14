@@ -10,15 +10,22 @@ import UIKit
 
 struct FilteredPictureView: View {
     @Environment(Router.self) private var router
+    @Environment(DIContainer.self) private var container
 
     @State private var pictureViewModel = PictureViewModel()
     @State private var viewModel: FilteredPictureViewModel
     @State private var showShareSheet = false
     private let albumViewModel: AlbumViewModel
+    private let shareViewModel: ShareViewModel
 
-    init(appliedFilters: [AppliedFilter], albumViewModel: AlbumViewModel) {
+    init(
+        appliedFilters: [AppliedFilter],
+        albumViewModel: AlbumViewModel,
+        shareViewModel: ShareViewModel
+    ) {
         _viewModel = State(initialValue: FilteredPictureViewModel(appliedFilters: appliedFilters))
         self.albumViewModel = albumViewModel
+        self.shareViewModel = shareViewModel
     }
 
     var body: some View {
@@ -89,9 +96,9 @@ struct FilteredPictureView: View {
         .bottomSheet(isPresented: $showShareSheet, detents: [.full]) { dismiss in
             ShareSheet(
                 albums: albumViewModel.shareDestinations,
-                sharedAlbums: Album.sharedSamples,
-                shareAlbums: ShareAlbum.samples,
+                shareAlbums: shareViewModel.groups,
                 onDismiss: { dismiss() },
+                onOpenShareAlbum: loadSharedAlbums,
                 onComplete: { destinations in
                     let localIdentifiers = pictureViewModel.selectedPhotoLocalIdentifiers
                     Task {
@@ -129,6 +136,13 @@ struct FilteredPictureView: View {
                 filterChipBar
             }
         }
+    }
+
+    private func loadSharedAlbums(groupID: ShareAlbum.ID) async {
+        await shareViewModel.loadSharedAlbums(
+            groupID: groupID,
+            using: DefaultShareGroupAPI(networkProvider: container.networkProvider)
+        )
     }
 
     private var topBar: some View {
@@ -199,6 +213,7 @@ struct FilteredPictureView: View {
     FilteredPictureView(appliedFilters: [
         AppliedFilter(kind: .device, value: "iphone 6"),
         AppliedFilter(kind: .location, value: "오사카")
-    ], albumViewModel: AlbumViewModel(albums: AlbumViewItem.samples))
+    ], albumViewModel: AlbumViewModel(albums: AlbumViewItem.samples), shareViewModel: ShareViewModel())
+        .environment(DIContainer())
         .environment(Router())
 }

@@ -9,7 +9,7 @@ import SwiftUI
 
 enum ShareDestination: Hashable {
     case album(Album.ID)
-    case sharedAlbum(shareAlbumID: ShareAlbum.ID, albumID: Album.ID)
+    case sharedAlbum(shareAlbumID: ShareAlbum.ID, albumID: SharedAlbum.ID)
 }
 
 extension Array where Element == ShareDestination {
@@ -27,16 +27,17 @@ struct ShareSheet: View {
     @Environment(AuthenticationState.self) private var authenticationState
 
     let albums: [Album]
-    let sharedAlbums: [Album]
     let shareAlbums: [ShareAlbum]
     let onDismiss: () -> Void
     var excludedAlbumIDs: Set<Album.ID> = []
+    var onOpenShareAlbum: (ShareAlbum.ID) async -> Void = { _ in }
     /// 완료 시 선택 순서대로 전달한다. 호출 화면은 사진 추가, 이동 등 필요한 동작을 결정한다.
     var onComplete: ([ShareDestination]) -> Void = { _ in }
 
     @State private var selection: BottomSheetTabSelection = .left
     @State private var selectedAlbumIDs: [Album.ID] = []
-    @State private var targetShareAlbum: ShareAlbum?
+    @State private var selectedSharedAlbumIDs: [SharedAlbum.ID] = []
+    @State private var targetShareAlbumID: ShareAlbum.ID?
 
     var body: some View {
         BottomSheet(
@@ -46,7 +47,7 @@ struct ShareSheet: View {
             },
             rightItem: {
                 if showsCompletionButton {
-                    headerButton("완료", isDisabled: selectedDestinations.isEmpty, action: completeSelection)
+                    headerButton("완료", isDisabled: isCompletionDisabled, action: completeSelection)
                 }
             }
         ) {
@@ -58,13 +59,18 @@ struct ShareSheet: View {
                 }
         }
         .onChange(of: selection) { _, _ in
-            targetShareAlbum = nil
+            targetShareAlbumID = nil
             selectedAlbumIDs = []
+            selectedSharedAlbumIDs = []
+        }
+        .task(id: targetShareAlbumID) {
+            guard let targetShareAlbumID else { return }
+            await onOpenShareAlbum(targetShareAlbumID)
         }
     }
 
     @ViewBuilder private var leadingHeaderButton: some View {
-        if targetShareAlbum != nil {
+        if targetShareAlbumID != nil {
             BottomSheetBackButton(action: returnToShareAlbumList)
         } else {
             BottomSheetCloseButton(action: onDismiss)
@@ -84,16 +90,17 @@ struct ShareSheet: View {
                 ShareLoginPrompt {
                     authenticationState.requestLogin(.share)
                 }
-            } else if targetShareAlbum != nil {
-                AlbumSelectionGrid(
-                    albums: sharedAlbums,
-                    selectedAlbumIDs: selectedAlbumIDs,
-                    onSelect: selectAlbum
+            } else if let targetShareAlbum {
+                SharedAlbumSelectionGrid(
+                    albums: targetShareAlbum.albums,
+                    selectedAlbumIDs: selectedSharedAlbumIDs,
+                    onSelect: selectSharedAlbum
                 )
             } else {
                 ShareAlbumList(albums: shareAlbums) { album in
-                    targetShareAlbum = album
+                    targetShareAlbumID = album.id
                     selectedAlbumIDs = []
+                    selectedSharedAlbumIDs = []
                 }
             }
         }
@@ -124,8 +131,20 @@ struct ShareSheet: View {
         }
     }
 
+    private func selectSharedAlbum(_ album: SharedAlbum) {
+        if let index = selectedSharedAlbumIDs.firstIndex(of: album.id) {
+            selectedSharedAlbumIDs.remove(at: index)
+        } else {
+            selectedSharedAlbumIDs.append(album.id)
+        }
+    }
+
     private var showsCompletionButton: Bool {
         selection == .left || authenticationState.isLoggedIn
+    }
+
+    private var isCompletionDisabled: Bool {
+        selection == .right || selectedDestinations.isEmpty
     }
 
     private var personalAlbums: [Album] {
@@ -140,7 +159,7 @@ struct ShareSheet: View {
             guard let targetShareAlbum else {
                 return []
             }
-            return selectedAlbumIDs.map {
+            return selectedSharedAlbumIDs.map {
                 .sharedAlbum(shareAlbumID: targetShareAlbum.id, albumID: $0)
             }
         }
@@ -156,8 +175,13 @@ struct ShareSheet: View {
     }
 
     private func returnToShareAlbumList() {
-        targetShareAlbum = nil
+        targetShareAlbumID = nil
         selectedAlbumIDs = []
+        selectedSharedAlbumIDs = []
+    }
+
+    private var targetShareAlbum: ShareAlbum? {
+        shareAlbums.first { $0.id == targetShareAlbumID }
     }
 }
 
@@ -208,6 +232,42 @@ struct AlbumSelectionGrid: View {
                             state: selectedAlbumIDs.contains(album.id) ? .highlighted : .plain,
                             nameColorOverride: .white00,
                             thumbnailLocalIdentifiers: album.thumbnailLocalIdentifiers
+                        )
+                    }
+                    .buttonStyle(StaticButtonStyle())
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 28)
+            .transaction { transaction in
+                transaction.animation = nil
+            }
+        }
+    }
+}
+
+private struct SharedAlbumSelectionGrid: View {
+    let albums: [SharedAlbum]
+    let selectedAlbumIDs: [SharedAlbum.ID]
+    let onSelect: (SharedAlbum) -> Void
+
+    private let columns = [
+        GridItem(.flexible(), spacing: 17),
+        GridItem(.flexible(), spacing: 17)
+    ]
+
+    var body: some View {
+        ScrollView(showsIndicators: false) {
+            LazyVGrid(columns: columns, spacing: 20) {
+                ForEach(albums) { album in
+                    Button {
+                        onSelect(album)
+                    } label: {
+                        AlbumCard(
+                            name: album.name,
+                            count: album.count,
+                            state: selectedAlbumIDs.contains(album.id) ? .highlighted : .plain,
+                            nameColorOverride: .white00
                         )
                     }
                     .buttonStyle(StaticButtonStyle())
@@ -309,8 +369,7 @@ private struct ShareDestinationRow: View {
 #Preview {
     ShareSheet(
         albums: Album.samples,
-        sharedAlbums: Album.sharedSamples,
-        shareAlbums: ShareAlbum.samples,
+        shareAlbums: [],
         onDismiss: {}
     )
     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)

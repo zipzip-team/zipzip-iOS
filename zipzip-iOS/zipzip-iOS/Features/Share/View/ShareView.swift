@@ -117,11 +117,27 @@ struct ShareView: View {
                     ShareGroupManagementSheet(
                         group: group,
                         groupName: $viewModel.shareGroupNameDraft,
-                        inviteCode: viewModel.inviteCode,
+                        inviteCode: viewModel.inviteCode(for: group.id) ?? "",
+                        isInviteCodeAvailable: viewModel.isInviteCodeAvailable(for: group.id),
                         onClose: viewModel.dismissShareManagement,
                         onComplete: viewModel.completeShareManagement,
                         onLeave: leaveManagedShareGroup
                     )
+                    .task(id: group.id) {
+                        await viewModel.loadInviteCode(
+                            groupID: group.id,
+                            using: DefaultShareGroupAPI(networkProvider: container.networkProvider)
+                        )
+                    }
+                }
+            }
+            .task(id: authenticationState.isLoggedIn) {
+                if authenticationState.isLoggedIn {
+                    await viewModel.loadGroups(
+                        using: DefaultShareGroupAPI(networkProvider: container.networkProvider)
+                    )
+                } else {
+                    viewModel.resetRemoteData()
                 }
             }
     }
@@ -150,27 +166,22 @@ struct ShareView: View {
 struct ShareAlbumDetailDestinationView: View {
     @Environment(Router.self) private var router
     let groupID: ShareAlbum.ID
-    let albumID: Album.ID
+    let albumID: SharedAlbum.ID
     let viewModel: ShareViewModel
 
     var body: some View {
-        if let group = viewModel.group(withID: groupID),
-           let album = viewModel.album(groupID: groupID, albumID: albumID) {
+        if let album = viewModel.album(groupID: groupID, albumID: albumID) {
             AlbumDetailView(
                 album: .init(
-                    id: album.id,
+                    id: 0,
                     title: album.name,
-                    createdAt: group.date,
+                    createdAt: album.createdAt,
                     photoCount: album.count
                 ),
-                viewModel: detailViewModel
-            ) { detailViewModel in
-                AlbumDetailGalleryPlaceholderView(
-                    photoCount: album.count,
-                    showsSelectionControls: detailViewModel.isSelectionMode,
-                    selectedPhotoIDs: detailViewModel.selectedPhotoIDs,
-                    onSelectPhoto: detailViewModel.togglePhotoSelection
-                )
+                viewModel: AlbumDetailViewModel(),
+                moveAlbums: []
+            ) { _ in
+                EmptyView()
             }
         } else {
             ContentUnavailableView("사진집을 찾을 수 없어요", systemImage: "photo.on.rectangle")
@@ -187,23 +198,10 @@ struct ShareAlbumDetailDestinationView: View {
                 }
         }
     }
-
-    private var detailViewModel: AlbumDetailViewModel {
-        AlbumDetailViewModel(
-            actions: .init(
-                onRename: { name in
-                    viewModel.renameAlbum(groupID: groupID, albumID: albumID, to: name)
-                },
-                onDelete: {
-                    viewModel.removeAlbums([albumID], from: groupID)
-                    router.pop()
-                }
-            )
-        )
-    }
 }
 
 private struct ShareGroupListView: View {
+    @Environment(DIContainer.self) private var container
     let viewModel: ShareViewModel
     let onOpenGroup: (ShareAlbum.ID) -> Void
 
@@ -212,7 +210,7 @@ private struct ShareGroupListView: View {
             Color.orange30
                 .ignoresSafeArea()
 
-            if viewModel.groups.isEmpty, !viewModel.isAddMode {
+            if viewModel.groups.isEmpty, viewModel.hasLoadedGroups, !viewModel.isAddMode {
                 ShareCollectionEmptyView(onCreate: viewModel.presentCreateSheet)
             } else {
                 ScrollView(showsIndicators: false) {
@@ -231,11 +229,23 @@ private struct ShareGroupListView: View {
                             }
                             .buttonStyle(StaticButtonStyle())
                             .accessibilityLabel("\(group.name), \(group.memberCount)명")
+                            .task {
+                                await viewModel.loadMoreGroupsIfNeeded(
+                                    currentGroupID: group.id,
+                                    using: DefaultShareGroupAPI(networkProvider: container.networkProvider)
+                                )
+                            }
                         }
                     }
                     .padding(.horizontal, 16)
                     .padding(.top, 69)
                     .padding(.bottom, viewModel.isAddMode ? 130 : 24)
+                }
+                .refreshable {
+                    await viewModel.loadGroups(
+                        using: DefaultShareGroupAPI(networkProvider: container.networkProvider),
+                        refresh: true
+                    )
                 }
             }
         }
@@ -595,11 +605,14 @@ private struct ShareAlbumManagementSheet: View {
 }
 
 #Preview("Share Login", traits: .fixedLayout(width: 390, height: 844)) {
-    ShareViewPreview(isLoggedIn: false, groups: ShareAlbum.samples)
+    ShareViewPreview(isLoggedIn: false, groups: [])
 }
 
 #Preview("Share List", traits: .fixedLayout(width: 390, height: 844)) {
-    ShareViewPreview(isLoggedIn: true, groups: ShareAlbum.samples)
+    ShareViewPreview(
+        isLoggedIn: true,
+        groups: [ShareAlbum(name: "집집팟", date: .now, memberCount: 4)]
+    )
 }
 
 #Preview("Share Empty", traits: .fixedLayout(width: 390, height: 844)) {

@@ -21,7 +21,7 @@ enum Route: Hashable {
     case albumDetail(Int)
     case albumPhotoDetail(albumID: Int, photo: Photo)
     case shareGroup(UUID)
-    case shareAlbum(groupID: UUID, albumID: Int)
+    case shareAlbum(groupID: UUID, albumID: UUID)
     case shareImport(UUID)
     case myPage
     case registeredDeviceManagement
