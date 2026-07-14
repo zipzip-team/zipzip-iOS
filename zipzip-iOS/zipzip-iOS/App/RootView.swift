@@ -37,6 +37,7 @@ struct RootView: View {
                 }
             }
             .task {
+                KeyboardPrewarmer.prewarm()
                 guard hasCompletedOnboarding else { return }
                 photoSync.startIfNeeded()
                 await albumViewModel.loadAlbums()
