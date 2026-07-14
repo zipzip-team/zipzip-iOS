@@ -10,6 +10,7 @@ import UIKit
 
 struct ShareView: View {
     @Environment(AuthenticationState.self) private var authenticationState
+    @Environment(DIContainer.self) private var container
     @Environment(Router.self) private var router
     let viewModel: ShareViewModel
 
@@ -43,8 +44,15 @@ struct ShareView: View {
                     title: "공유 그룹 생성하기",
                     placeholder: "공유 그룹 이름",
                     value: $viewModel.groupNameDraft,
+                    isConfirming: viewModel.isCreatingGroup,
                     onCancel: { viewModel.isCreateSheetPresented = false },
-                    onConfirm: viewModel.createGroup
+                    onConfirm: {
+                        Task {
+                            await viewModel.createGroup(
+                                using: DefaultShareGroupAPI(networkProvider: container.networkProvider)
+                            )
+                        }
+                    }
                 )
             }
             .bottomSheet(
@@ -69,10 +77,6 @@ struct ShareView: View {
             ) { _ in
                 ShareInvitationSheet(
                     code: viewModel.inviteCode,
-                    onPrevious: {
-                        viewModel.isInviteSheetPresented = false
-                        viewModel.isCreateSheetPresented = true
-                    },
                     onComplete: viewModel.completeInvitation
                 )
             }
@@ -364,6 +368,7 @@ private struct ShareEntryFormSheet: View {
     let title: String
     let placeholder: String
     @Binding var value: String
+    var isConfirming = false
     let onCancel: () -> Void
     let onConfirm: () -> Void
 
@@ -375,6 +380,7 @@ private struct ShareEntryFormSheet: View {
                     .foregroundStyle(.grey400)
 
                 TextInput(placeholder, text: $value)
+                    .disabled(isConfirming)
 
                 Spacer(minLength: 0)
 
@@ -386,6 +392,7 @@ private struct ShareEntryFormSheet: View {
                         action: onConfirm
                     )
                 }
+                .disabled(isConfirming)
             }
             .padding(.horizontal, 16)
             .padding(.top, 12)
@@ -394,7 +401,7 @@ private struct ShareEntryFormSheet: View {
     }
 
     private var isConfirmDisabled: Bool {
-        value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        isConfirming || value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 }
 
@@ -438,7 +445,6 @@ private struct ShareJoinConfirmationSheet: View {
 
 private struct ShareInvitationSheet: View {
     let code: String
-    let onPrevious: () -> Void
     let onComplete: () -> Void
 
     var body: some View {
@@ -464,10 +470,7 @@ private struct ShareInvitationSheet: View {
 
                 Spacer(minLength: 0)
 
-                HStack(spacing: 16) {
-                    CommonButton(title: "이전", property1: .secondary, action: onPrevious)
-                    CommonButton(title: "완료", property1: .cta, action: onComplete)
-                }
+                CommonButton(title: "완료", property1: .cta, action: onComplete)
             }
             .padding(.horizontal, 16)
             .padding(.top, 12)
@@ -606,6 +609,7 @@ private struct ShareAlbumManagementSheet: View {
 private struct ShareViewPreview: View {
     @State private var authenticationState: AuthenticationState
     @State private var viewModel: ShareViewModel
+    @State private var container = DIContainer()
 
     init(isLoggedIn: Bool, groups: [ShareAlbum]) {
         let authenticationState = AuthenticationState.preview(isLoggedIn: isLoggedIn)
@@ -616,6 +620,7 @@ private struct ShareViewPreview: View {
     var body: some View {
         ShareView(viewModel: viewModel)
             .environment(authenticationState)
+            .environment(container)
             .environment(Router())
     }
 }

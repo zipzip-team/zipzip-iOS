@@ -29,18 +29,20 @@ final class ShareViewModel {
     var isCommentsPresented = false
     var isAlbumManagementPresented = false
     var isShareManagementPresented = false
+    private(set) var isCreatingGroup = false
 
     var joinCode = ""
     var groupNameDraft = ""
-    let inviteCode = "# 3d2dsd322d32d23"
+    var inviteCode = ""
     var commentDraft = ""
     var albumNameDraft = ""
     var shareGroupNameDraft = ""
 
     private(set) var pendingJoinGroup: ShareAlbum?
-    private(set) var pendingCreatedGroup: ShareAlbum?
     private(set) var albumManagementTarget: ShareAlbumManagementTarget?
     private(set) var managedShareGroup: ShareAlbum?
+    private var groupCreationName: String?
+    private var groupCreationIdempotencyKey: UUID?
 
     init() {
         self.groups = ShareAlbum.samples
@@ -104,30 +106,52 @@ final class ShareViewModel {
 
     func presentCreateSheet() {
         groupNameDraft = ""
+        groupCreationName = nil
+        groupCreationIdempotencyKey = nil
         isCreateSheetPresented = true
     }
 
-    func createGroup() {
+    func createGroup(using api: ShareGroupAPI) async {
         let trimmedName = groupNameDraft.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmedName.isEmpty else {
+        guard !trimmedName.isEmpty, !isCreatingGroup else {
             return
         }
 
-        pendingCreatedGroup = ShareAlbum(
-            name: trimmedName,
-            date: .now,
-            memberCount: 1,
-            currentUserRole: .admin
-        )
-        isCreateSheetPresented = false
-        isInviteSheetPresented = true
+        let idempotencyKey: UUID
+        if groupCreationName == trimmedName, let groupCreationIdempotencyKey {
+            idempotencyKey = groupCreationIdempotencyKey
+        } else {
+            idempotencyKey = UUID()
+            groupCreationName = trimmedName
+            groupCreationIdempotencyKey = idempotencyKey
+        }
+
+        isCreatingGroup = true
+
+        do {
+            let response = try await api.createGroup(
+                name: trimmedName,
+                idempotencyKey: idempotencyKey
+            )
+            let createdGroup = ShareAlbum(
+                id: response.id,
+                name: response.name,
+                date: .now,
+                memberCount: 1,
+                currentUserRole: .admin
+            )
+            groups.append(createdGroup)
+            inviteCode = response.inviteCode
+            groupCreationName = nil
+            groupCreationIdempotencyKey = nil
+            isCreateSheetPresented = false
+            isInviteSheetPresented = true
+        } catch {}
+
+        isCreatingGroup = false
     }
 
     func completeInvitation() {
-        if let pendingCreatedGroup {
-            groups.append(pendingCreatedGroup)
-        }
-        pendingCreatedGroup = nil
         isInviteSheetPresented = false
         isAddMode = false
     }
@@ -253,7 +277,6 @@ final class ShareViewModel {
         isCommentsPresented = false
         isShareManagementPresented = false
         pendingJoinGroup = nil
-        pendingCreatedGroup = nil
         managedShareGroup = nil
         dismissAlbumManagement()
     }
