@@ -17,7 +17,7 @@ struct ProfileButton: View {
                 .foregroundStyle(.grey1000)
                 .frame(width: 24, height: 24)
                 .padding(8)
-                .background(.grey50, in: Circle())
+                .background(.white00, in: Circle())
                 .shadow(color: .black.opacity(0.05), radius: 6, y: 4)
                 .contentShape(Circle())
         }
