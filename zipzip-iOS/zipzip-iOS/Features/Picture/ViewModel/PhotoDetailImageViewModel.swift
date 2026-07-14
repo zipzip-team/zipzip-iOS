@@ -8,7 +8,7 @@ import UIKit
 
 @Observable
 final class PhotoDetailImageViewModel {
-    private static let thumbnailSize = CGSize(width: 400, height: 400)
+    private static let previewSize = CGSize(width: 400, height: 400)
     private static let fullSize = CGSize(width: 1600, height: 1600)
 
     private(set) var image: UIImage?
@@ -30,14 +30,14 @@ final class PhotoDetailImageViewModel {
         loadFailed = false
         isFullImageLoaded = false
 
-        let thumbnail = await PhotoThumbnailLoader.shared.fastThumbnail(
+        let previewImage = await PhotoThumbnailLoader.shared.fastFullImage(
             for: localIdentifier,
-            targetSize: Self.thumbnailSize
+            targetSize: Self.previewSize
         )
         guard !Task.isCancelled else { return }
-        if let thumbnail, !isFullImageLoaded {
-            image = thumbnail
-            imageSize = thumbnail.size
+        if let previewImage, !isFullImageLoaded {
+            image = previewImage
+            imageSize = previewImage.size
         }
 
         let fullImage = await PhotoThumbnailLoader.shared.fullImage(

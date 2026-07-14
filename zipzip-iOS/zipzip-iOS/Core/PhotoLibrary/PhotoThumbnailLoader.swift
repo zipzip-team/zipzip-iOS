@@ -17,11 +17,11 @@ final class PhotoThumbnailLoader: @unchecked Sendable {
         await requestImage(for: localIdentifier, targetSize: targetSize, contentMode: .aspectFill)
     }
 
-    func fastThumbnail(for localIdentifier: String, targetSize: CGSize) async -> UIImage? {
+    func fastFullImage(for localIdentifier: String, targetSize: CGSize) async -> UIImage? {
         await requestImage(
             for: localIdentifier,
             targetSize: targetSize,
-            contentMode: .aspectFill,
+            contentMode: .aspectFit,
             deliveryMode: .fastFormat
         )
     }
