@@ -59,12 +59,24 @@ struct MoveInIndicator: View {
 
     private var label: String {
         guard let remainingMinutes else { return "이사 중" }
-        return "\(remainingMinutes)분 남음"
+        return Self.remainingText(remainingMinutes)
     }
 
     private var accessibilityText: String {
         guard let remainingMinutes else { return "사진을 정리하고 있어요" }
-        return "사진 정리 중, 약 \(remainingMinutes)분 남음"
+        return "사진 정리 중, 약 \(Self.remainingText(remainingMinutes))"
+    }
+
+    private static func remainingText(_ minutes: Int) -> String {
+        let hours = minutes / 60
+        let mins = minutes % 60
+        if hours == 0 {
+            return "\(mins)분 남음"
+        }
+        if mins == 0 {
+            return "\(hours)시간 남음"
+        }
+        return "\(hours)시간 \(mins)분 남음"
     }
 }
 
@@ -74,6 +86,7 @@ struct MoveInIndicator: View {
         VStack(spacing: 16) {
             MoveInIndicator()
             MoveInIndicator(remainingMinutes: 6)
+            MoveInIndicator(remainingMinutes: 1035)
         }
     }
 }
