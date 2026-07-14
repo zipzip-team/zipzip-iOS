@@ -149,7 +149,7 @@ struct MyPageView: View {
                 MyPageMenuRow(title: "개인정보 처리 방침") {
                     openLink(.privacyPolicy)
                 }
-                MyPageMenuRow(title: "사용자 지원 / 문의", showsDivider: false) {
+                MyPageMenuRow(title: "사용자 지원 / 문의") {
                     openLink(.support)
                 }
             }
@@ -200,7 +200,7 @@ struct MyPageView: View {
         Button(action: action) {
             Text(title)
                 .font(.b1_md)
-                .foregroundStyle(isDestructive ? .orange700 : .grey1000)
+                .foregroundStyle(isDestructive ? .orange500 : .grey1000)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.horizontal, 10)
                 .padding(.vertical, 24)
