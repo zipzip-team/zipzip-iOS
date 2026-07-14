@@ -22,6 +22,7 @@ struct MoveInIndicator: View {
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var isAnimating = false
+    @State private var indicatorHeight: CGFloat = 0
 
     private static let tooltipAutoDismiss: Duration = .seconds(2)
 
@@ -47,17 +48,23 @@ struct MoveInIndicator: View {
         .padding(.vertical, Layout.verticalPadding)
         .background(.white00, in: Capsule())
         .shadow(color: .black.opacity(0.05), radius: 6, x: 0, y: 4)
+        .background {
+            GeometryReader { proxy in
+                Color.clear
+                    .onAppear { indicatorHeight = proxy.size.height }
+                    .onChange(of: proxy.size.height) { _, newHeight in indicatorHeight = newHeight }
+            }
+        }
         .contentShape(Capsule())
         .onTapGesture {
             guard tooltipText != nil else { return }
             isTooltipPresented.toggle()
         }
-        .overlay(alignment: .bottom) {
+        .overlay(alignment: .top) {
             if isTooltipPresented, let tooltipText {
                 MoveInTooltip(text: tooltipText)
-                    .alignmentGuide(VerticalAlignment.bottom) { dimensions in
-                        dimensions[VerticalAlignment.top] - Layout.tooltipGap
-                    }
+                    .fixedSize()
+                    .offset(y: indicatorHeight + Layout.tooltipGap)
                     .transition(.opacity.combined(with: .scale(scale: 0.9, anchor: .top)))
             }
         }
