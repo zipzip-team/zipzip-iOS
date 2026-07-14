@@ -235,6 +235,11 @@ final class ShareViewModel {
         defer { loadingInviteCodeGroupIDs.remove(groupID) }
 
         do {
+            if let storedInviteCode = try await store.fetchInviteCode(groupID: groupID) {
+                inviteCodes[groupID] = storedInviteCode
+                return
+            }
+
             let response = try await api.fetchInviteCode(groupID: groupID)
             try await store.updateInviteCode(response)
             inviteCodes[groupID] = try await store.fetchInviteCode(groupID: groupID)

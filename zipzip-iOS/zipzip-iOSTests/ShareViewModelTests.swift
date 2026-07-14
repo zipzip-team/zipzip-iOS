@@ -24,6 +24,13 @@ final class ShareViewModelTests: XCTestCase {
         let storedGroups = try await store.fetchGroups()
         XCTAssertEqual(storedGroups.map(\.id), [response.id])
 
+        let restoredViewModel = ShareViewModel(store: store)
+        await restoredViewModel.loadInviteCode(
+            groupID: response.id,
+            using: UnavailableShareGroupAPI()
+        )
+        XCTAssertEqual(restoredViewModel.inviteCode(for: response.id), response.inviteCode)
+
         viewModel.completeInvitation()
         XCTAssertEqual(viewModel.groups.count, 1)
     }
