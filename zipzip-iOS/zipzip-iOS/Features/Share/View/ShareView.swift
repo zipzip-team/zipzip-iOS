@@ -78,10 +78,6 @@ struct ShareView: View {
             ) { _ in
                 ShareInvitationSheet(
                     code: viewModel.inviteCode,
-                    onPrevious: {
-                        viewModel.isInviteSheetPresented = false
-                        viewModel.isCreateSheetPresented = true
-                    },
                     onComplete: viewModel.completeInvitation
                 )
             }
@@ -457,7 +453,6 @@ private struct ShareJoinConfirmationSheet: View {
 
 private struct ShareInvitationSheet: View {
     let code: String
-    let onPrevious: () -> Void
     let onComplete: () -> Void
 
     var body: some View {
@@ -483,10 +478,7 @@ private struct ShareInvitationSheet: View {
 
                 Spacer(minLength: 0)
 
-                HStack(spacing: 16) {
-                    CommonButton(title: "이전", property1: .secondary, action: onPrevious)
-                    CommonButton(title: "완료", property1: .cta, action: onComplete)
-                }
+                CommonButton(title: "완료", property1: .cta, action: onComplete)
             }
             .padding(.horizontal, 16)
             .padding(.top, 12)

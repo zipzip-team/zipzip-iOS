@@ -25,7 +25,7 @@ final class DefaultShareGroupAPI: ShareGroupAPI {
     }
 }
 
-nonisolated struct CreateSharedGroupResponse: Decodable, Sendable {
+nonisolated struct CreateSharedGroupResponse: Decodable {
     let id: UUID
     let name: String
     let inviteCode: String
