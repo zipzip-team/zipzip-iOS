@@ -399,7 +399,7 @@ private struct ShareEntryFormSheet: View {
                 HStack(spacing: 16) {
                     CommonButton(title: "취소", property1: .secondary, action: onCancel)
                     CommonButton(
-                        title: isConfirming ? "생성 중..." : "확인",
+                        title: "확인",
                         property1: isConfirmDisabled ? .disabled : .cta,
                         action: onConfirm
                     )
