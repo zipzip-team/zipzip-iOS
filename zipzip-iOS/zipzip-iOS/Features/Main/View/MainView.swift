@@ -9,6 +9,7 @@ import SwiftUI
 
 struct MainView: View {
     @Environment(Router.self) private var router
+    @Environment(PhotoSyncCoordinator.self) private var photoSync
 
     private enum Layout {
         static let heroHeight: CGFloat = 402
@@ -93,14 +94,24 @@ struct MainView: View {
 
             Spacer()
 
+            if photoSync.isProcessing {
+                MoveInIndicator(remainingMinutes: photoSync.remainingMinutes)
+                    .transition(.opacity)
+
+                Spacer()
+            }
+
             ProfileButton {
                 router.push(.myPage)
             }
         }
         .padding(.horizontal, Layout.horizontalPadding)
+        .animation(.easeInOut(duration: 0.2), value: photoSync.isProcessing)
     }
 }
 
 #Preview {
     MainView()
+        .environment(Router())
+        .environment(PhotoSyncCoordinator())
 }

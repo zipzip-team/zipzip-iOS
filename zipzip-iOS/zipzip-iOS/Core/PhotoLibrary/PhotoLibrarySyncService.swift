@@ -9,7 +9,7 @@ import Foundation
 @preconcurrency import Photos
 import SQLiteData
 
-nonisolated struct SyncProgress {
+nonisolated struct SyncProgress: Equatable {
     let processed: Int
     let total: Int
 }

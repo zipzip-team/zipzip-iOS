@@ -20,7 +20,7 @@ nonisolated struct DeviceBackfillService {
     private static let maxConsecutiveEmptyBatches = 3
 
     @concurrent
-    func backfillPendingDevices() async throws {
+    func backfillPendingDevices(onProgress: @Sendable (SyncProgress) -> Void = { _ in }) async throws {
         let status = PHPhotoLibrary.authorizationStatus(for: .readWrite)
         guard status == .authorized || status == .limited else { return }
 
@@ -32,12 +32,16 @@ nonisolated struct DeviceBackfillService {
         }
         guard !pending.isEmpty else { return }
 
+        let total = pending.count
+        onProgress(SyncProgress(processed: 0, total: total))
+
         var deviceCache: [DeviceKey: Int] = [:]
         var emptyBatches = 0
 
         for start in stride(from: 0, to: pending.count, by: Self.batchSize) {
             try Task.checkCancellation()
-            let batch = Array(pending[start ..< min(start + Self.batchSize, pending.count)])
+            let batchEnd = min(start + Self.batchSize, pending.count)
+            let batch = Array(pending[start ..< batchEnd])
             let results = await Self.resolve(batch)
 
             let neededKeys = Set(results.compactMap(Self.deviceKey)).subtracting(deviceCache.keys)
@@ -67,6 +71,8 @@ nonisolated struct DeviceBackfillService {
                 }
                 return count
             }
+
+            onProgress(SyncProgress(processed: batchEnd, total: total))
 
             if resolvedCount == 0 {
                 emptyBatches += 1
