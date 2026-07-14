@@ -45,7 +45,6 @@ struct ShareView: View {
                     placeholder: "공유 그룹 이름",
                     value: $viewModel.groupNameDraft,
                     isConfirming: viewModel.isCreatingGroup,
-                    errorMessage: viewModel.groupCreationErrorMessage,
                     onCancel: { viewModel.isCreateSheetPresented = false },
                     onConfirm: {
                         Task {
@@ -370,7 +369,6 @@ private struct ShareEntryFormSheet: View {
     let placeholder: String
     @Binding var value: String
     var isConfirming = false
-    var errorMessage: String?
     let onCancel: () -> Void
     let onConfirm: () -> Void
 
@@ -383,12 +381,6 @@ private struct ShareEntryFormSheet: View {
 
                 TextInput(placeholder, text: $value)
                     .disabled(isConfirming)
-
-                if let errorMessage {
-                    Text(errorMessage)
-                        .font(.b3_md)
-                        .foregroundStyle(.red)
-                }
 
                 Spacer(minLength: 0)
 

@@ -30,7 +30,6 @@ final class ShareViewModel {
     var isAlbumManagementPresented = false
     var isShareManagementPresented = false
     private(set) var isCreatingGroup = false
-    private(set) var groupCreationErrorMessage: String?
 
     var joinCode = ""
     var groupNameDraft = ""
@@ -107,7 +106,6 @@ final class ShareViewModel {
 
     func presentCreateSheet() {
         groupNameDraft = ""
-        groupCreationErrorMessage = nil
         groupCreationName = nil
         groupCreationIdempotencyKey = nil
         isCreateSheetPresented = true
@@ -129,7 +127,6 @@ final class ShareViewModel {
         }
 
         isCreatingGroup = true
-        groupCreationErrorMessage = nil
 
         do {
             let response = try await api.createGroup(
@@ -149,9 +146,7 @@ final class ShareViewModel {
             groupCreationIdempotencyKey = nil
             isCreateSheetPresented = false
             isInviteSheetPresented = true
-        } catch {
-            groupCreationErrorMessage = error.localizedDescription
-        }
+        } catch {}
 
         isCreatingGroup = false
     }
