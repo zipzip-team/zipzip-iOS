@@ -13,13 +13,17 @@ nonisolated struct DetectedDeviceProvider {
 
     func load() async throws -> [DetectedDevice] {
         try await database.read { db in
-            let rows = try DeviceRecord
-                .group(by: \.id)
-                .join(PhotoRecord.all) { $1.deviceID.eq($0.id) }
-                .select { ($0.id, $0.make, $0.model, $1.id.count()) }
-                .fetchAll(db)
-            return Self.mapped(rows)
+            try Self.detectedDevices(db)
         }
+    }
+
+    fileprivate static func detectedDevices(_ db: Database) throws -> [DetectedDevice] {
+        let rows = try DeviceRecord
+            .group(by: \.id)
+            .join(PhotoRecord.all) { $1.deviceID.eq($0.id) }
+            .select { ($0.id, $0.make, $0.model, $1.id.count()) }
+            .fetchAll(db)
+        return mapped(rows)
     }
 
     func loadRegistered() async throws -> [DetectedDevice] {
@@ -80,5 +84,13 @@ nonisolated struct DetectedDeviceProvider {
         let make = (make ?? "").trimmingCharacters(in: .whitespaces)
         let model = (model ?? "").trimmingCharacters(in: .whitespaces)
         return !make.isEmpty || !model.isEmpty
+    }
+}
+
+/// 감지된 기기 목록을 DB 관찰로 제공한다.
+/// 기기 백필이 `device`/`photo.device_id`를 채우면 자동으로 재실행돼 기기 선택 화면이 갱신된다.
+nonisolated struct DetectedDevicesRequest: FetchKeyRequest {
+    func fetch(_ db: Database) throws -> [DetectedDevice] {
+        try DetectedDeviceProvider.detectedDevices(db)
     }
 }

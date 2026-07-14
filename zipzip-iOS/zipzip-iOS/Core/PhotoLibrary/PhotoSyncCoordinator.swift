@@ -13,27 +13,16 @@ private let logger = Logger(subsystem: "com.zipzip.zipzip-iOS", category: "Photo
 
 enum SyncPhase: Equatable {
     case idle
-    case reading(SyncProgress)
-    case labeling(SyncProgress)
-    case backfilling(SyncProgress)
+    case reading
+    case organizing
     case finished
 
     fileprivate var kind: Int {
         switch self {
         case .idle: 0
         case .reading: 1
-        case .labeling: 2
-        case .backfilling: 3
-        case .finished: 4
-        }
-    }
-
-    fileprivate var progress: SyncProgress? {
-        switch self {
-        case let .reading(progress), let .labeling(progress), let .backfilling(progress):
-            progress
-        case .idle, .finished:
-            nil
+        case .organizing: 2
+        case .finished: 3
         }
     }
 }
@@ -54,13 +43,10 @@ final class PhotoSyncCoordinator {
     private var task: Task<Void, Never>?
 
     @ObservationIgnored
-    private var backfillTask: Task<Void, Never>?
+    private var etaStartedAt: Date?
 
     @ObservationIgnored
-    private var phaseStartedAt: Date?
-
-    @ObservationIgnored
-    private var phaseStartProcessed = 0
+    private var etaStartProcessed = 0
 
     @ObservationIgnored
     private var pipelineGeneration = 0
@@ -94,76 +80,78 @@ final class PhotoSyncCoordinator {
         phase = .idle
         estimatedSecondsRemaining = nil
         task = Task {
-            defer {
-                task = nil
-                isFinished = true
-            }
+            defer { task = nil }
+
+            // 1단계: sync — 기기 저장 사진의 기기 정보까지 해석 완료
             do {
                 for try await progress in photoLibrarySync.syncIfNeeded() {
                     self.progress = progress
-                    updatePhase(.reading(progress), generation: generation)
-                }
-                try await placeLabeling.labelPendingPhotos { progress in
-                    Task { @MainActor in self.updatePhase(.labeling(progress), generation: generation) }
+                    advance(to: .reading, generation: generation)
+                    reportProgress(processed: progress.processed, total: progress.total, generation: generation)
                 }
             } catch {
                 logger.error("photo library sync failed: \(error)")
             }
-            startBackfill(generation: generation)
-        }
-    }
 
-    private func startBackfill(generation: Int) {
-        guard backfillTask == nil else {
-            updatePhase(.finished, generation: generation)
-            return
-        }
-        updatePhase(.backfilling(SyncProgress(processed: 0, total: 0)), generation: generation)
-        backfillTask = Task(priority: .utility) {
-            defer {
-                backfillTask = nil
-                updatePhase(.finished, generation: generation)
-            }
-            do {
-                try await deviceBackfill.backfillPendingDevices { progress in
-                    Task { @MainActor in self.updatePhase(.backfilling(progress), generation: generation) }
+            // sync 완료 시점에 확인 버튼 활성화
+            isFinished = true
+
+            // 2단계: 장소 라벨링 + iCloud 기기 백필을 백그라운드 병렬 수행
+            advance(to: .organizing, generation: generation)
+            let labeling = placeLabeling
+            let backfill = deviceBackfill
+            await withTaskGroup(of: Void.self) { group in
+                group.addTask(priority: .utility) {
+                    do {
+                        try await labeling.labelPendingPhotos()
+                    } catch {
+                        logger.error("place labeling failed: \(error)")
+                    }
                 }
-            } catch is CancellationError {
-            } catch {
-                logger.error("device backfill failed: \(error)")
+                group.addTask(priority: .utility) {
+                    do {
+                        try await backfill.backfillPendingDevices { progress in
+                            Task { @MainActor in
+                                self.reportProgress(
+                                    processed: progress.processed,
+                                    total: progress.total,
+                                    generation: generation
+                                )
+                            }
+                        }
+                    } catch is CancellationError {
+                    } catch {
+                        logger.error("device backfill failed: \(error)")
+                    }
+                }
             }
+
+            advance(to: .finished, generation: generation)
         }
     }
 
-    private func updatePhase(_ newPhase: SyncPhase, generation: Int) {
+    private func advance(to newPhase: SyncPhase, generation: Int) {
         guard generation == pipelineGeneration else { return }
         guard newPhase.kind >= phase.kind else { return }
         if newPhase.kind != phase.kind {
-            phaseStartedAt = Date()
-            phaseStartProcessed = newPhase.progress?.processed ?? 0
+            etaStartedAt = Date()
+            etaStartProcessed = 0
+            estimatedSecondsRemaining = nil
         }
         phase = newPhase
-        recomputeRemaining(for: newPhase)
     }
 
-    private func recomputeRemaining(for phase: SyncPhase) {
-        guard let progress = phase.progress else {
-            estimatedSecondsRemaining = nil
-            return
-        }
-        guard let phaseStartedAt,
-              progress.total > progress.processed
-        else {
-            return
-        }
+    private func reportProgress(processed: Int, total: Int, generation: Int) {
+        guard generation == pipelineGeneration, isProcessing else { return }
+        guard let etaStartedAt, total > processed else { return }
 
-        let elapsed = Date().timeIntervalSince(phaseStartedAt)
-        let processedSinceStart = progress.processed - phaseStartProcessed
+        let elapsed = Date().timeIntervalSince(etaStartedAt)
+        let processedSinceStart = processed - etaStartProcessed
         guard elapsed >= 0.75, processedSinceStart > 0 else { return }
 
         let rate = Double(processedSinceStart) / elapsed
         guard rate > 0 else { return }
 
-        estimatedSecondsRemaining = Double(progress.total - progress.processed) / rate
+        estimatedSecondsRemaining = Double(total - processed) / rate
     }
 }
