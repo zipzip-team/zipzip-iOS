@@ -11,16 +11,17 @@ import SwiftUI
 @main
 struct zipzip_iOSApp: App {
     @State private var router = Router()
-    @State private var container = DIContainer()
+    @State private var container: DIContainer
 
     init() {
         prepareAppDependencies()
+        _container = State(initialValue: DIContainer())
     }
 
     var body: some Scene {
         WindowGroup {
             if ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] == nil {
-                RootView()
+                RootView(shareGroupRepository: container.shareGroupRepository)
                     .environment(router)
                     .environment(container)
                     .environment(container.authenticationState)

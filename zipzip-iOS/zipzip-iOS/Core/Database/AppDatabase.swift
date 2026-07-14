@@ -213,6 +213,68 @@ func appDatabase() throws -> any DatabaseWriter {
         .execute(db)
     }
 
+    migrator.registerMigration("Mirror shared server entities") { db in
+        // 기존 공유 테이블의 정수 ID는 서버 UUID와 호환되지 않는 임시 스키마다.
+        // 공유 데이터는 서버가 원본이므로 캐시만 비우고 UUID 기반 미러 테이블로 다시 만든다.
+        try #sql(#"DROP TABLE "shared_photo""#).execute(db)
+        try #sql(#"DROP TABLE "shared_album""#).execute(db)
+        try #sql(#"DROP TABLE "shared_group""#).execute(db)
+
+        try #sql(
+            """
+            CREATE TABLE "shared_group"(
+              "id" TEXT NOT NULL PRIMARY KEY,
+              "created_by_user_id" TEXT,
+              "created_by_display_name" TEXT,
+              "name" TEXT NOT NULL,
+              "invite_code" TEXT UNIQUE,
+              "created_at" INTEGER,
+              "joined_at" INTEGER,
+              "updated_at" INTEGER NOT NULL,
+              "member_count" INTEGER NOT NULL DEFAULT 0,
+              "shared_album_count" INTEGER NOT NULL DEFAULT 0,
+              "photo_count" INTEGER NOT NULL DEFAULT 0,
+              "my_role" TEXT NOT NULL
+            ) STRICT
+            """
+        )
+        .execute(db)
+
+        try #sql(
+            """
+            CREATE TABLE "shared_album"(
+              "id" TEXT NOT NULL PRIMARY KEY,
+              "shared_group_id" TEXT NOT NULL REFERENCES "shared_group"("id") ON DELETE CASCADE,
+              "name" TEXT NOT NULL,
+              "photo_count" INTEGER NOT NULL DEFAULT 0,
+              "created_by_user_id" TEXT,
+              "created_by_display_name" TEXT,
+              "is_creator" INTEGER NOT NULL DEFAULT 0,
+              "created_at" INTEGER NOT NULL,
+              "updated_at" INTEGER NOT NULL
+            ) STRICT
+            """
+        )
+        .execute(db)
+
+        try #sql(
+            """
+            CREATE TABLE "shared_photo"(
+              "id" TEXT NOT NULL PRIMARY KEY,
+              "shared_album_id" TEXT NOT NULL REFERENCES "shared_album"("id") ON DELETE CASCADE,
+              "content_hash" TEXT,
+              "original_file_name" TEXT
+            ) STRICT
+            """
+        )
+        .execute(db)
+
+        try #sql(#"CREATE INDEX "idx_shared_album_group_id" ON "shared_album"("shared_group_id")"#)
+            .execute(db)
+        try #sql(#"CREATE INDEX "idx_shared_photo_album_id" ON "shared_photo"("shared_album_id")"#)
+            .execute(db)
+    }
+
     migrator.registerMigration("Track device resolution pending") { db in
         try #sql(
             #"ALTER TABLE "photo" ADD COLUMN "device_pending" INTEGER NOT NULL DEFAULT 0"#

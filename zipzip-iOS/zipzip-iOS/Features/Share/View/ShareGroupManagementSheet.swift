@@ -12,16 +12,12 @@ struct ShareGroupManagementSheet: View {
     let group: ShareAlbum
     @Binding var groupName: String
     let inviteCode: String
+    let isInviteCodeAvailable: Bool
     let onClose: () -> Void
     let onComplete: () -> Void
     let onLeave: () -> Void
 
     @State private var isLeaveConfirmationPresented = false
-
-    private let memberColumns = [
-        GridItem(.flexible(), spacing: 16),
-        GridItem(.flexible(), spacing: 16)
-    ]
 
     var body: some View {
         BottomSheet(
@@ -38,7 +34,6 @@ struct ShareGroupManagementSheet: View {
                     VStack(spacing: 0) {
                         groupInformationSection
                         invitationSection
-                        memberSection
                         leaveSection
                     }
                     .padding(.horizontal, 16)
@@ -83,7 +78,7 @@ struct ShareGroupManagementSheet: View {
             .frame(width: 46, alignment: .leading)
 
             VStack(alignment: .leading, spacing: 4) {
-                Text("류단아")
+                Text(group.createdBy?.displayName ?? "")
                 Text(formattedCreationDate)
                 Text("총 \(photoCount)장")
             }
@@ -113,6 +108,7 @@ struct ShareGroupManagementSheet: View {
                 RoundedTextButton(title: "복사", style: .large) {
                     UIPasteboard.general.string = inviteCode
                 }
+                .disabled(!isInviteCodeAvailable)
             }
             .padding(12)
             .background(.grey900, in: .rect(cornerRadius: 12))
@@ -123,19 +119,6 @@ struct ShareGroupManagementSheet: View {
                 .fill(.grey800)
                 .frame(height: 1)
         }
-    }
-
-    private var memberSection: some View {
-        VStack(alignment: .leading, spacing: 24) {
-            sectionTitle("멤버")
-
-            LazyVGrid(columns: memberColumns, spacing: 16) {
-                ForEach(members) { member in
-                    ShareGroupMemberCard(member: member)
-                }
-            }
-        }
-        .padding(.vertical, 20)
     }
 
     private var leaveSection: some View {
@@ -171,18 +154,7 @@ struct ShareGroupManagementSheet: View {
     }
 
     private var photoCount: Int {
-        group.albums.reduce(0) { $0 + $1.count }
-    }
-
-    private var members: [ShareGroupMember] {
-        (0 ..< max(group.memberCount, 1)).map { index in
-            ShareGroupMember(
-                id: index,
-                name: "류단아",
-                isCurrentUser: index == 0,
-                isAdmin: index == 0
-            )
-        }
+        group.photoCount
     }
 
     private var leaveConfirmationID: String {
@@ -219,47 +191,6 @@ private struct ShareGroupNameField: View {
         .padding(.horizontal, 16)
         .frame(height: 52)
         .background(.grey100, in: .rect(cornerRadius: 8))
-    }
-}
-
-private struct ShareGroupMember: Identifiable {
-    let id: Int
-    let name: String
-    let isCurrentUser: Bool
-    let isAdmin: Bool
-}
-
-private struct ShareGroupMemberCard: View {
-    let member: ShareGroupMember
-
-    var body: some View {
-        HStack(spacing: 10) {
-            ProfileImage(size: 32, isStroke: false)
-
-            HStack(spacing: 4) {
-                Text(member.name)
-                    .font(.b1_sb)
-                    .foregroundStyle(.white00)
-                    .lineLimit(1)
-
-                if member.isAdmin {
-                    Image(.crown)
-                        .resizable()
-                        .scaledToFit()
-                        .frame(width: 24, height: 24)
-                        .accessibilityLabel("방장")
-                }
-            }
-
-            Spacer(minLength: 0)
-        }
-        .padding(.horizontal, 16)
-        .frame(height: 56)
-        .background(
-            member.isCurrentUser ? Color.grey600 : Color.grey800,
-            in: .rect(cornerRadius: 8)
-        )
-        .accessibilityElement(children: .combine)
     }
 }
 
@@ -332,9 +263,16 @@ private struct ShareGroupLeaveConfirmation: View {
     @Previewable @State var groupName = "집집집"
 
     ShareGroupManagementSheet(
-        group: ShareAlbum.samples[0],
+        group: ShareAlbum(
+            name: groupName,
+            date: .now,
+            memberCount: 1,
+            photoCount: 0,
+            createdBy: ShareGroupUser(id: nil, displayName: nil)
+        ),
         groupName: $groupName,
         inviteCode: "# 3d2dsd322d32d23",
+        isInviteCodeAvailable: true,
         onClose: {},
         onComplete: {},
         onLeave: {}
