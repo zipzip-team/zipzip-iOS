@@ -10,10 +10,17 @@ import SwiftUI
 struct MainView: View {
     @Environment(Router.self) private var router
 
+    private let organizedPhotoCount: Int
+
     private enum Layout {
-        static let heroHeight: CGFloat = 400
-        static let sectionSpacing: CGFloat = 32
+        static let heroHeight: CGFloat = 420
+        static let sectionSpacing: CGFloat = 28
         static let horizontalPadding: CGFloat = 16
+        static let organizedPhotoCountTopPadding: CGFloat = 134
+    }
+
+    init(organizedPhotoCount: Int = 0) {
+        self.organizedPhotoCount = organizedPhotoCount
     }
 
     var body: some View {
@@ -48,11 +55,35 @@ struct MainView: View {
                 .frame(height: Layout.heroHeight)
 
             Image(.zip01)
+
+            organizedPhotoCountView
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                .padding(.top, Layout.organizedPhotoCountTopPadding)
+                .padding(.horizontal, Layout.horizontalPadding)
         }
     }
 
+    private var organizedPhotoCountView: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text("집집에서 정리한 사진")
+                .font(.t3_md)
+
+            HStack(alignment: .bottom, spacing: 2) {
+                Text("\(organizedPhotoCount)")
+                    .font(.h1_sb)
+
+                Text("장")
+                    .font(.b1_md)
+                    .padding(.bottom, 6)
+            }
+        }
+        .foregroundStyle(.grey1000)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("집집에서 정리한 사진 \(organizedPhotoCount)장")
+    }
+
     private var unresolvedPhotosSection: some View {
-        VStack(alignment: .leading, spacing: 24) {
+        VStack(alignment: .leading, spacing: 16) {
             VStack(alignment: .leading, spacing: 4) {
                 Text("아직 머물 곳을 찾는 사진들")
                     .font(.t2_sb)
@@ -105,5 +136,5 @@ struct MainView: View {
 }
 
 #Preview {
-    MainView()
+    MainView(organizedPhotoCount: 7018)
 }
