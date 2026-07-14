@@ -8,10 +8,22 @@ import SwiftUI
 struct MoveInIndicator: View {
     var remainingMinutes: Int?
     var tooltipText: String?
+    @Binding var isTooltipPresented: Bool
+
+    init(
+        remainingMinutes: Int? = nil,
+        tooltipText: String? = nil,
+        isTooltipPresented: Binding<Bool> = .constant(false)
+    ) {
+        self.remainingMinutes = remainingMinutes
+        self.tooltipText = tooltipText
+        _isTooltipPresented = isTooltipPresented
+    }
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var isAnimating = false
-    @State private var showTooltip = false
+
+    private static let tooltipAutoDismiss: Duration = .seconds(2)
 
     private enum Layout {
         static let horizontalPadding: CGFloat = 18
@@ -39,16 +51,24 @@ struct MoveInIndicator: View {
         .onTapGesture {
             guard tooltipText != nil else { return }
             withAnimation(reduceMotion ? nil : .easeOut(duration: 0.15)) {
-                showTooltip.toggle()
+                isTooltipPresented.toggle()
             }
         }
         .overlay(alignment: .bottom) {
-            if showTooltip, let tooltipText {
+            if isTooltipPresented, let tooltipText {
                 MoveInTooltip(text: tooltipText)
                     .alignmentGuide(VerticalAlignment.bottom) { dimensions in
                         dimensions[VerticalAlignment.top] - Layout.tooltipGap
                     }
                     .transition(.opacity.combined(with: .scale(scale: 0.9, anchor: .top)))
+            }
+        }
+        .task(id: isTooltipPresented) {
+            guard isTooltipPresented else { return }
+            try? await Task.sleep(for: Self.tooltipAutoDismiss)
+            guard !Task.isCancelled else { return }
+            withAnimation(reduceMotion ? nil : .easeOut(duration: 0.15)) {
+                isTooltipPresented = false
             }
         }
         .onAppear { isAnimating = true }
@@ -103,10 +123,14 @@ struct MoveInIndicator: View {
 #Preview {
     ZStack {
         Color.orange30.ignoresSafeArea()
-        VStack(spacing: 16) {
+        VStack(spacing: 60) {
             MoveInIndicator()
             MoveInIndicator(remainingMinutes: 6)
-            MoveInIndicator(remainingMinutes: 1035, tooltipText: "1234장의 사진이 입주했어요!")
+            MoveInIndicator(
+                remainingMinutes: 1035,
+                tooltipText: "1234장의 사진이 입주했어요!",
+                isTooltipPresented: .constant(true)
+            )
         }
     }
 }
