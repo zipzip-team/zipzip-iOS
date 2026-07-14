@@ -29,44 +29,51 @@ nonisolated struct SharedGroupStore {
             let albumsByGroupID = Dictionary(grouping: albumRecords, by: \.sharedGroupID)
 
             return groupRecords.compactMap { groupRecord in
-                guard let id = UUID(uuidString: groupRecord.id) else {
-                    return nil
-                }
-
-                let albums = (albumsByGroupID[groupRecord.id] ?? []).compactMap { record in
-                    guard let albumID = UUID(uuidString: record.id),
-                          let groupID = UUID(uuidString: record.sharedGroupID)
-                    else {
-                        return nil
-                    }
-                    return StoredSharedAlbum(
-                        id: albumID,
-                        sharedGroupID: groupID,
-                        name: record.name,
-                        photoCount: record.photoCount,
-                        createdByUserID: record.createdByUserID.flatMap(UUID.init(uuidString:)),
-                        createdByDisplayName: record.createdByDisplayName,
-                        isCreator: record.isCreator,
-                        createdAt: record.createdAt,
-                        updatedAt: record.updatedAt
-                    )
-                }
-
-                return StoredSharedGroup(
-                    id: id,
-                    name: groupRecord.name,
-                    date: groupRecord.joinedAt ?? groupRecord.createdAt ?? groupRecord.updatedAt,
-                    memberCount: groupRecord.memberCount,
-                    role: groupRecord.myRole,
-                    albums: albums,
-                    sharedAlbumCount: groupRecord.sharedAlbumCount,
-                    photoCount: groupRecord.photoCount,
-                    createdByUserID: groupRecord.createdByUserID.flatMap(UUID.init(uuidString:)),
-                    createdByDisplayName: groupRecord.createdByDisplayName,
-                    updatedAt: groupRecord.updatedAt
-                )
+                let albums = (albumsByGroupID[groupRecord.id] ?? []).compactMap(Self.makeStoredAlbum)
+                return Self.makeStoredGroup(groupRecord, albums: albums)
             }
         }
+    }
+
+    private static func makeStoredAlbum(_ record: SharedAlbumRecord) -> StoredSharedAlbum? {
+        guard let albumID = UUID(uuidString: record.id),
+              let groupID = UUID(uuidString: record.sharedGroupID)
+        else {
+            return nil
+        }
+        return StoredSharedAlbum(
+            id: albumID,
+            sharedGroupID: groupID,
+            name: record.name,
+            photoCount: record.photoCount,
+            createdByUserID: record.createdByUserID.flatMap(UUID.init(uuidString:)),
+            createdByDisplayName: record.createdByDisplayName,
+            isCreator: record.isCreator,
+            createdAt: record.createdAt,
+            updatedAt: record.updatedAt
+        )
+    }
+
+    private static func makeStoredGroup(
+        _ record: SharedGroupRecord,
+        albums: [StoredSharedAlbum]
+    ) -> StoredSharedGroup? {
+        guard let id = UUID(uuidString: record.id) else {
+            return nil
+        }
+        return StoredSharedGroup(
+            id: id,
+            name: record.name,
+            date: record.joinedAt ?? record.createdAt ?? record.updatedAt,
+            memberCount: record.memberCount,
+            role: record.myRole,
+            albums: albums,
+            sharedAlbumCount: record.sharedAlbumCount,
+            photoCount: record.photoCount,
+            createdByUserID: record.createdByUserID.flatMap(UUID.init(uuidString:)),
+            createdByDisplayName: record.createdByDisplayName,
+            updatedAt: record.updatedAt
+        )
     }
 
     func upsertGroupSummaries(_ summaries: [ShareGroupSummaryResponse]) async throws {
@@ -175,7 +182,7 @@ nonisolated struct SharedGroupStore {
     func updateInviteCode(_ response: InviteCodeResponse) async throws {
         try await database.write { db in
             try SharedGroupRecord
-                .update { $0.inviteCode = response.inviteCode }
+                .update { $0.inviteCode = #bind(response.inviteCode) }
                 .where { $0.id.eq(response.sharedGroupId.uuidString) }
                 .execute(db)
         }
