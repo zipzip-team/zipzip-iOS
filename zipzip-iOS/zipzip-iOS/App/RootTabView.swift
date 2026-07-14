@@ -35,9 +35,9 @@ struct RootTabView: View {
             .bottomSheet(isPresented: $showShareSheet, detents: [.full]) { dismiss in
                 ShareSheet(
                     albums: albumViewModel.shareDestinations,
-                    sharedAlbums: Album.sharedSamples,
-                    shareAlbums: ShareAlbum.samples,
+                    shareAlbums: shareViewModel.groups,
                     onDismiss: { dismiss() },
+                    onOpenShareAlbum: loadSharedAlbums,
                     onComplete: { destinations in
                         let localIdentifiers = pictureViewModel.selectedPhotoLocalIdentifiers
                         Task {
@@ -112,9 +112,13 @@ struct RootTabView: View {
                 onOpenFilter: { router.push(.filter) },
                 onOpenPhoto: { router.push(.photoDetail($0)) }
             )
-        case .album: AlbumView(viewModel: albumViewModel)
+        case .album: AlbumView(viewModel: albumViewModel, shareViewModel: shareViewModel)
         case .share: ShareView(viewModel: shareViewModel)
         }
+    }
+
+    private func loadSharedAlbums(groupID: ShareAlbum.ID) async {
+        await shareViewModel.loadSharedAlbums(groupID: groupID)
     }
 
     private func selectTab(_ newSelection: NavbarTab) {

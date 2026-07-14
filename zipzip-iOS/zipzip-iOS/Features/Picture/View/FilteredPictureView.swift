@@ -15,10 +15,16 @@ struct FilteredPictureView: View {
     @State private var viewModel: FilteredPictureViewModel
     @State private var showShareSheet = false
     private let albumViewModel: AlbumViewModel
+    private let shareViewModel: ShareViewModel
 
-    init(appliedFilters: [AppliedFilter], albumViewModel: AlbumViewModel) {
+    init(
+        appliedFilters: [AppliedFilter],
+        albumViewModel: AlbumViewModel,
+        shareViewModel: ShareViewModel
+    ) {
         _viewModel = State(initialValue: FilteredPictureViewModel(appliedFilters: appliedFilters))
         self.albumViewModel = albumViewModel
+        self.shareViewModel = shareViewModel
     }
 
     var body: some View {
@@ -89,9 +95,9 @@ struct FilteredPictureView: View {
         .bottomSheet(isPresented: $showShareSheet, detents: [.full]) { dismiss in
             ShareSheet(
                 albums: albumViewModel.shareDestinations,
-                sharedAlbums: Album.sharedSamples,
-                shareAlbums: ShareAlbum.samples,
+                shareAlbums: shareViewModel.groups,
                 onDismiss: { dismiss() },
+                onOpenShareAlbum: loadSharedAlbums,
                 onComplete: { destinations in
                     let localIdentifiers = pictureViewModel.selectedPhotoLocalIdentifiers
                     Task {
@@ -129,6 +135,10 @@ struct FilteredPictureView: View {
                 filterChipBar
             }
         }
+    }
+
+    private func loadSharedAlbums(groupID: ShareAlbum.ID) async {
+        await shareViewModel.loadSharedAlbums(groupID: groupID)
     }
 
     private var topBar: some View {
@@ -196,9 +206,15 @@ struct FilteredPictureView: View {
 }
 
 #Preview {
-    FilteredPictureView(appliedFilters: [
-        AppliedFilter(kind: .device, value: "iphone 6"),
-        AppliedFilter(kind: .location, value: "오사카")
-    ], albumViewModel: AlbumViewModel(albums: AlbumViewItem.samples))
-        .environment(Router())
+    let container = DIContainer()
+    FilteredPictureView(
+        appliedFilters: [
+            AppliedFilter(kind: .device, value: "iphone 6"),
+            AppliedFilter(kind: .location, value: "오사카")
+        ],
+        albumViewModel: AlbumViewModel(albums: AlbumViewItem.samples),
+        shareViewModel: ShareViewModel(repository: container.shareGroupRepository)
+    )
+    .environment(container)
+    .environment(Router())
 }

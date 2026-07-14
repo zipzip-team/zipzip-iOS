@@ -9,8 +9,8 @@ import SQLiteData
 
 @Table("shared_photo")
 struct SharedPhotoRecord {
-    let id: Int
-    @Column("shared_album_id") var sharedAlbumID: Int
+    let id: String
+    @Column("shared_album_id") var sharedAlbumID: String
     @Column("content_hash") var contentHash: String?
     @Column("original_file_name") var originalFileName: String?
 }

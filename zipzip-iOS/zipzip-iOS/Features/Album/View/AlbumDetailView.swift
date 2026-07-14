@@ -23,12 +23,16 @@ struct AlbumDetailView<Content: View>: View {
     private let contentTopSpacing: CGFloat
     private let detailContent: (AlbumDetailViewModel) -> Content
     private let moveAlbums: [Album]
+    private let shareAlbums: [ShareAlbum]
+    private let onOpenShareAlbum: (ShareAlbum.ID) async -> Void
 
     init(
         album: AlbumDetailItem,
         viewModel: AlbumDetailViewModel,
         contentTopSpacing: CGFloat = 30,
-        moveAlbums: [Album] = Album.samples,
+        moveAlbums: [Album] = [],
+        shareAlbums: [ShareAlbum] = [],
+        onOpenShareAlbum: @escaping (ShareAlbum.ID) async -> Void = { _ in },
         @ViewBuilder content: @escaping (AlbumDetailViewModel) -> Content
     ) {
         self.album = album
@@ -36,6 +40,8 @@ struct AlbumDetailView<Content: View>: View {
         self.contentTopSpacing = contentTopSpacing
         self.detailContent = content
         self.moveAlbums = moveAlbums
+        self.shareAlbums = shareAlbums
+        self.onOpenShareAlbum = onOpenShareAlbum
     }
 
     var body: some View {
@@ -109,10 +115,10 @@ struct AlbumDetailView<Content: View>: View {
         .bottomSheet(isPresented: $viewModel.isMoveSheetPresented, detents: [.full]) { sheetDismiss in
             ShareSheet(
                 albums: moveAlbums,
-                sharedAlbums: Album.sharedSamples,
-                shareAlbums: ShareAlbum.samples,
+                shareAlbums: shareAlbums,
                 onDismiss: { sheetDismiss() },
                 excludedAlbumIDs: [album.id],
+                onOpenShareAlbum: onOpenShareAlbum,
                 onComplete: viewModel.completePhotoMove
             )
         }
@@ -200,14 +206,18 @@ struct AlbumDetailView<Content: View>: View {
 struct AlbumDetailEmptyView: View {
     let album: AlbumDetailItem
     let viewModel: AlbumDetailViewModel
-    var moveAlbums = Album.samples
+    var moveAlbums: [Album] = []
+    var shareAlbums: [ShareAlbum] = []
+    var onOpenShareAlbum: (ShareAlbum.ID) async -> Void = { _ in }
 
     var body: some View {
         AlbumDetailView(
             album: album,
             viewModel: viewModel,
             contentTopSpacing: 125,
-            moveAlbums: moveAlbums
+            moveAlbums: moveAlbums,
+            shareAlbums: shareAlbums,
+            onOpenShareAlbum: onOpenShareAlbum
         ) { viewModel in
             AlbumDetailEmptyContent(onLoadPhotos: viewModel.presentPhotoPicker)
         }
