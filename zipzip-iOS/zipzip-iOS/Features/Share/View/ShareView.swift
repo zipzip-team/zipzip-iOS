@@ -611,17 +611,18 @@ private struct ShareViewPreview: View {
     @State private var authenticationState: AuthenticationState
     @State private var viewModel: ShareViewModel
     @State private var container = DIContainer()
-
-        init(isLoggedIn: Bool, groups: [ShareAlbum]) {
-            let authenticationState = AuthenticationState.preview(isLoggedIn: isLoggedIn)
-            _authenticationState = State(initialValue: authenticationState)
-            _viewModel = State(initialValue: ShareViewModel(groups: groups))
-        }
-
+    
+    init(isLoggedIn: Bool, groups: [ShareAlbum]) {
+        let authenticationState = AuthenticationState.preview(isLoggedIn: isLoggedIn)
+        _authenticationState = State(initialValue: authenticationState)
+        _viewModel = State(initialValue: ShareViewModel(groups: groups))
+    }
+    
     var body: some View {
         ShareView(viewModel: viewModel)
             .environment(authenticationState)
             .environment(container)
             .environment(Router())
     }
+}
 #endif
