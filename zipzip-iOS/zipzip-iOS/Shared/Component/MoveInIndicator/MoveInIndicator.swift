@@ -8,21 +8,11 @@ import SwiftUI
 struct MoveInIndicator: View {
     var remainingMinutes: Int?
     var tooltipText: String?
-    @Binding var isTooltipPresented: Bool
-
-    init(
-        remainingMinutes: Int? = nil,
-        tooltipText: String? = nil,
-        isTooltipPresented: Binding<Bool> = .constant(false)
-    ) {
-        self.remainingMinutes = remainingMinutes
-        self.tooltipText = tooltipText
-        _isTooltipPresented = isTooltipPresented
-    }
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var isAnimating = false
     @State private var indicatorHeight: CGFloat = 0
+    @State private var showTooltip = false
 
     private static let tooltipAutoDismiss: Duration = .seconds(2)
 
@@ -55,30 +45,26 @@ struct MoveInIndicator: View {
                     .onChange(of: proxy.size.height) { _, newHeight in indicatorHeight = newHeight }
             }
         }
-        .contentShape(Capsule())
-        .onTapGesture {
-            guard tooltipText != nil else { return }
-            isTooltipPresented.toggle()
-        }
         .overlay(alignment: .top) {
-            if isTooltipPresented, let tooltipText {
+            if showTooltip, let tooltipText {
                 MoveInTooltip(text: tooltipText)
                     .fixedSize()
                     .offset(y: indicatorHeight + Layout.tooltipGap)
+                    .allowsHitTesting(false)
                     .transition(.opacity.combined(with: .scale(scale: 0.9, anchor: .top)))
             }
         }
-        .animation(reduceMotion ? nil : .easeOut(duration: 0.18), value: isTooltipPresented)
-        .task(id: isTooltipPresented) {
-            guard isTooltipPresented else { return }
+        .animation(reduceMotion ? nil : .easeOut(duration: 0.18), value: showTooltip)
+        .task(id: tooltipText != nil) {
+            guard tooltipText != nil else { return }
+            showTooltip = true
             try? await Task.sleep(for: Self.tooltipAutoDismiss)
             guard !Task.isCancelled else { return }
-            isTooltipPresented = false
+            showTooltip = false
         }
         .onAppear { isAnimating = true }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(accessibilityText)
-        .accessibilityHint(tooltipText == nil ? "" : "두 번 탭하면 등록된 사진 수를 볼 수 있습니다.")
     }
 
     private var dots: some View {
@@ -132,8 +118,7 @@ struct MoveInIndicator: View {
             MoveInIndicator(remainingMinutes: 6)
             MoveInIndicator(
                 remainingMinutes: 1035,
-                tooltipText: "1234장의 사진이 입주했어요!",
-                isTooltipPresented: .constant(true)
+                tooltipText: "1234장의 사진이 입주했어요!"
             )
         }
     }

@@ -14,8 +14,6 @@ struct MainView: View {
 
     @Fetch(RegisteredPhotoCountRequest()) private var registeredPhotoCount = 0
 
-    @State private var showMoveInTooltip = false
-
     private enum Layout {
         static let heroHeight: CGFloat = 402
         static let sectionSpacing: CGFloat = 32
@@ -35,19 +33,9 @@ struct MainView: View {
             }
             .ignoresSafeArea(edges: .top)
 
-            if showMoveInTooltip, photoSync.isProcessing {
-                Color.clear
-                    .ignoresSafeArea()
-                    .contentShape(Rectangle())
-                    .onTapGesture { showMoveInTooltip = false }
-            }
-
             floatingHeader
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .onChange(of: photoSync.isProcessing) { _, isProcessing in
-            if !isProcessing { showMoveInTooltip = false }
-        }
     }
 
     private var heroSection: some View {
@@ -114,8 +102,7 @@ struct MainView: View {
                     remainingMinutes: photoSync.remainingMinutes,
                     tooltipText: registeredPhotoCount > 0
                         ? "\(registeredPhotoCount)장의 사진이 입주했어요!"
-                        : nil,
-                    isTooltipPresented: $showMoveInTooltip
+                        : nil
                 )
                 .transition(.opacity)
 
