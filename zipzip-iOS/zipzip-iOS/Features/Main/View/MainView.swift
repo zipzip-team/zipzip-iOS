@@ -32,6 +32,13 @@ struct MainView: View {
             floatingHeader
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .overlay(alignment: .topLeading) {
+            FloatingHeader(.trailing, top: FloatingHeaderLayout.mainProfileButtonTop) {
+                ProfileButton {
+                    router.push(.myPage)
+                }
+            }
+        }
     }
 
     private var heroSection: some View {
@@ -95,10 +102,6 @@ struct MainView: View {
             .frame(width: 44, height: 44)
 
             Spacer()
-
-            ProfileButton {
-                router.push(.myPage)
-            }
         }
         .padding(.horizontal, Layout.horizontalPadding)
     }

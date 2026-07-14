@@ -53,20 +53,20 @@ struct AlbumDetailView<Content: View>: View {
                 .ignoresSafeArea(edges: .top)
         }
         .overlay(alignment: .topLeading) {
-            leadingActionButton
-                .padding(.top, 14)
-                .padding(.leading, 16)
+            FloatingHeader(.leading) {
+                leadingActionButton
+            }
         }
-        .overlay(alignment: .topTrailing) {
-            AlbumHeaderActionButton(
-                onSelectionTap: { viewModel.enterSelectionMode(photoCount: album.photoCount) },
-                onAddTap: viewModel.presentPhotoPicker
-            )
-            .padding(.top, 14)
-            .padding(.trailing, 16)
-            .opacity(viewModel.isSelectionMode ? 0 : 1)
-            .allowsHitTesting(!viewModel.isSelectionMode)
-            .accessibilityHidden(viewModel.isSelectionMode)
+        .overlay(alignment: .topLeading) {
+            FloatingHeader(.trailing) {
+                AlbumHeaderActionButton(
+                    onSelectionTap: { viewModel.enterSelectionMode(photoCount: album.photoCount) },
+                    onAddTap: viewModel.presentPhotoPicker
+                )
+                .opacity(viewModel.isSelectionMode ? 0 : 1)
+                .allowsHitTesting(!viewModel.isSelectionMode)
+                .accessibilityHidden(viewModel.isSelectionMode)
+            }
         }
         .overlay(alignment: .bottom) {
             if viewModel.isSelectionMode {

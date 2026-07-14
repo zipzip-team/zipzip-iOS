@@ -180,13 +180,13 @@ struct ShareAlbumDetailDestinationView: View {
                 .navigationBarBackButtonHidden(true)
                 .toolbarVisibility(.hidden, for: .navigationBar)
                 .overlay(alignment: .topLeading) {
-                    RoundedIconButton(items: [
-                        .init(id: "missing-share-album-back", icon: .iconChevronLeft, accessibilityLabel: "뒤로가기") {
-                            router.pop()
-                        }
-                    ])
-                    .padding(.top, 14)
-                    .padding(.leading, 16)
+                    FloatingHeader(.leading) {
+                        RoundedIconButton(items: [
+                            .init(id: "missing-share-album-back", icon: .iconChevronLeft, accessibilityLabel: "뒤로가기") {
+                                router.pop()
+                            }
+                        ])
+                    }
                 }
         }
     }
@@ -248,15 +248,15 @@ private struct ShareGroupListView: View {
                     .padding(.leading, 16)
             }
         }
-        .overlay(alignment: .topTrailing) {
-            if !viewModel.isAddMode {
-                RoundedIconButton(items: [
-                    .init(id: "add-share-group", icon: .plus, accessibilityLabel: "공유 그룹 추가") {
-                        viewModel.enterAddMode()
-                    }
-                ])
-                .padding(.top, 14)
-                .padding(.trailing, 16)
+        .overlay(alignment: .topLeading) {
+            FloatingHeader(.trailing) {
+                if !viewModel.isAddMode {
+                    RoundedIconButton(items: [
+                        .init(id: "add-share-group", icon: .plus, accessibilityLabel: "공유 그룹 추가") {
+                            viewModel.enterAddMode()
+                        }
+                    ])
+                }
             }
         }
         .overlay(alignment: .bottom) {

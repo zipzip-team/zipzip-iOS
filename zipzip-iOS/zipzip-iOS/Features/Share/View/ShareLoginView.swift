@@ -21,16 +21,6 @@ struct ShareLoginView: View {
             loginContent(displayName: $authenticationState.displayNameDraft)
                 .padding(.top, 560)
 
-            RoundedIconButton(items: [
-                .init(id: "share-login-back", icon: .iconChevronLeft, accessibilityLabel: "뒤로가기") {
-                    authenticationState.cancelLogin()
-                }
-            ])
-            .disabled(authenticationState.isAuthenticating)
-            .padding(.top, 66)
-            .padding(.leading, 16)
-            .frame(maxWidth: .infinity, alignment: .leading)
-
             if authenticationState.isAuthenticating {
                 Color.black.opacity(0.2)
                     .ignoresSafeArea()
@@ -45,6 +35,16 @@ struct ShareLoginView: View {
         .ignoresSafeArea()
         .navigationBarBackButtonHidden(true)
         .toolbarVisibility(.hidden, for: .navigationBar)
+        .overlay(alignment: .topLeading) {
+            FloatingHeader(.leading) {
+                RoundedIconButton(items: [
+                    .init(id: "share-login-back", icon: .iconChevronLeft, accessibilityLabel: "뒤로가기") {
+                        authenticationState.cancelLogin()
+                    }
+                ])
+                .disabled(authenticationState.isAuthenticating)
+            }
+        }
     }
 
     private func loginContent(displayName: Binding<String>) -> some View {

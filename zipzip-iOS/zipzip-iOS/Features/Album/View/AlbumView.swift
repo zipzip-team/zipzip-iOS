@@ -69,16 +69,16 @@ struct AlbumView: View {
                     .padding(.bottom, 80)
             }
         }
-        .overlay(alignment: .topTrailing) {
-            AlbumHeaderActionButton(
-                onSelectionTap: viewModel.enterSelectionMode,
-                onAddTap: viewModel.presentCreateAlbumSheet
-            )
-            .padding(.top, 14)
-            .padding(.trailing, 16)
-            .opacity(viewModel.isSelectionMode ? 0 : 1)
-            .allowsHitTesting(!viewModel.isSelectionMode)
-            .accessibilityHidden(viewModel.isSelectionMode)
+        .overlay(alignment: .topLeading) {
+            FloatingHeader(.trailing) {
+                AlbumHeaderActionButton(
+                    onSelectionTap: viewModel.enterSelectionMode,
+                    onAddTap: viewModel.presentCreateAlbumSheet
+                )
+                .opacity(viewModel.isSelectionMode ? 0 : 1)
+                .allowsHitTesting(!viewModel.isSelectionMode)
+                .accessibilityHidden(viewModel.isSelectionMode)
+            }
         }
         .overlay(alignment: .topLeading) {
             RoundedTextButton(title: "취소", style: .cancel, action: viewModel.exitSelectionMode)

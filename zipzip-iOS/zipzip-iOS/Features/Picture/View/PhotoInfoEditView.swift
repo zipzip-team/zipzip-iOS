@@ -23,7 +23,9 @@ struct PhotoInfoEditView: View {
         .background(Color.orange30.ignoresSafeArea())
         .navigationBarBackButtonHidden(true)
         .overlay(alignment: .topLeading) {
-            backButton
+            FloatingHeader(.leading) {
+                backButton
+            }
         }
     }
 
@@ -32,8 +34,6 @@ struct PhotoInfoEditView: View {
             .init(id: "back", icon: .chevronLeft, accessibilityLabel: "뒤로가기") { dismiss() }
         ])
         .opacity(0.9)
-        .padding(.horizontal, 16)
-        .padding(.vertical, 4)
     }
 }
 

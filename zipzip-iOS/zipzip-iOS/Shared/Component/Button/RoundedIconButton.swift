@@ -7,6 +7,93 @@
 
 import SwiftUI
 
+enum FloatingHeaderLayout {
+    static let buttonHeight: CGFloat = 44
+    static let roundedIconButtonTop: CGFloat = 68
+    static let mainProfileButtonTop: CGFloat = 66
+    static let horizontalPadding: CGFloat = 16
+}
+
+enum FloatingHeaderPosition {
+    case leading
+    case trailing
+
+    var alignment: Alignment {
+        switch self {
+        case .leading:
+            .topLeading
+        case .trailing:
+            .topTrailing
+        }
+    }
+
+    var horizontalEdge: Edge.Set {
+        switch self {
+        case .leading:
+            .leading
+        case .trailing:
+            .trailing
+        }
+    }
+}
+
+struct FloatingHeader<Content: View>: View {
+    private let position: FloatingHeaderPosition
+    private let top: CGFloat
+    private let content: Content
+
+    init(
+        _ position: FloatingHeaderPosition,
+        top: CGFloat = FloatingHeaderLayout.roundedIconButtonTop,
+        @ViewBuilder content: () -> Content
+    ) {
+        self.position = position
+        self.top = top
+        self.content = content()
+    }
+
+    var body: some View {
+        GeometryReader { geometry in
+            content
+                .padding(
+                    .top,
+                    top - geometry.frame(in: .global).minY
+                )
+                .padding(position.horizontalEdge, FloatingHeaderLayout.horizontalPadding)
+                .frame(
+                    width: geometry.size.width,
+                    height: geometry.size.height,
+                    alignment: position.alignment
+                )
+        }
+    }
+}
+
+struct FloatingHeaderBar<Content: View>: View {
+    private let content: Content
+
+    init(@ViewBuilder content: () -> Content) {
+        self.content = content()
+    }
+
+    var body: some View {
+        GeometryReader { geometry in
+            content
+                .frame(maxWidth: .infinity, alignment: .topLeading)
+                .padding(
+                    .top,
+                    FloatingHeaderLayout.roundedIconButtonTop - geometry.frame(in: .global).minY
+                )
+                .padding(.horizontal, FloatingHeaderLayout.horizontalPadding)
+                .frame(
+                    width: geometry.size.width,
+                    height: geometry.size.height,
+                    alignment: .topLeading
+                )
+        }
+    }
+}
+
 struct RoundedIconButton: View {
     private let items: [RoundedIconButtonItem]
 
@@ -39,7 +126,7 @@ struct RoundedIconButton: View {
                     }
                 }
                 .padding(.horizontal, items.count == 1 ? 8 : 4)
-                .frame(height: 44)
+                .frame(height: FloatingHeaderLayout.buttonHeight)
                 .background(.white00, in: .capsule)
                 .shadow(color: .black.opacity(0.05), radius: 6, y: 4)
             }
@@ -55,7 +142,7 @@ struct RoundedIconButton: View {
                 .foregroundStyle(.grey1000)
                 .frame(width: 28, height: 28)
                 .padding(.horizontal, items.count == 1 ? 8 : 12)
-                .frame(height: 44)
+                .frame(height: FloatingHeaderLayout.buttonHeight)
                 .contentShape(.rect)
                 .accessibilityHidden(true)
         }

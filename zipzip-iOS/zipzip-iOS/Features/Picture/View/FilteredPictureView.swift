@@ -32,7 +32,9 @@ struct FilteredPictureView: View {
         @Bindable var viewModel = viewModel
 
         return VStack(spacing: 8) {
-            topBar
+            Color.clear
+                .frame(height: FloatingHeaderLayout.buttonHeight + 8)
+
             ScrollView {
                 PhotoGallery(
                     sections: pictureViewModel.sections,
@@ -128,6 +130,11 @@ struct FilteredPictureView: View {
             onSecondaryTap: { pictureViewModel.showDeleteAlert = false },
             onPrimaryTap: { pictureViewModel.showDeleteAlert = false } // TODO: 삭제 실행 연결
         )
+        .overlay(alignment: .topLeading) {
+            FloatingHeaderBar {
+                topBar
+            }
+        }
         .overlay(alignment: .bottom) {
             if pictureViewModel.isSelectionMode {
                 actionBar
@@ -161,8 +168,6 @@ struct FilteredPictureView: View {
                 ])
             }
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 4)
     }
 
     private var actionBar: some View {

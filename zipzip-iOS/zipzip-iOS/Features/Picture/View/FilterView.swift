@@ -17,10 +17,8 @@ struct FilterView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 8) {
-                RoundedIconButton(items: [
-                    .init(id: "back", icon: .chevronLeft, accessibilityLabel: "뒤로가기") { router.pop() }
-                ])
-                .padding(.vertical, 6)
+                Color.clear
+                    .frame(height: FloatingHeaderLayout.buttonHeight + 12)
 
                 VStack(alignment: .leading, spacing: 16) {
                     deviceSection
@@ -34,6 +32,13 @@ struct FilterView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .background(Color.orange30.ignoresSafeArea())
         .navigationBarBackButtonHidden(true)
+        .overlay(alignment: .topLeading) {
+            FloatingHeader(.leading) {
+                RoundedIconButton(items: [
+                    .init(id: "back", icon: .chevronLeft, accessibilityLabel: "뒤로가기") { router.pop() }
+                ])
+            }
+        }
         .task { await viewModel.loadOptions() }
         .bottomSheet(isPresented: $showDateSheet, detents: [.height(dateSheetHeight)]) { dismiss in
             DateFilterSheet(date: $pickerDate, onReset: {

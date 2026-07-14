@@ -30,20 +30,19 @@ struct MyPageContainerView<TopBar: View, Content: View>: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 0) {
-                topBar
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 4)
-
-                content
-                    .padding(.top, 8)
-            }
+            content
+                .padding(.top, FloatingHeaderLayout.buttonHeight + 16)
         }
         .padding(.top, topPadding)
         .padding(.horizontal, horizontalPadding)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: alignment)
         .background(.orange30)
         .navigationBarBackButtonHidden(true)
+        .overlay(alignment: .topLeading) {
+            FloatingHeaderBar {
+                topBar
+            }
+        }
     }
 }
 

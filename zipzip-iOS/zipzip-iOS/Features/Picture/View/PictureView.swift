@@ -53,9 +53,11 @@ struct PictureView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .background(Color.orange30.ignoresSafeArea())
-        .overlay(alignment: .topTrailing) {
-            if !viewModel.isSelectionMode {
-                floatingButton
+        .overlay(alignment: .topLeading) {
+            FloatingHeader(.trailing) {
+                if !viewModel.isSelectionMode {
+                    floatingButton
+                }
             }
         }
         .overlay(alignment: .topLeading) {
@@ -84,8 +86,6 @@ struct PictureView: View {
                 viewModel.enterSelectionMode()
             }
         ])
-        .padding(.horizontal, 16)
-        .padding(.vertical, 4)
     }
 
     private var cancelButton: some View {
