@@ -134,7 +134,7 @@ final class PhotoSyncCoordinator {
         guard generation == pipelineGeneration else { return }
         guard newPhase.kind >= phase.kind else { return }
         if newPhase.kind != phase.kind {
-            etaStartedAt = Date()
+            etaStartedAt = nil
             etaStartProcessed = 0
             estimatedSecondsRemaining = nil
         }
@@ -143,7 +143,14 @@ final class PhotoSyncCoordinator {
 
     private func reportProgress(processed: Int, total: Int, generation: Int) {
         guard generation == pipelineGeneration, isProcessing else { return }
-        guard let etaStartedAt, total > processed else { return }
+        guard total > processed else { return }
+
+        // 첫 샘플에서 시각·처리량 기준을 함께 시드해, 이후 rate를 동일 구간으로 계산한다.
+        guard let etaStartedAt else {
+            etaStartedAt = Date()
+            etaStartProcessed = processed
+            return
+        }
 
         let elapsed = Date().timeIntervalSince(etaStartedAt)
         let processedSinceStart = processed - etaStartProcessed
