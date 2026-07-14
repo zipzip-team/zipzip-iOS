@@ -34,9 +34,11 @@ struct MyPageView: View {
         } content: {
             VStack(alignment: .leading, spacing: 32) {
                 loginSection
-                menuSection
-                if authenticationState.isLoggedIn {
-                    accountSection
+                VStack(spacing: 0) {
+                    menuSection
+                    if authenticationState.isLoggedIn {
+                        accountSection
+                    }
                 }
             }
         }
@@ -84,7 +86,7 @@ struct MyPageView: View {
                             .foregroundStyle(.grey1000)
                             .lineLimit(1)
 
-                        Text("Apple 계정으로 로그인했어요.")
+                        Text("반가워요! 집집의 모든 기능을 자유롭게 이용해보세요.")
                             .font(.b2_md)
                             .foregroundStyle(.grey600)
                             .lineLimit(1)
@@ -147,25 +149,25 @@ struct MyPageView: View {
                 MyPageMenuRow(title: "개인정보 처리 방침") {
                     openLink(.privacyPolicy)
                 }
-                MyPageMenuRow(title: "사용자 지원 / 문의") {
+                MyPageMenuRow(title: "사용자 지원 / 문의", showsDivider: false) {
                     openLink(.support)
                 }
             }
             .padding(.horizontal, 16)
+
+            Rectangle()
+                .fill(.grey50)
+                .frame(height: 10)
         }
     }
 
     private var accountSection: some View {
         VStack(spacing: 0) {
-            Rectangle()
-                .fill(.grey50)
-                .frame(height: 10)
-
             VStack(spacing: 0) {
                 accountButton("로그아웃") {
                     showsLogoutConfirmation = true
                 }
-                accountButton("회원 탈퇴", isDestructive: true) {
+                accountButton("회원 탈퇴", isDestructive: true, showsDivider: false) {
                     showsWithdrawWarning = true
                 }
 
@@ -192,6 +194,7 @@ struct MyPageView: View {
     private func accountButton(
         _ title: String,
         isDestructive: Bool = false,
+        showsDivider: Bool = true,
         action: @escaping () -> Void
     ) -> some View {
         Button(action: action) {
@@ -205,9 +208,11 @@ struct MyPageView: View {
         }
         .buttonStyle(.plain)
         .overlay(alignment: .bottom) {
-            Rectangle()
-                .fill(.grey70)
-                .frame(height: 1)
+            if showsDivider {
+                Rectangle()
+                    .fill(.grey70)
+                    .frame(height: 1)
+            }
         }
     }
 

@@ -31,7 +31,7 @@ struct MyPageContainerView<TopBar: View, Content: View>: View {
     var body: some View {
         ScrollView {
             content
-                .padding(.top, FloatingHeaderLayout.buttonHeight + 16)
+                .padding(.top, FloatingHeaderLayout.buttonHeight + 30)
         }
         .padding(.top, topPadding)
         .padding(.horizontal, horizontalPadding)
