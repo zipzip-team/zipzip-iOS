@@ -9,7 +9,8 @@ final class ShareViewModelTests: XCTestCase {
             name: "우리 가족",
             inviteCode: "ZZ7K9P2Q"
         )
-        let viewModel = ShareViewModel(groups: [])
+        let store = try makeStore()
+        let viewModel = ShareViewModel(groups: [], store: store)
         viewModel.presentCreateSheet()
         viewModel.groupNameDraft = "우리 가족"
 
@@ -20,6 +21,8 @@ final class ShareViewModelTests: XCTestCase {
         XCTAssertEqual(viewModel.groups.map(\.id), [response.id])
         XCTAssertEqual(viewModel.groups.map(\.name), [response.name])
         XCTAssertEqual(viewModel.inviteCode, response.inviteCode)
+        let storedGroups = try await store.fetchGroups()
+        XCTAssertEqual(storedGroups.map(\.id), [response.id])
 
         viewModel.completeInvitation()
         XCTAssertEqual(viewModel.groups.count, 1)
@@ -70,7 +73,7 @@ final class ShareViewModelTests: XCTestCase {
                 hasNext: false
             )
         )
-        let viewModel = ShareViewModel()
+        let viewModel = ShareViewModel(store: try makeStore())
 
         await viewModel.loadGroups(using: api)
         await viewModel.loadGroup(id: groupID, using: api)
@@ -105,7 +108,7 @@ final class ShareViewModelTests: XCTestCase {
                 hasNext: false
             )
         )
-        let viewModel = ShareViewModel()
+        let viewModel = ShareViewModel(store: try makeStore())
 
         await viewModel.loadGroups(using: api)
         viewModel.resetRemoteData()
@@ -150,12 +153,63 @@ final class ShareViewModelTests: XCTestCase {
                 hasNext: false
             )
         )
-        let viewModel = ShareViewModel()
+        let viewModel = ShareViewModel(store: try makeStore())
 
         await viewModel.loadGroups(using: api)
         await viewModel.loadMoreGroupsIfNeeded(currentGroupID: firstID, using: api)
 
         XCTAssertEqual(viewModel.groups.map(\.id), [firstID, secondID])
+    }
+
+    @MainActor
+    func testLoadsGroupsAndAlbumsFromDatabaseWhenNetworkIsUnavailable() async throws {
+        let groupID = try XCTUnwrap(UUID(uuidString: "11111111-1111-1111-1111-111111111111"))
+        let albumID = try XCTUnwrap(UUID(uuidString: "33333333-3333-3333-3333-333333333333"))
+        let store = try makeStore()
+        let onlineViewModel = ShareViewModel(store: store)
+        let api = StubShareGroupAPI(
+            groupListResponse: ShareGroupListPageResponse(
+                items: [ShareGroupSummaryResponse(
+                    id: groupID,
+                    name: "우리 가족",
+                    myRole: .host,
+                    memberCount: 4,
+                    sharedAlbumCount: 1,
+                    photoCount: 42,
+                    joinedAt: "2026-07-03T10:15:30Z",
+                    updatedAt: "2026-07-03T10:15:30Z"
+                )],
+                nextCursor: nil,
+                hasNext: false
+            ),
+            sharedAlbumListResponse: SharedAlbumListPageResponse(
+                items: [SharedAlbumResponse(
+                    id: albumID,
+                    name: "제주도",
+                    photoCount: 42,
+                    createdBy: nil,
+                    isCreator: true,
+                    createdAt: "2026-07-02T10:15:30Z",
+                    updatedAt: "2026-07-03T10:15:30Z"
+                )],
+                nextCursor: nil,
+                hasNext: false
+            )
+        )
+
+        await onlineViewModel.loadGroups(using: api)
+        await onlineViewModel.loadSharedAlbums(groupID: groupID, using: api)
+
+        let offlineViewModel = ShareViewModel(store: store)
+        await offlineViewModel.loadGroups(using: UnavailableShareGroupAPI())
+
+        XCTAssertEqual(offlineViewModel.groups.map(\.id), [groupID])
+        XCTAssertEqual(offlineViewModel.group(withID: groupID)?.albums.map(\.id), [albumID])
+        XCTAssertEqual(offlineViewModel.group(withID: groupID)?.albums.map(\.count), [42])
+    }
+
+    private func makeStore() throws -> SharedGroupStore {
+        SharedGroupStore(database: try appDatabase())
     }
 }
 
@@ -189,5 +243,31 @@ private struct StubShareGroupAPI: ShareGroupAPI {
 
     func createGroup(name: String, idempotencyKey: UUID) async throws -> CreateSharedGroupResponse {
         try XCTUnwrap(createResponse)
+    }
+}
+
+private struct UnavailableShareGroupAPI: ShareGroupAPI {
+    func fetchGroups(cursor: String?, size: Int) async throws -> ShareGroupListPageResponse {
+        throw URLError(.notConnectedToInternet)
+    }
+
+    func fetchGroup(id: UUID) async throws -> ShareGroupDetailResponse {
+        throw URLError(.notConnectedToInternet)
+    }
+
+    func fetchInviteCode(groupID: UUID) async throws -> InviteCodeResponse {
+        throw URLError(.notConnectedToInternet)
+    }
+
+    func fetchSharedAlbums(
+        groupID: UUID,
+        cursor: String?,
+        size: Int
+    ) async throws -> SharedAlbumListPageResponse {
+        throw URLError(.notConnectedToInternet)
+    }
+
+    func createGroup(name: String, idempotencyKey: UUID) async throws -> CreateSharedGroupResponse {
+        throw URLError(.notConnectedToInternet)
     }
 }
