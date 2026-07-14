@@ -33,7 +33,7 @@ struct MainView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .overlay(alignment: .topLeading) {
-            FloatingHeader(.trailing, top: FloatingHeaderLayout.mainProfileButtonTop) {
+            FloatingHeader(.trailing) {
                 ProfileButton {
                     router.push(.myPage)
                 }
@@ -95,15 +95,12 @@ struct MainView: View {
     }
 
     private var floatingHeader: some View {
-        HStack {
+        FloatingHeader(.leading) {
             Image(
                 .badgeLogo
             )
             .frame(width: 44, height: 44)
-
-            Spacer()
         }
-        .padding(.horizontal, Layout.horizontalPadding)
     }
 }
 

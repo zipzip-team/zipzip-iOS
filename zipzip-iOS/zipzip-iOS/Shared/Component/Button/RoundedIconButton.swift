@@ -10,7 +10,6 @@ import SwiftUI
 enum FloatingHeaderLayout {
     static let buttonHeight: CGFloat = 44
     static let roundedIconButtonTop: CGFloat = 68
-    static let mainProfileButtonTop: CGFloat = 66
     static let scrollableTitleTop: CGFloat = 71.5
     static let scrollableTitleLayoutHeight = scrollableTitleTop + buttonHeight
     static let scrollableTitleContentSpacing: CGFloat = 12.5
@@ -116,10 +115,20 @@ struct ScrollableHeaderTitle: View {
         Text(title)
             .font(.t1_sb)
             .foregroundStyle(.grey900)
-            .frame(maxWidth: .infinity, height: FloatingHeaderLayout.buttonHeight, alignment: .leading)
+            .frame(
+                maxWidth: .infinity,
+                minHeight: FloatingHeaderLayout.buttonHeight,
+                maxHeight: FloatingHeaderLayout.buttonHeight,
+                alignment: .leading
+            )
             .padding(.top, FloatingHeaderLayout.scrollableTitleTop)
             .padding(.horizontal, FloatingHeaderLayout.horizontalPadding)
-            .frame(maxWidth: .infinity, height: layoutHeight, alignment: .topLeading)
+            .frame(
+                maxWidth: .infinity,
+                minHeight: layoutHeight,
+                maxHeight: layoutHeight,
+                alignment: .topLeading
+            )
             .opacity(isVisible ? 1 : 0)
             .accessibilityHidden(!isVisible)
     }
