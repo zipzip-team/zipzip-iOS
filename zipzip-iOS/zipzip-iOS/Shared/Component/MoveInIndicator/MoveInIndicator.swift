@@ -32,7 +32,7 @@ struct MoveInIndicator: View {
         static let dotSpacing: CGFloat = 2
         static let dotSize: CGFloat = 4
         static let dotsHeight: CGFloat = 18
-        static let tooltipGap: CGFloat = 8
+        static let tooltipGap: CGFloat = 12
     }
 
     var body: some View {
@@ -50,9 +50,7 @@ struct MoveInIndicator: View {
         .contentShape(Capsule())
         .onTapGesture {
             guard tooltipText != nil else { return }
-            withAnimation(reduceMotion ? nil : .easeOut(duration: 0.15)) {
-                isTooltipPresented.toggle()
-            }
+            isTooltipPresented.toggle()
         }
         .overlay(alignment: .bottom) {
             if isTooltipPresented, let tooltipText {
@@ -63,13 +61,12 @@ struct MoveInIndicator: View {
                     .transition(.opacity.combined(with: .scale(scale: 0.9, anchor: .top)))
             }
         }
+        .animation(reduceMotion ? nil : .easeOut(duration: 0.18), value: isTooltipPresented)
         .task(id: isTooltipPresented) {
             guard isTooltipPresented else { return }
             try? await Task.sleep(for: Self.tooltipAutoDismiss)
             guard !Task.isCancelled else { return }
-            withAnimation(reduceMotion ? nil : .easeOut(duration: 0.15)) {
-                isTooltipPresented = false
-            }
+            isTooltipPresented = false
         }
         .onAppear { isAnimating = true }
         .accessibilityElement(children: .ignore)
