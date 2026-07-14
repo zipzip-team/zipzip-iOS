@@ -10,36 +10,47 @@ struct MoveInTooltip: View {
 
     private enum Layout {
         static let arrowWidth: CGFloat = 14
-        static let arrowHeight: CGFloat = 9
+        static let arrowHeight: CGFloat = 8
         static let horizontalPadding: CGFloat = 12
         static let verticalPadding: CGFloat = 6
         static let cornerRadius: CGFloat = 8
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            TooltipArrow()
+        Text(text)
+            .font(.b3_sb)
+            .foregroundStyle(.grey1000)
+            .padding(.horizontal, Layout.horizontalPadding)
+            .padding(.vertical, Layout.verticalPadding)
+            .padding(.top, Layout.arrowHeight)
+            .background {
+                TooltipBubble(
+                    arrowWidth: Layout.arrowWidth,
+                    arrowHeight: Layout.arrowHeight,
+                    cornerRadius: Layout.cornerRadius
+                )
                 .fill(.grey50)
-                .frame(width: Layout.arrowWidth, height: Layout.arrowHeight)
-
-            Text(text)
-                .font(.b3_sb)
-                .foregroundStyle(.grey1000)
-                .padding(.horizontal, Layout.horizontalPadding)
-                .padding(.vertical, Layout.verticalPadding)
-                .background(.grey50, in: RoundedRectangle(cornerRadius: Layout.cornerRadius, style: .continuous))
-        }
-        .shadow(color: .black.opacity(0.05), radius: 6, x: 0, y: 4)
-        .fixedSize()
+                .shadow(color: .black.opacity(0.05), radius: 6, x: 0, y: 4)
+            }
+            .fixedSize()
     }
 }
 
-private struct TooltipArrow: Shape {
+private struct TooltipBubble: Shape {
+    let arrowWidth: CGFloat
+    let arrowHeight: CGFloat
+    let cornerRadius: CGFloat
+
     func path(in rect: CGRect) -> Path {
         var path = Path()
+        let bodyTop = rect.minY + arrowHeight
+        path.addRoundedRect(
+            in: CGRect(x: rect.minX, y: bodyTop, width: rect.width, height: rect.height - arrowHeight),
+            cornerSize: CGSize(width: cornerRadius, height: cornerRadius)
+        )
         path.move(to: CGPoint(x: rect.midX, y: rect.minY))
-        path.addLine(to: CGPoint(x: rect.minX, y: rect.maxY))
-        path.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY))
+        path.addLine(to: CGPoint(x: rect.midX - arrowWidth / 2, y: bodyTop))
+        path.addLine(to: CGPoint(x: rect.midX + arrowWidth / 2, y: bodyTop))
         path.closeSubpath()
         return path
     }
