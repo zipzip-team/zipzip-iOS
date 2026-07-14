@@ -26,13 +26,7 @@ struct PictureView: View {
         @Bindable var viewModel = viewModel
         return ScrollView {
             VStack(alignment: .leading, spacing: 8) {
-                Text("사진")
-                    .font(.t1_sb)
-                    .foregroundStyle(.grey900)
-                    .frame(height: 44)
-                    .padding(.vertical, 4)
-                    .padding(.horizontal, 16)
-                    .opacity(viewModel.isSelectionMode ? 0 : 1)
+                ScrollableHeaderTitle("사진", isVisible: !viewModel.isSelectionMode)
 
                 if !viewModel.isSelectionMode {
                     PhotoRecommendationPlaceholder()
@@ -51,6 +45,7 @@ struct PictureView: View {
                 .padding(.horizontal, 16)
             }
         }
+        .ignoresSafeArea(edges: .top)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .background(Color.orange30.ignoresSafeArea())
         .overlay(alignment: .topLeading) {

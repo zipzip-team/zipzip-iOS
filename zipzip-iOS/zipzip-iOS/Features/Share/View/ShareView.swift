@@ -201,49 +201,58 @@ private struct ShareGroupListView: View {
             Color.orange30
                 .ignoresSafeArea()
 
-            if viewModel.groups.isEmpty, viewModel.hasLoadedGroups, !viewModel.isAddMode {
-                ShareCollectionEmptyView(onCreate: viewModel.presentCreateSheet)
-            } else {
-                ScrollView(showsIndicators: false) {
-                    LazyVStack(spacing: 12) {
-                        ForEach(viewModel.groups) { group in
-                            Button {
-                                onOpenGroup(group.id)
-                            } label: {
-                                ShareAlbumCard(
-                                    thumbnail: nil,
-                                    title: group.name,
-                                    date: group.date,
-                                    profileImages: Array(repeating: nil, count: min(group.memberCount, 4)),
-                                    memberCount: group.memberCount
-                                )
+            ScrollView(showsIndicators: false) {
+                VStack(spacing: 0) {
+                    if !viewModel.isAddMode {
+                        ScrollableHeaderTitle("공유")
+                    }
+
+                    if viewModel.groups.isEmpty, viewModel.hasLoadedGroups, !viewModel.isAddMode {
+                        ShareCollectionEmptyView(onCreate: viewModel.presentCreateSheet)
+                            .frame(maxWidth: .infinity)
+                            .containerRelativeFrame(.vertical) { length, _ in
+                                max(length - FloatingHeaderLayout.scrollableTitleLayoutHeight, 0)
                             }
-                            .buttonStyle(StaticButtonStyle())
-                            .accessibilityLabel("\(group.name), \(group.memberCount)명")
-                            .task {
-                                await viewModel.loadMoreGroupsIfNeeded(currentGroupID: group.id)
+                    } else {
+                        LazyVStack(spacing: 12) {
+                            ForEach(viewModel.groups) { group in
+                                Button {
+                                    onOpenGroup(group.id)
+                                } label: {
+                                    ShareAlbumCard(
+                                        thumbnail: nil,
+                                        title: group.name,
+                                        date: group.date,
+                                        profileImages: Array(repeating: nil, count: min(group.memberCount, 4)),
+                                        memberCount: group.memberCount
+                                    )
+                                }
+                                .buttonStyle(StaticButtonStyle())
+                                .accessibilityLabel("\(group.name), \(group.memberCount)명")
+                                .task {
+                                    await viewModel.loadMoreGroupsIfNeeded(currentGroupID: group.id)
+                                }
                             }
                         }
+                        .padding(.horizontal, 16)
+                        .padding(
+                            .top,
+                            viewModel.isAddMode
+                                ? FloatingHeaderLayout.roundedIconButtonTop + FloatingHeaderLayout.buttonHeight + 16
+                                : FloatingHeaderLayout.scrollableTitleContentSpacing
+                        )
+                        .padding(.bottom, viewModel.isAddMode ? 130 : 24)
                     }
-                    .padding(.horizontal, 16)
-                    .padding(.top, 69)
-                    .padding(.bottom, viewModel.isAddMode ? 130 : 24)
                 }
-                .refreshable {
-                    await viewModel.loadGroups(refresh: true)
-                }
+            }
+            .ignoresSafeArea(edges: .top)
+            .refreshable {
+                await viewModel.loadGroups(refresh: true)
             }
         }
         .overlay(alignment: .topLeading) {
             if viewModel.isAddMode {
                 RoundedTextButton(title: "취소", style: .cancel, action: viewModel.exitAddMode)
-                    .padding(.top, 14)
-                    .padding(.leading, 16)
-            } else {
-                Text("공유")
-                    .font(.t1_sb)
-                    .foregroundStyle(.grey900)
-                    .frame(height: 44)
                     .padding(.top, 14)
                     .padding(.leading, 16)
             }

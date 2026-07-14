@@ -11,6 +11,9 @@ enum FloatingHeaderLayout {
     static let buttonHeight: CGFloat = 44
     static let roundedIconButtonTop: CGFloat = 68
     static let mainProfileButtonTop: CGFloat = 66
+    static let scrollableTitleTop: CGFloat = 71.5
+    static let scrollableTitleLayoutHeight = scrollableTitleTop + buttonHeight
+    static let scrollableTitleContentSpacing: CGFloat = 12.5
     static let horizontalPadding: CGFloat = 16
 }
 
@@ -91,6 +94,34 @@ struct FloatingHeaderBar<Content: View>: View {
                     alignment: .topLeading
                 )
         }
+    }
+}
+
+struct ScrollableHeaderTitle: View {
+    let title: String
+    let isVisible: Bool
+    let layoutHeight: CGFloat
+
+    init(
+        _ title: String,
+        isVisible: Bool = true,
+        layoutHeight: CGFloat = FloatingHeaderLayout.scrollableTitleLayoutHeight
+    ) {
+        self.title = title
+        self.isVisible = isVisible
+        self.layoutHeight = layoutHeight
+    }
+
+    var body: some View {
+        Text(title)
+            .font(.t1_sb)
+            .foregroundStyle(.grey900)
+            .frame(maxWidth: .infinity, height: FloatingHeaderLayout.buttonHeight, alignment: .leading)
+            .padding(.top, FloatingHeaderLayout.scrollableTitleTop)
+            .padding(.horizontal, FloatingHeaderLayout.horizontalPadding)
+            .frame(maxWidth: .infinity, height: layoutHeight, alignment: .topLeading)
+            .opacity(isVisible ? 1 : 0)
+            .accessibilityHidden(!isVisible)
     }
 }
 

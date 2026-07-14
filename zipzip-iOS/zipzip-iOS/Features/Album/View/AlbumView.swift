@@ -37,7 +37,6 @@ struct AlbumView: View {
 
             ScrollView(showsIndicators: false) {
                 AlbumTitleHeader(isVisible: !viewModel.isSelectionMode)
-                    .frame(height: 54, alignment: .bottom)
 
                 if !viewModel.albums.isEmpty {
                     LazyVGrid(
@@ -63,6 +62,7 @@ struct AlbumView: View {
                     }
                 }
             }
+            .ignoresSafeArea(edges: .top)
 
             if viewModel.albums.isEmpty {
                 AlbumCollectionEmptyView(onStartTap: viewModel.presentCreateAlbumSheet)
@@ -414,13 +414,7 @@ private struct AlbumTitleHeader: View {
     let isVisible: Bool
 
     var body: some View {
-        Text("사진집")
-            .font(.t1_sb)
-            .foregroundStyle(.grey900)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, 16)
-            .opacity(isVisible ? 1 : 0)
-            .accessibilityHidden(!isVisible)
+        ScrollableHeaderTitle("사진집", isVisible: isVisible)
     }
 }
 
