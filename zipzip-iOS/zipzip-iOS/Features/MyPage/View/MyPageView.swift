@@ -224,8 +224,10 @@ struct MyPageView: View {
     }
 }
 
-#Preview {
-    MyPageView()
-        .environment(Router())
-        .environment(AuthenticationState.preview())
-}
+#if DEBUG
+    #Preview {
+        MyPageView()
+            .environment(Router())
+            .environment(AuthenticationState.preview())
+    }
+#endif

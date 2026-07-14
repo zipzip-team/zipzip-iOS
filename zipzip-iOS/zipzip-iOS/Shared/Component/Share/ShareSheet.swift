@@ -306,14 +306,16 @@ private struct ShareDestinationRow: View {
     }
 }
 
-#Preview {
-    ShareSheet(
-        albums: Album.samples,
-        sharedAlbums: Album.sharedSamples,
-        shareAlbums: ShareAlbum.samples,
-        onDismiss: {}
-    )
-    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
-    .background(.black)
-    .environment(AuthenticationState.preview())
-}
+#if DEBUG
+    #Preview {
+        ShareSheet(
+            albums: Album.samples,
+            sharedAlbums: Album.sharedSamples,
+            shareAlbums: ShareAlbum.samples,
+            onDismiss: {}
+        )
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+        .background(.black)
+        .environment(AuthenticationState.preview())
+    }
+#endif

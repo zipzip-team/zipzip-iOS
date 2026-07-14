@@ -594,28 +594,29 @@ private struct ShareAlbumManagementSheet: View {
     }
 }
 
-#Preview("Share Login", traits: .fixedLayout(width: 390, height: 844)) {
-    ShareViewPreview(isLoggedIn: false, groups: ShareAlbum.samples)
-}
+#if DEBUG
+    #Preview("Share Login", traits: .fixedLayout(width: 390, height: 844)) {
+        ShareViewPreview(isLoggedIn: false, groups: ShareAlbum.samples)
+    }
 
-#Preview("Share List", traits: .fixedLayout(width: 390, height: 844)) {
-    ShareViewPreview(isLoggedIn: true, groups: ShareAlbum.samples)
-}
+    #Preview("Share List", traits: .fixedLayout(width: 390, height: 844)) {
+        ShareViewPreview(isLoggedIn: true, groups: ShareAlbum.samples)
+    }
 
-#Preview("Share Empty", traits: .fixedLayout(width: 390, height: 844)) {
-    ShareViewPreview(isLoggedIn: true, groups: [])
-}
+    #Preview("Share Empty", traits: .fixedLayout(width: 390, height: 844)) {
+        ShareViewPreview(isLoggedIn: true, groups: [])
+    }
 
 private struct ShareViewPreview: View {
     @State private var authenticationState: AuthenticationState
     @State private var viewModel: ShareViewModel
     @State private var container = DIContainer()
 
-    init(isLoggedIn: Bool, groups: [ShareAlbum]) {
-        let authenticationState = AuthenticationState.preview(isLoggedIn: isLoggedIn)
-        _authenticationState = State(initialValue: authenticationState)
-        _viewModel = State(initialValue: ShareViewModel(groups: groups))
-    }
+        init(isLoggedIn: Bool, groups: [ShareAlbum]) {
+            let authenticationState = AuthenticationState.preview(isLoggedIn: isLoggedIn)
+            _authenticationState = State(initialValue: authenticationState)
+            _viewModel = State(initialValue: ShareViewModel(groups: groups))
+        }
 
     var body: some View {
         ShareView(viewModel: viewModel)
@@ -623,4 +624,4 @@ private struct ShareViewPreview: View {
             .environment(container)
             .environment(Router())
     }
-}
+#endif
