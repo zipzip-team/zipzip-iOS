@@ -450,32 +450,34 @@ struct AlbumHeaderActionButton: View {
     }
 }
 
-#Preview("Album View", traits: .fixedLayout(width: 390, height: 844)) {
-    AlbumViewPreview(albums: AlbumViewItem.samples)
-}
-
-#Preview("Album View Empty", traits: .fixedLayout(width: 390, height: 844)) {
-    AlbumViewPreview(albums: [])
-}
-
-private struct AlbumViewPreview: View {
-    @State private var selection: NavbarTab = .album
-    @State private var viewModel = AlbumViewModel(albums: AlbumViewItem.samples)
-
-    init(albums: [AlbumViewItem]) {
-        _viewModel = State(initialValue: AlbumViewModel(albums: albums))
+#if DEBUG
+    #Preview("Album View", traits: .fixedLayout(width: 390, height: 844)) {
+        AlbumViewPreview(albums: AlbumViewItem.samples)
     }
 
-    var body: some View {
-        AlbumView(viewModel: viewModel, shareViewModel: ShareViewModel())
-            .safeAreaInset(edge: .bottom, spacing: 0) {
-                if !viewModel.isSelectionMode {
-                    Navbar(selection: selection) { selection = $0 }
-                        .padding(.bottom, 28)
-                        .ignoresSafeArea(.container, edges: .bottom)
+    #Preview("Album View Empty", traits: .fixedLayout(width: 390, height: 844)) {
+        AlbumViewPreview(albums: [])
+    }
+
+    private struct AlbumViewPreview: View {
+        @State private var selection: NavbarTab = .album
+        @State private var viewModel = AlbumViewModel(albums: AlbumViewItem.samples)
+
+        init(albums: [AlbumViewItem]) {
+            _viewModel = State(initialValue: AlbumViewModel(albums: albums))
+        }
+
+        var body: some View {
+            AlbumView(viewModel: viewModel, shareViewModel: ShareViewModel())
+                .safeAreaInset(edge: .bottom, spacing: 0) {
+                    if !viewModel.isSelectionMode {
+                        Navbar(selection: selection) { selection = $0 }
+                            .padding(.bottom, 28)
+                            .ignoresSafeArea(.container, edges: .bottom)
+                    }
                 }
-            }
-            .environment(AuthenticationState.preview())
-            .environment(Router())
+                .environment(AuthenticationState.preview())
+                .environment(Router())
+        }
     }
-}
+#endif

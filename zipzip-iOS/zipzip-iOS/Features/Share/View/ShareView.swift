@@ -604,36 +604,38 @@ private struct ShareAlbumManagementSheet: View {
     }
 }
 
-#Preview("Share Login", traits: .fixedLayout(width: 390, height: 844)) {
-    ShareViewPreview(isLoggedIn: false, groups: [])
-}
-
-#Preview("Share List", traits: .fixedLayout(width: 390, height: 844)) {
-    ShareViewPreview(
-        isLoggedIn: true,
-        groups: [ShareAlbum(name: "집집팟", date: .now, memberCount: 4)]
-    )
-}
-
-#Preview("Share Empty", traits: .fixedLayout(width: 390, height: 844)) {
-    ShareViewPreview(isLoggedIn: true, groups: [])
-}
-
-private struct ShareViewPreview: View {
-    @State private var authenticationState: AuthenticationState
-    @State private var viewModel: ShareViewModel
-    @State private var container = DIContainer()
-
-    init(isLoggedIn: Bool, groups: [ShareAlbum]) {
-        let authenticationState = AuthenticationState.preview(isLoggedIn: isLoggedIn)
-        _authenticationState = State(initialValue: authenticationState)
-        _viewModel = State(initialValue: ShareViewModel(groups: groups))
+#if DEBUG
+    #Preview("Share Login", traits: .fixedLayout(width: 390, height: 844)) {
+        ShareViewPreview(isLoggedIn: false, groups: [])
     }
 
-    var body: some View {
-        ShareView(viewModel: viewModel)
-            .environment(authenticationState)
-            .environment(container)
-            .environment(Router())
+    #Preview("Share List", traits: .fixedLayout(width: 390, height: 844)) {
+        ShareViewPreview(
+            isLoggedIn: true,
+            groups: [ShareAlbum(name: "집집팟", date: .now, memberCount: 4)]
+        )
     }
-}
+
+    #Preview("Share Empty", traits: .fixedLayout(width: 390, height: 844)) {
+        ShareViewPreview(isLoggedIn: true, groups: [])
+    }
+
+    private struct ShareViewPreview: View {
+        @State private var authenticationState: AuthenticationState
+        @State private var viewModel: ShareViewModel
+        @State private var container = DIContainer()
+
+        init(isLoggedIn: Bool, groups: [ShareAlbum]) {
+            let authenticationState = AuthenticationState.preview(isLoggedIn: isLoggedIn)
+            _authenticationState = State(initialValue: authenticationState)
+            _viewModel = State(initialValue: ShareViewModel(groups: groups))
+        }
+
+        var body: some View {
+            ShareView(viewModel: viewModel)
+                .environment(authenticationState)
+                .environment(container)
+                .environment(Router())
+        }
+    }
+#endif

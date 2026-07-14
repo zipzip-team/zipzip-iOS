@@ -119,7 +119,9 @@ private struct ShareLoginScene: View {
     }
 }
 
-#Preview("Share Login", traits: .fixedLayout(width: 390, height: 844)) {
-    ShareLoginView()
-        .environment(AuthenticationState.preview())
-}
+#if DEBUG
+    #Preview("Share Login", traits: .fixedLayout(width: 390, height: 844)) {
+        ShareLoginView()
+            .environment(AuthenticationState.preview())
+    }
+#endif

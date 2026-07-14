@@ -417,11 +417,13 @@ private struct ShareImportHeader: View {
     }
 }
 
-#Preview("Share Group Detail", traits: .fixedLayout(width: 390, height: 844)) {
-    let group = ShareAlbum(name: "집집팟", date: .now, memberCount: 4)
-    let viewModel = ShareViewModel(groups: [group])
-    ShareGroupDetailView(groupID: group.id, viewModel: viewModel, personalAlbums: [])
-        .environment(AuthenticationState.preview(isLoggedIn: true))
-        .environment(DIContainer())
-        .environment(Router())
-}
+#if DEBUG
+    #Preview("Share Group Detail", traits: .fixedLayout(width: 390, height: 844)) {
+        let group = ShareAlbum(name: "집집팟", date: .now, memberCount: 4)
+        let viewModel = ShareViewModel(groups: [group])
+        ShareGroupDetailView(groupID: group.id, viewModel: viewModel, personalAlbums: [])
+            .environment(AuthenticationState.preview(isLoggedIn: true))
+            .environment(DIContainer())
+            .environment(Router())
+    }
+#endif
