@@ -11,14 +11,14 @@ struct MainView: View {
     @Environment(Router.self) private var router
 
     private enum Layout {
-        static let heroHeight: CGFloat = 402
+        static let heroHeight: CGFloat = 400
         static let sectionSpacing: CGFloat = 32
         static let horizontalPadding: CGFloat = 16
     }
 
     var body: some View {
         ZStack(alignment: .top) {
-            Color.orange30
+            Color.white00
                 .ignoresSafeArea()
 
             ScrollView(showsIndicators: false) {
@@ -35,9 +35,23 @@ struct MainView: View {
     }
 
     private var heroSection: some View {
-        Rectangle()
-            .fill(.grey70)
-            .frame(height: Layout.heroHeight)
+        ZStack {
+            Color.orange30
+
+            GeometryReader { proxy in
+                Image(.zip01)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(
+                        width: proxy.size.width,
+                        height: Layout.heroHeight,
+                        alignment: .bottomTrailing
+                    )
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .frame(height: Layout.heroHeight)
+        .clipped()
     }
 
     private var unresolvedPhotosSection: some View {
@@ -57,22 +71,22 @@ struct MainView: View {
                     HomePhotoCard(
                         eyebrow: "어딜 다녀왔더라?",
                         title: "장소를 모르는 사진",
-                        backgroundColor: .orange400,
-                        imageWidth: 112
+                        backgroundColor: .orange200,
+                        image: .homeCard01
                     )
 
                     HomePhotoCard(
                         eyebrow: "어떤 사진을 찍었지?",
                         title: "최근 저장된 사진",
-                        backgroundColor: Color(red: 0.74, green: 0.87, blue: 0.94),
-                        imageWidth: 112
+                        backgroundColor: .skyblue500,
+                        image: .homeCard02
                     )
 
                     HomePhotoCard(
                         eyebrow: "어떤 걸로 찍었지?",
                         title: "등록된 기기 확인",
-                        backgroundColor: .yellow500,
-                        imageWidth: 112
+                        backgroundColor: .yellow400,
+                        image: .homeCard03
                     )
                 }
             }
@@ -82,14 +96,10 @@ struct MainView: View {
 
     private var floatingHeader: some View {
         HStack {
-            Button {} label: {
-                Text("logo")
-                    .font(.b2_md)
-                    .foregroundStyle(.grey1000)
-                    .frame(width: 44, height: 44)
-                    .background(.grey200, in: RoundedRectangle(cornerRadius: 6.67, style: .continuous))
-            }
-            .buttonStyle(.plain)
+            Image(
+                .badgeLogo
+            )
+            .frame(width: 44, height: 44)
 
             Spacer()
 

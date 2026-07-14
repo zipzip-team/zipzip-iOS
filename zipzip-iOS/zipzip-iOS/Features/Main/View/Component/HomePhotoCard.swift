@@ -11,7 +11,7 @@ struct HomePhotoCard: View {
     let eyebrow: String
     let title: String
     let backgroundColor: Color
-    let imageWidth: CGFloat
+    let image: ImageResource
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -30,9 +30,8 @@ struct HomePhotoCard: View {
             Spacer(minLength: 12)
 
             ZStack(alignment: .bottomTrailing) {
-                Rectangle()
-                    .fill(.grey100)
-                    .frame(width: imageWidth, height: 118)
+                Image(image)
+                    .frame(width: 120, height: 120)
                     .frame(maxWidth: .infinity, alignment: .leading)
 
                 HomePhotoCardButton {}
@@ -51,7 +50,7 @@ struct HomePhotoCard: View {
         eyebrow: "어딜 다녀왔더라?",
         title: "장소를 모르는 사진",
         backgroundColor: .orange400,
-        imageWidth: 112
+        image: .homeCard01
     )
     .padding()
     .background(.orange30)
