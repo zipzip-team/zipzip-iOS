@@ -79,7 +79,7 @@ struct RootTabView: View {
                 },
                 .init(icon: .delete, title: "삭제") { pictureViewModel.requestDelete() }
             ])
-            .padding(.bottom, 28)
+            .padding(.bottom, 26.5)
             .ignoresSafeArea(.container, edges: .bottom)
         } else if showsNavbar {
             Navbar(selection: selection, onSelect: selectTab)

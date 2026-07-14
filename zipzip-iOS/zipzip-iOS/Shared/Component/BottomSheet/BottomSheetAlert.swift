@@ -70,7 +70,7 @@ struct BottomSheetAlert: View {
             }
             .padding(.top, 44)
             .padding(.horizontal, 16)
-            .padding(.bottom, 15)
+            .padding(.bottom, 31.5)
         }
         .frame(maxWidth: .infinity)
         .background(.grey950, in: bottomSheetAlertShape)
