@@ -33,7 +33,7 @@ struct MoveInIndicator: View {
         static let dotSpacing: CGFloat = 2
         static let dotSize: CGFloat = 4
         static let dotsHeight: CGFloat = 18
-        static let tooltipGap: CGFloat = 12
+        static let tooltipGap: CGFloat = 8
     }
 
     var body: some View {
