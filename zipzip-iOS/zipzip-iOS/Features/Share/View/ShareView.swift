@@ -43,8 +43,13 @@ struct ShareView: View {
                     title: "공유 그룹 생성하기",
                     placeholder: "공유 그룹 이름",
                     value: $viewModel.groupNameDraft,
+                    isConfirming: viewModel.isCreatingGroup,
                     onCancel: { viewModel.isCreateSheetPresented = false },
-                    onConfirm: viewModel.createGroup
+                    onConfirm: {
+                        Task {
+                            await viewModel.createGroup()
+                        }
+                    }
                 )
             }
             .bottomSheet(
@@ -69,10 +74,6 @@ struct ShareView: View {
             ) { _ in
                 ShareInvitationSheet(
                     code: viewModel.inviteCode,
-                    onPrevious: {
-                        viewModel.isInviteSheetPresented = false
-                        viewModel.isCreateSheetPresented = true
-                    },
                     onComplete: viewModel.completeInvitation
                 )
             }
@@ -113,11 +114,22 @@ struct ShareView: View {
                     ShareGroupManagementSheet(
                         group: group,
                         groupName: $viewModel.shareGroupNameDraft,
-                        inviteCode: viewModel.inviteCode,
+                        inviteCode: viewModel.inviteCode(for: group.id) ?? "",
+                        isInviteCodeAvailable: viewModel.isInviteCodeAvailable(for: group.id),
                         onClose: viewModel.dismissShareManagement,
                         onComplete: viewModel.completeShareManagement,
                         onLeave: leaveManagedShareGroup
                     )
+                    .task(id: group.id) {
+                        await viewModel.loadInviteCode(groupID: group.id)
+                    }
+                }
+            }
+            .task(id: authenticationState.isLoggedIn) {
+                if authenticationState.isLoggedIn {
+                    await viewModel.loadGroups()
+                } else {
+                    viewModel.resetRemoteData()
                 }
             }
     }
@@ -146,27 +158,22 @@ struct ShareView: View {
 struct ShareAlbumDetailDestinationView: View {
     @Environment(Router.self) private var router
     let groupID: ShareAlbum.ID
-    let albumID: Album.ID
+    let albumID: SharedAlbum.ID
     let viewModel: ShareViewModel
 
     var body: some View {
-        if let group = viewModel.group(withID: groupID),
-           let album = viewModel.album(groupID: groupID, albumID: albumID) {
+        if let album = viewModel.album(groupID: groupID, albumID: albumID) {
             AlbumDetailView(
                 album: .init(
-                    id: album.id,
+                    id: 0,
                     title: album.name,
-                    createdAt: group.date,
+                    createdAt: album.createdAt,
                     photoCount: album.count
                 ),
-                viewModel: detailViewModel
-            ) { detailViewModel in
-                AlbumDetailGalleryPlaceholderView(
-                    photoCount: album.count,
-                    showsSelectionControls: detailViewModel.isSelectionMode,
-                    selectedPhotoIDs: detailViewModel.selectedPhotoIDs,
-                    onSelectPhoto: detailViewModel.togglePhotoSelection
-                )
+                viewModel: AlbumDetailViewModel(),
+                moveAlbums: []
+            ) { _ in
+                EmptyView()
             }
         } else {
             ContentUnavailableView("사진집을 찾을 수 없어요", systemImage: "photo.on.rectangle")
@@ -183,20 +190,6 @@ struct ShareAlbumDetailDestinationView: View {
                 }
         }
     }
-
-    private var detailViewModel: AlbumDetailViewModel {
-        AlbumDetailViewModel(
-            actions: .init(
-                onRename: { name in
-                    viewModel.renameAlbum(groupID: groupID, albumID: albumID, to: name)
-                },
-                onDelete: {
-                    viewModel.removeAlbums([albumID], from: groupID)
-                    router.pop()
-                }
-            )
-        )
-    }
 }
 
 private struct ShareGroupListView: View {
@@ -208,7 +201,7 @@ private struct ShareGroupListView: View {
             Color.orange30
                 .ignoresSafeArea()
 
-            if viewModel.groups.isEmpty, !viewModel.isAddMode {
+            if viewModel.groups.isEmpty, viewModel.hasLoadedGroups, !viewModel.isAddMode {
                 ShareCollectionEmptyView(onCreate: viewModel.presentCreateSheet)
             } else {
                 ScrollView(showsIndicators: false) {
@@ -227,11 +220,17 @@ private struct ShareGroupListView: View {
                             }
                             .buttonStyle(StaticButtonStyle())
                             .accessibilityLabel("\(group.name), \(group.memberCount)명")
+                            .task {
+                                await viewModel.loadMoreGroupsIfNeeded(currentGroupID: group.id)
+                            }
                         }
                     }
                     .padding(.horizontal, 16)
                     .padding(.top, 69)
                     .padding(.bottom, viewModel.isAddMode ? 130 : 24)
+                }
+                .refreshable {
+                    await viewModel.loadGroups(refresh: true)
                 }
             }
         }
@@ -364,6 +363,7 @@ private struct ShareEntryFormSheet: View {
     let title: String
     let placeholder: String
     @Binding var value: String
+    var isConfirming = false
     let onCancel: () -> Void
     let onConfirm: () -> Void
 
@@ -375,6 +375,7 @@ private struct ShareEntryFormSheet: View {
                     .foregroundStyle(.grey400)
 
                 TextInput(placeholder, text: $value)
+                    .disabled(isConfirming)
 
                 Spacer(minLength: 0)
 
@@ -386,6 +387,7 @@ private struct ShareEntryFormSheet: View {
                         action: onConfirm
                     )
                 }
+                .disabled(isConfirming)
             }
             .padding(.horizontal, 16)
             .padding(.top, 12)
@@ -394,7 +396,7 @@ private struct ShareEntryFormSheet: View {
     }
 
     private var isConfirmDisabled: Bool {
-        value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        isConfirming || value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 }
 
@@ -438,7 +440,6 @@ private struct ShareJoinConfirmationSheet: View {
 
 private struct ShareInvitationSheet: View {
     let code: String
-    let onPrevious: () -> Void
     let onComplete: () -> Void
 
     var body: some View {
@@ -464,10 +465,7 @@ private struct ShareInvitationSheet: View {
 
                 Spacer(minLength: 0)
 
-                HStack(spacing: 16) {
-                    CommonButton(title: "이전", property1: .secondary, action: onPrevious)
-                    CommonButton(title: "완료", property1: .cta, action: onComplete)
-                }
+                CommonButton(title: "완료", property1: .cta, action: onComplete)
             }
             .padding(.horizontal, 16)
             .padding(.top, 12)
@@ -591,31 +589,45 @@ private struct ShareAlbumManagementSheet: View {
     }
 }
 
-#Preview("Share Login", traits: .fixedLayout(width: 390, height: 844)) {
-    ShareViewPreview(isLoggedIn: false, groups: ShareAlbum.samples)
-}
-
-#Preview("Share List", traits: .fixedLayout(width: 390, height: 844)) {
-    ShareViewPreview(isLoggedIn: true, groups: ShareAlbum.samples)
-}
-
-#Preview("Share Empty", traits: .fixedLayout(width: 390, height: 844)) {
-    ShareViewPreview(isLoggedIn: true, groups: [])
-}
-
-private struct ShareViewPreview: View {
-    @State private var authenticationState: AuthenticationState
-    @State private var viewModel: ShareViewModel
-
-    init(isLoggedIn: Bool, groups: [ShareAlbum]) {
-        let authenticationState = AuthenticationState.preview(isLoggedIn: isLoggedIn)
-        _authenticationState = State(initialValue: authenticationState)
-        _viewModel = State(initialValue: ShareViewModel(groups: groups))
+#if DEBUG
+    #Preview("Share Login", traits: .fixedLayout(width: 390, height: 844)) {
+        ShareViewPreview(isLoggedIn: false, groups: [])
     }
 
-    var body: some View {
-        ShareView(viewModel: viewModel)
-            .environment(authenticationState)
-            .environment(Router())
+    #Preview("Share List", traits: .fixedLayout(width: 390, height: 844)) {
+        ShareViewPreview(
+            isLoggedIn: true,
+            groups: [ShareAlbum(name: "집집팟", date: .now, memberCount: 4)]
+        )
     }
-}
+
+    #Preview("Share Empty", traits: .fixedLayout(width: 390, height: 844)) {
+        ShareViewPreview(isLoggedIn: true, groups: [])
+    }
+
+    private struct ShareViewPreview: View {
+        @State private var authenticationState: AuthenticationState
+        @State private var viewModel: ShareViewModel
+        @State private var container = DIContainer()
+
+        init(isLoggedIn: Bool, groups: [ShareAlbum]) {
+            let authenticationState = AuthenticationState.preview(isLoggedIn: isLoggedIn)
+            let container = DIContainer()
+            _authenticationState = State(initialValue: authenticationState)
+            _viewModel = State(
+                initialValue: ShareViewModel(
+                    groups: groups,
+                    repository: container.shareGroupRepository
+                )
+            )
+            _container = State(initialValue: container)
+        }
+
+        var body: some View {
+            ShareView(viewModel: viewModel)
+                .environment(authenticationState)
+                .environment(container)
+                .environment(Router())
+        }
+    }
+#endif

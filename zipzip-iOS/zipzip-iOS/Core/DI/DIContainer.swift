@@ -12,6 +12,7 @@ import Observation
 final class DIContainer {
     let authenticationState: AuthenticationState
     let networkProvider: NetworkProvider
+    let shareGroupRepository: ShareGroupRepository
     let registeredDeviceStore: RegisteredDeviceStore
 
     init(
@@ -31,12 +32,16 @@ final class DIContainer {
             credentialController: credentialController
         )
         self.authenticationState = authenticationState
-        self.networkProvider = AuthenticatedNetworkProvider(
+        let authenticatedNetworkProvider = AuthenticatedNetworkProvider(
             provider: publicNetworkProvider,
             credentialController: credentialController,
             onAuthenticationLost: { [weak authenticationState] in
                 authenticationState?.handleAuthenticationLost()
             }
+        )
+        self.networkProvider = authenticatedNetworkProvider
+        self.shareGroupRepository = DefaultShareGroupRepository(
+            api: DefaultShareGroupAPI(networkProvider: authenticatedNetworkProvider)
         )
         self.registeredDeviceStore = registeredDeviceStore ?? DefaultRegisteredDeviceStore()
     }

@@ -10,14 +10,16 @@ import SwiftUI
 struct AlbumView: View {
     @Environment(Router.self) private var router
     @State private var viewModel: AlbumViewModel
+    let shareViewModel: ShareViewModel
 
     private let columns = [
         GridItem(.flexible(), spacing: 17),
         GridItem(.flexible(), spacing: 17)
     ]
 
-    init(viewModel: AlbumViewModel) {
+    init(viewModel: AlbumViewModel, shareViewModel: ShareViewModel) {
         _viewModel = State(initialValue: viewModel)
+        self.shareViewModel = shareViewModel
     }
 
     var body: some View {
@@ -136,7 +138,7 @@ struct AlbumView: View {
         }
         .bottomSheet(isPresented: $viewModel.isShareAlbumSheetPresented, detents: [.full]) { _ in
             AlbumShareDestinationSheet(
-                shareAlbums: ShareAlbum.samples,
+                shareAlbums: shareViewModel.groups,
                 onCancel: viewModel.dismissShareAlbumSheet,
                 onComplete: viewModel.completeShareAlbumMove
             )
@@ -157,10 +159,12 @@ struct AlbumDetailDestinationView: View {
     @State private var lastKnownAlbum: AlbumViewItem?
 
     let viewModel: AlbumViewModel
+    let shareViewModel: ShareViewModel
     let albumID: AlbumViewItem.ID
 
-    init(viewModel: AlbumViewModel, albumID: AlbumViewItem.ID) {
+    init(viewModel: AlbumViewModel, shareViewModel: ShareViewModel, albumID: AlbumViewItem.ID) {
         self.viewModel = viewModel
+        self.shareViewModel = shareViewModel
         self.albumID = albumID
         _lastKnownAlbum = State(initialValue: viewModel.album(for: albumID))
     }
@@ -174,13 +178,17 @@ struct AlbumDetailDestinationView: View {
                     AlbumDetailEmptyView(
                         album: album.detailItem,
                         viewModel: detailViewModel,
-                        moveAlbums: viewModel.moveDestinations(excluding: albumID)
+                        moveAlbums: viewModel.moveDestinations(excluding: albumID),
+                        shareAlbums: shareViewModel.groups,
+                        onOpenShareAlbum: loadSharedAlbums
                     )
                 } else {
                     AlbumDetailView(
                         album: album.detailItem,
                         viewModel: detailViewModel,
-                        moveAlbums: viewModel.moveDestinations(excluding: albumID)
+                        moveAlbums: viewModel.moveDestinations(excluding: albumID),
+                        shareAlbums: shareViewModel.groups,
+                        onOpenShareAlbum: loadSharedAlbums
                     ) { detailViewModel in
                         AlbumDetailGalleryPlaceholderView(
                             sections: photoSections,
@@ -202,6 +210,10 @@ struct AlbumDetailDestinationView: View {
                 }
             }
         }
+    }
+
+    private func loadSharedAlbums(groupID: ShareAlbum.ID) async {
+        await shareViewModel.loadSharedAlbums(groupID: groupID)
     }
 }
 
@@ -364,7 +376,7 @@ private struct AlbumShareDestinationSheet: View {
                 if authenticationState.isLoggedIn {
                     AlbumSheetTextButton(
                         title: "완료",
-                        isDisabled: selectedShareAlbumID == nil,
+                        isDisabled: true,
                         action: completeSelection
                     )
                 }
@@ -434,32 +446,40 @@ struct AlbumHeaderActionButton: View {
     }
 }
 
-#Preview("Album View", traits: .fixedLayout(width: 390, height: 844)) {
-    AlbumViewPreview(albums: AlbumViewItem.samples)
-}
-
-#Preview("Album View Empty", traits: .fixedLayout(width: 390, height: 844)) {
-    AlbumViewPreview(albums: [])
-}
-
-private struct AlbumViewPreview: View {
-    @State private var selection: NavbarTab = .album
-    @State private var viewModel = AlbumViewModel(albums: AlbumViewItem.samples)
-
-    init(albums: [AlbumViewItem]) {
-        _viewModel = State(initialValue: AlbumViewModel(albums: albums))
+#if DEBUG
+    #Preview("Album View", traits: .fixedLayout(width: 390, height: 844)) {
+        AlbumViewPreview(albums: AlbumViewItem.samples)
     }
 
-    var body: some View {
-        AlbumView(viewModel: viewModel)
-            .safeAreaInset(edge: .bottom, spacing: 0) {
-                if !viewModel.isSelectionMode {
-                    Navbar(selection: selection) { selection = $0 }
-                        .padding(.bottom, 28)
-                        .ignoresSafeArea(.container, edges: .bottom)
+    #Preview("Album View Empty", traits: .fixedLayout(width: 390, height: 844)) {
+        AlbumViewPreview(albums: [])
+    }
+
+    private struct AlbumViewPreview: View {
+        @State private var selection: NavbarTab = .album
+        @State private var viewModel = AlbumViewModel(albums: AlbumViewItem.samples)
+        @State private var shareViewModel: ShareViewModel
+
+        init(albums: [AlbumViewItem]) {
+            _viewModel = State(initialValue: AlbumViewModel(albums: albums))
+            _shareViewModel = State(
+                initialValue: ShareViewModel(
+                    repository: DIContainer().shareGroupRepository
+                )
+            )
+        }
+
+        var body: some View {
+            AlbumView(viewModel: viewModel, shareViewModel: shareViewModel)
+                .safeAreaInset(edge: .bottom, spacing: 0) {
+                    if !viewModel.isSelectionMode {
+                        Navbar(selection: selection) { selection = $0 }
+                            .padding(.bottom, 28)
+                            .ignoresSafeArea(.container, edges: .bottom)
+                    }
                 }
-            }
-            .environment(AuthenticationState.preview())
-            .environment(Router())
+                .environment(AuthenticationState.preview())
+                .environment(Router())
+        }
     }
-}
+#endif

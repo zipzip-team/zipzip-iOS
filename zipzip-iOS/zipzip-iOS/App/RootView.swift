@@ -17,7 +17,13 @@ struct RootView: View {
     @State private var photoSync = PhotoSyncCoordinator()
     @State private var albumViewModel = AlbumViewModel()
     @State private var pictureViewModel = PictureViewModel()
-    @State private var shareViewModel = ShareViewModel()
+    @State private var shareViewModel: ShareViewModel
+
+    init(shareGroupRepository: ShareGroupRepository) {
+        _shareViewModel = State(
+            initialValue: ShareViewModel(repository: shareGroupRepository)
+        )
+    }
 
     var body: some View {
         @Bindable var router = router
@@ -37,6 +43,7 @@ struct RootView: View {
                 }
             }
             .task {
+                KeyboardPrewarmer.prewarm()
                 guard hasCompletedOnboarding else { return }
                 photoSync.startIfNeeded()
                 await albumViewModel.loadAlbums()
@@ -64,7 +71,8 @@ struct RootView: View {
                 case let .filterResult(filters):
                     FilteredPictureView(
                         appliedFilters: filters,
-                        albumViewModel: albumViewModel
+                        albumViewModel: albumViewModel,
+                        shareViewModel: shareViewModel
                     )
                 case let .photoInfoEdit(metadata, localIdentifiers):
                     PhotoInfoEditView(metadata: metadata, localIdentifiers: localIdentifiers)
@@ -72,6 +80,7 @@ struct RootView: View {
                     PhotoDetailView(
                         photo: photo,
                         albums: albumViewModel.shareDestinations,
+                        shareViewModel: shareViewModel,
                         onDelete: { action, currentPhoto in
                             guard action == .deletePermanently else { return false }
                             return await pictureViewModel.deletePhotos(
@@ -85,12 +94,14 @@ struct RootView: View {
                 case let .albumDetail(albumID):
                     AlbumDetailDestinationView(
                         viewModel: albumViewModel,
+                        shareViewModel: shareViewModel,
                         albumID: albumID
                     )
                 case let .albumPhotoDetail(albumID, photo):
                     PhotoDetailView(
                         photo: photo,
                         albums: albumViewModel.shareDestinations,
+                        shareViewModel: shareViewModel,
                         deletionContext: .album,
                         excludedAlbumIDs: [albumID],
                         onDelete: { action, currentPhoto in
@@ -108,7 +119,11 @@ struct RootView: View {
                         onToggleFavorite: togglePhotoFavorite
                     )
                 case let .shareGroup(groupID):
-                    ShareGroupDetailView(groupID: groupID, viewModel: shareViewModel)
+                    ShareGroupDetailView(
+                        groupID: groupID,
+                        viewModel: shareViewModel,
+                        personalAlbums: albumViewModel.shareDestinations
+                    )
                 case let .shareAlbum(groupID, albumID):
                     ShareAlbumDetailDestinationView(
                         groupID: groupID,
@@ -116,7 +131,12 @@ struct RootView: View {
                         viewModel: shareViewModel
                     )
                 case let .shareImport(groupID):
-                    ShareImportView(groupID: groupID, viewModel: shareViewModel)
+                    ShareImportView(
+                        groupID: groupID,
+                        viewModel: shareViewModel,
+                        albums: albumViewModel.shareDestinations,
+                        photoSections: pictureViewModel.sections
+                    )
                 case .myPage:
                     MyPageView()
                 case .registeredDeviceManagement:
@@ -133,6 +153,13 @@ struct RootView: View {
                 minimumDuration: hasCompletedOnboarding ? .seconds(2) : .zero
             )
             await authenticationState.checkAppleCredentialState()
+        }
+        .task(id: authenticationState.isLoggedIn) {
+            if authenticationState.isLoggedIn {
+                await shareViewModel.loadGroups()
+            } else {
+                shareViewModel.resetRemoteData()
+            }
         }
         .onChange(of: scenePhase) { _, phase in
             guard phase == .active else { return }

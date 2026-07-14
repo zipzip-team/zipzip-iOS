@@ -49,6 +49,7 @@ struct PhotoDetailView: View {
 
     @State private var photo: Photo
     private let albums: [Album]
+    private let shareViewModel: ShareViewModel?
     let deletionContext: PhotoDeletionContext
     private let excludedAlbumIDs: Set<Album.ID>
     private let onDelete: (PhotoDeletionAction, Photo) async -> Bool
@@ -78,6 +79,7 @@ struct PhotoDetailView: View {
     init(
         photo: Photo,
         albums: [Album] = Album.samples,
+        shareViewModel: ShareViewModel? = nil,
         deletionContext: PhotoDeletionContext = .gallery,
         excludedAlbumIDs: Set<Album.ID> = [],
         onDelete: @escaping (PhotoDeletionAction, Photo) async -> Bool = { _, _ in true },
@@ -88,6 +90,7 @@ struct PhotoDetailView: View {
     ) {
         _photo = State(initialValue: photo)
         self.albums = albums
+        self.shareViewModel = shareViewModel
         self.deletionContext = deletionContext
         self.excludedAlbumIDs = excludedAlbumIDs
         self.onDelete = onDelete
@@ -197,10 +200,10 @@ struct PhotoDetailView: View {
         .bottomSheet(isPresented: $showShareSheet, detents: [.full]) { dismiss in
             ShareSheet(
                 albums: albums,
-                sharedAlbums: Album.sharedSamples,
-                shareAlbums: ShareAlbum.samples,
+                shareAlbums: shareViewModel?.groups ?? [],
                 onDismiss: { dismiss() },
                 excludedAlbumIDs: excludedAlbumIDs,
+                onOpenShareAlbum: loadSharedAlbums,
                 onComplete: { destinations in
                     guard !photo.localIdentifier.isEmpty else {
                         return
@@ -228,6 +231,11 @@ struct PhotoDetailView: View {
             onSecondaryTap: handleSecondaryDeleteAction,
             onPrimaryTap: handlePrimaryDeleteAction
         )
+    }
+
+    private func loadSharedAlbums(groupID: ShareAlbum.ID) async {
+        guard let shareViewModel else { return }
+        await shareViewModel.loadSharedAlbums(groupID: groupID)
     }
 
     private var deleteAlertContent: PhotoDeleteAlertContent {
@@ -486,4 +494,5 @@ struct PhotoDetailView: View {
 
 #Preview {
     PhotoDetailView(photo: PhotoSection.sample[0].photos[0])
+        .environment(DIContainer())
 }

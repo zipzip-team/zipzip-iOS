@@ -158,9 +158,7 @@ final class AlbumViewModel {
     }
 
     func completeShareAlbumMove(to _: ShareAlbum) {
-        let movedAlbumIDs = Set(selectedAlbumIDs)
-        albums.removeAll { movedAlbumIDs.contains($0.id) }
-        exitSelectionMode()
+        dismissShareAlbumSheet()
     }
 
     func deleteSelectedAlbums() {
