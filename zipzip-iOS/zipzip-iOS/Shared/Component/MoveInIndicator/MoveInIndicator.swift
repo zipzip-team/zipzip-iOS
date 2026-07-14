@@ -7,9 +7,11 @@ import SwiftUI
 
 struct MoveInIndicator: View {
     var remainingMinutes: Int?
+    var tooltipText: String?
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var isAnimating = false
+    @State private var showTooltip = false
 
     private enum Layout {
         static let horizontalPadding: CGFloat = 18
@@ -18,6 +20,7 @@ struct MoveInIndicator: View {
         static let dotSpacing: CGFloat = 2
         static let dotSize: CGFloat = 4
         static let dotsHeight: CGFloat = 18
+        static let tooltipGap: CGFloat = 8
     }
 
     var body: some View {
@@ -32,9 +35,26 @@ struct MoveInIndicator: View {
         .padding(.vertical, Layout.verticalPadding)
         .background(.white00, in: Capsule())
         .shadow(color: .black.opacity(0.05), radius: 6, x: 0, y: 4)
+        .contentShape(Capsule())
+        .onTapGesture {
+            guard tooltipText != nil else { return }
+            withAnimation(reduceMotion ? nil : .easeOut(duration: 0.15)) {
+                showTooltip.toggle()
+            }
+        }
+        .overlay(alignment: .bottom) {
+            if showTooltip, let tooltipText {
+                MoveInTooltip(text: tooltipText)
+                    .alignmentGuide(VerticalAlignment.bottom) { dimensions in
+                        dimensions[VerticalAlignment.top] - Layout.tooltipGap
+                    }
+                    .transition(.opacity.combined(with: .scale(scale: 0.9, anchor: .top)))
+            }
+        }
         .onAppear { isAnimating = true }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(accessibilityText)
+        .accessibilityHint(tooltipText == nil ? "" : "두 번 탭하면 등록된 사진 수를 볼 수 있습니다.")
     }
 
     private var dots: some View {
@@ -86,7 +106,7 @@ struct MoveInIndicator: View {
         VStack(spacing: 16) {
             MoveInIndicator()
             MoveInIndicator(remainingMinutes: 6)
-            MoveInIndicator(remainingMinutes: 1035)
+            MoveInIndicator(remainingMinutes: 1035, tooltipText: "1234장의 사진이 입주했어요!")
         }
     }
 }

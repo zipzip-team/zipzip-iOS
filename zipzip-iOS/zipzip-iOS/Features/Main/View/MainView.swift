@@ -5,11 +5,14 @@
 //  Created by 성환 on 7/5/26.
 //
 
+import SQLiteData
 import SwiftUI
 
 struct MainView: View {
     @Environment(Router.self) private var router
     @Environment(PhotoSyncCoordinator.self) private var photoSync
+
+    @Fetch(RegisteredPhotoCountRequest()) private var registeredPhotoCount = 0
 
     private enum Layout {
         static let heroHeight: CGFloat = 402
@@ -95,8 +98,13 @@ struct MainView: View {
             Spacer()
 
             if photoSync.isProcessing {
-                MoveInIndicator(remainingMinutes: photoSync.remainingMinutes)
-                    .transition(.opacity)
+                MoveInIndicator(
+                    remainingMinutes: photoSync.remainingMinutes,
+                    tooltipText: registeredPhotoCount > 0
+                        ? "\(registeredPhotoCount)장의 사진이 입주했어요!"
+                        : nil
+                )
+                .transition(.opacity)
 
                 Spacer()
             }
