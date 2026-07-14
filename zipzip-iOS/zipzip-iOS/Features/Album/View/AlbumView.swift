@@ -432,7 +432,7 @@ struct AlbumHeaderActionButton: View {
             ),
             .init(
                 id: "add",
-                icon: .plus,
+                icon: .createStroke,
                 accessibilityLabel: "사진집 추가",
                 action: onAddTap
             )
