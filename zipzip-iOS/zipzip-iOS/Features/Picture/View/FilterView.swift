@@ -18,7 +18,7 @@ struct FilterView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 8) {
                 Color.clear
-                    .frame(height: FloatingHeaderLayout.buttonHeight + 12)
+                    .frame(height: FloatingHeaderLayout.buttonHeight + 22)
 
                 VStack(alignment: .leading, spacing: 16) {
                     deviceSection
