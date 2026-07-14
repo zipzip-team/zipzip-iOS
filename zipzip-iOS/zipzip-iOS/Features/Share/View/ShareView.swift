@@ -10,6 +10,7 @@ import UIKit
 
 struct ShareView: View {
     @Environment(AuthenticationState.self) private var authenticationState
+    @Environment(DIContainer.self) private var container
     @Environment(Router.self) private var router
     let viewModel: ShareViewModel
 
@@ -43,8 +44,16 @@ struct ShareView: View {
                     title: "공유 그룹 생성하기",
                     placeholder: "공유 그룹 이름",
                     value: $viewModel.groupNameDraft,
+                    isConfirming: viewModel.isCreatingGroup,
+                    errorMessage: viewModel.groupCreationErrorMessage,
                     onCancel: { viewModel.isCreateSheetPresented = false },
-                    onConfirm: viewModel.createGroup
+                    onConfirm: {
+                        Task {
+                            await viewModel.createGroup(
+                                using: DefaultShareGroupAPI(networkProvider: container.networkProvider)
+                            )
+                        }
+                    }
                 )
             }
             .bottomSheet(
@@ -364,6 +373,8 @@ private struct ShareEntryFormSheet: View {
     let title: String
     let placeholder: String
     @Binding var value: String
+    var isConfirming = false
+    var errorMessage: String?
     let onCancel: () -> Void
     let onConfirm: () -> Void
 
@@ -375,17 +386,25 @@ private struct ShareEntryFormSheet: View {
                     .foregroundStyle(.grey400)
 
                 TextInput(placeholder, text: $value)
+                    .disabled(isConfirming)
+
+                if let errorMessage {
+                    Text(errorMessage)
+                        .font(.b3_md)
+                        .foregroundStyle(.red)
+                }
 
                 Spacer(minLength: 0)
 
                 HStack(spacing: 16) {
                     CommonButton(title: "취소", property1: .secondary, action: onCancel)
                     CommonButton(
-                        title: "확인",
+                        title: isConfirming ? "생성 중..." : "확인",
                         property1: isConfirmDisabled ? .disabled : .cta,
                         action: onConfirm
                     )
                 }
+                .disabled(isConfirming)
             }
             .padding(.horizontal, 16)
             .padding(.top, 12)
@@ -394,7 +413,7 @@ private struct ShareEntryFormSheet: View {
     }
 
     private var isConfirmDisabled: Bool {
-        value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        isConfirming || value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 }
 
@@ -606,6 +625,7 @@ private struct ShareAlbumManagementSheet: View {
 private struct ShareViewPreview: View {
     @State private var authenticationState: AuthenticationState
     @State private var viewModel: ShareViewModel
+    @State private var container = DIContainer()
 
     init(isLoggedIn: Bool, groups: [ShareAlbum]) {
         let authenticationState = AuthenticationState.preview(isLoggedIn: isLoggedIn)
@@ -616,6 +636,7 @@ private struct ShareViewPreview: View {
     var body: some View {
         ShareView(viewModel: viewModel)
             .environment(authenticationState)
+            .environment(container)
             .environment(Router())
     }
 }
