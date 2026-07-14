@@ -1,15 +1,17 @@
 {
   "images" : [
     {
-      "filename" : "zip_01.png",
+      "filename" : "zip_01 1.png",
       "idiom" : "universal",
       "scale" : "1x"
     },
     {
+      "filename" : "zip_01.png",
       "idiom" : "universal",
       "scale" : "2x"
     },
     {
+      "filename" : "zip_01 2.png",
       "idiom" : "universal",
       "scale" : "3x"
     }
