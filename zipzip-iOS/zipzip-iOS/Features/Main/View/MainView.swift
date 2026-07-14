@@ -35,23 +35,13 @@ struct MainView: View {
     }
 
     private var heroSection: some View {
-        ZStack {
-            Color.orange30
+        ZStack(alignment: .bottomTrailing) {
+            Rectangle()
+                .fill(.orange30)
+                .frame(height: Layout.heroHeight)
 
-            GeometryReader { proxy in
-                Image(.zip01)
-                    .resizable()
-                    .scaledToFit()
-                    .frame(
-                        width: proxy.size.width,
-                        height: Layout.heroHeight,
-                        alignment: .bottomTrailing
-                    )
-            }
+            Image(.zip01)
         }
-        .frame(maxWidth: .infinity)
-        .frame(height: Layout.heroHeight)
-        .clipped()
     }
 
     private var unresolvedPhotosSection: some View {
@@ -72,6 +62,7 @@ struct MainView: View {
                         eyebrow: "어딜 다녀왔더라?",
                         title: "장소를 모르는 사진",
                         backgroundColor: .orange200,
+                        buttonBackgroundColor: .orange100,
                         image: .homeCard01
                     )
 
@@ -79,6 +70,7 @@ struct MainView: View {
                         eyebrow: "어떤 사진을 찍었지?",
                         title: "최근 저장된 사진",
                         backgroundColor: .skyblue500,
+                        buttonBackgroundColor: .skyblue100,
                         image: .homeCard02
                     )
 
@@ -86,6 +78,7 @@ struct MainView: View {
                         eyebrow: "어떤 걸로 찍었지?",
                         title: "등록된 기기 확인",
                         backgroundColor: .yellow400,
+                        buttonBackgroundColor: .white00,
                         image: .homeCard03
                     )
                 }

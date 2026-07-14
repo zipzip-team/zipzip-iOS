@@ -11,6 +11,7 @@ struct HomePhotoCard: View {
     let eyebrow: String
     let title: String
     let backgroundColor: Color
+    let buttonBackgroundColor: Color
     let image: ImageResource
 
     var body: some View {
@@ -34,7 +35,7 @@ struct HomePhotoCard: View {
                     .frame(width: 120, height: 120)
                     .frame(maxWidth: .infinity, alignment: .leading)
 
-                HomePhotoCardButton {}
+                HomePhotoCardButton(backgroundColor: buttonBackgroundColor) {}
                     .padding(.trailing, 8)
                     .padding(.bottom, 8)
             }
@@ -50,6 +51,7 @@ struct HomePhotoCard: View {
         eyebrow: "어딜 다녀왔더라?",
         title: "장소를 모르는 사진",
         backgroundColor: .orange400,
+        buttonBackgroundColor: .white00,
         image: .homeCard01
     )
     .padding()
