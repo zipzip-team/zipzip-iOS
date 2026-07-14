@@ -1,0 +1,237 @@
+//
+//  SharedGroupStore.swift
+//  zipzip-iOS
+//
+
+import Foundation
+import SQLiteData
+
+nonisolated struct SharedGroupStore {
+    private let database: any DatabaseWriter
+
+    init(database: (any DatabaseWriter)? = nil) {
+        if let database {
+            self.database = database
+        } else {
+            @Dependency(\.defaultDatabase) var defaultDatabase
+            self.database = defaultDatabase
+        }
+    }
+
+    func fetchGroups() async throws -> [StoredSharedGroup] {
+        try await database.read { db in
+            let groupRecords = try SharedGroupRecord
+                .order { ($0.updatedAt.desc(), $0.id.asc()) }
+                .fetchAll(db)
+            let albumRecords = try SharedAlbumRecord
+                .order { ($0.updatedAt.desc(), $0.id.asc()) }
+                .fetchAll(db)
+            let albumsByGroupID = Dictionary(grouping: albumRecords, by: \.sharedGroupID)
+
+            return groupRecords.compactMap { groupRecord in
+                guard let id = UUID(uuidString: groupRecord.id) else {
+                    return nil
+                }
+
+                let albums = (albumsByGroupID[groupRecord.id] ?? []).compactMap { record in
+                    guard let albumID = UUID(uuidString: record.id),
+                          let groupID = UUID(uuidString: record.sharedGroupID)
+                    else {
+                        return nil
+                    }
+                    return StoredSharedAlbum(
+                        id: albumID,
+                        sharedGroupID: groupID,
+                        name: record.name,
+                        photoCount: record.photoCount,
+                        createdByUserID: record.createdByUserID.flatMap(UUID.init(uuidString:)),
+                        createdByDisplayName: record.createdByDisplayName,
+                        isCreator: record.isCreator,
+                        createdAt: record.createdAt,
+                        updatedAt: record.updatedAt
+                    )
+                }
+
+                return StoredSharedGroup(
+                    id: id,
+                    name: groupRecord.name,
+                    date: groupRecord.joinedAt ?? groupRecord.createdAt ?? groupRecord.updatedAt,
+                    memberCount: groupRecord.memberCount,
+                    role: groupRecord.myRole,
+                    albums: albums,
+                    sharedAlbumCount: groupRecord.sharedAlbumCount,
+                    photoCount: groupRecord.photoCount,
+                    createdByUserID: groupRecord.createdByUserID.flatMap(UUID.init(uuidString:)),
+                    createdByDisplayName: groupRecord.createdByDisplayName,
+                    updatedAt: groupRecord.updatedAt
+                )
+            }
+        }
+    }
+
+    func upsertGroupSummaries(_ summaries: [ShareGroupSummaryResponse]) async throws {
+        try await database.write { db in
+            for summary in summaries {
+                let id = summary.id.uuidString
+                let existing = try SharedGroupRecord
+                    .where { $0.id.eq(id) }
+                    .fetchOne(db)
+                let updatedAt = Self.date(summary.updatedAt)
+
+                try SharedGroupRecord.upsert {
+                    SharedGroupRecord.Draft(
+                        id: id,
+                        createdByUserID: existing?.createdByUserID,
+                        createdByDisplayName: existing?.createdByDisplayName,
+                        name: summary.name,
+                        inviteCode: existing?.inviteCode,
+                        createdAt: existing?.createdAt,
+                        joinedAt: Self.date(summary.joinedAt),
+                        updatedAt: updatedAt,
+                        memberCount: summary.memberCount,
+                        sharedAlbumCount: summary.sharedAlbumCount,
+                        photoCount: summary.photoCount,
+                        myRole: summary.myRole.rawValue
+                    )
+                }
+                .execute(db)
+            }
+        }
+    }
+
+    func upsertGroupDetail(_ detail: ShareGroupDetailResponse) async throws {
+        try await database.write { db in
+            let id = detail.id.uuidString
+            let existing = try SharedGroupRecord
+                .where { $0.id.eq(id) }
+                .fetchOne(db)
+
+            try SharedGroupRecord.upsert {
+                SharedGroupRecord.Draft(
+                    id: id,
+                    createdByUserID: detail.createdBy.userId?.uuidString,
+                    createdByDisplayName: detail.createdBy.displayName,
+                    name: detail.name,
+                    inviteCode: existing?.inviteCode,
+                    createdAt: Self.date(detail.createdAt),
+                    joinedAt: existing?.joinedAt,
+                    updatedAt: Self.date(detail.updatedAt),
+                    memberCount: detail.memberCount,
+                    sharedAlbumCount: detail.sharedAlbumCount,
+                    photoCount: detail.photoCount,
+                    myRole: detail.myRole.rawValue
+                )
+            }
+            .execute(db)
+        }
+    }
+
+    func upsertSharedAlbums(
+        _ albums: [SharedAlbumResponse],
+        groupID: UUID
+    ) async throws {
+        try await database.write { db in
+            for album in albums {
+                try SharedAlbumRecord.upsert {
+                    SharedAlbumRecord.Draft(
+                        id: album.id.uuidString,
+                        sharedGroupID: groupID.uuidString,
+                        name: album.name,
+                        photoCount: album.photoCount,
+                        createdByUserID: album.createdBy?.userId?.uuidString,
+                        createdByDisplayName: album.createdBy?.displayName,
+                        isCreator: album.isCreator,
+                        createdAt: Self.date(album.createdAt),
+                        updatedAt: Self.date(album.updatedAt)
+                    )
+                }
+                .execute(db)
+            }
+        }
+    }
+
+    func upsertCreatedGroup(_ response: CreateSharedGroupResponse, createdAt: Date = .now) async throws {
+        try await database.write { db in
+            try SharedGroupRecord.upsert {
+                SharedGroupRecord.Draft(
+                    id: response.id.uuidString,
+                    createdByUserID: nil,
+                    createdByDisplayName: nil,
+                    name: response.name,
+                    inviteCode: response.inviteCode,
+                    createdAt: createdAt,
+                    joinedAt: createdAt,
+                    updatedAt: createdAt,
+                    memberCount: 1,
+                    sharedAlbumCount: 0,
+                    photoCount: 0,
+                    myRole: ShareGroupRoleResponse.host.rawValue
+                )
+            }
+            .execute(db)
+        }
+    }
+
+    func updateInviteCode(_ response: InviteCodeResponse) async throws {
+        try await database.write { db in
+            try SharedGroupRecord
+                .update { $0.inviteCode = response.inviteCode }
+                .where { $0.id.eq(response.sharedGroupId.uuidString) }
+                .execute(db)
+        }
+    }
+
+    func fetchInviteCode(groupID: UUID) async throws -> String? {
+        try await database.read { db in
+            try SharedGroupRecord
+                .where { $0.id.eq(groupID.uuidString) }
+                .select(\.inviteCode)
+                .fetchOne(db) ?? nil
+        }
+    }
+
+    func deleteGroup(id: UUID) async throws {
+        try await database.write { db in
+            try SharedGroupRecord
+                .where { $0.id.eq(id.uuidString) }
+                .delete()
+                .execute(db)
+        }
+    }
+
+    private static func date(_ value: String) -> Date {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        if let date = formatter.date(from: value) {
+            return date
+        }
+        formatter.formatOptions = [.withInternetDateTime]
+        return formatter.date(from: value) ?? .now
+    }
+}
+
+nonisolated struct StoredSharedGroup {
+    let id: UUID
+    let name: String
+    let date: Date
+    let memberCount: Int
+    let role: String
+    let albums: [StoredSharedAlbum]
+    let sharedAlbumCount: Int
+    let photoCount: Int
+    let createdByUserID: UUID?
+    let createdByDisplayName: String?
+    let updatedAt: Date
+}
+
+nonisolated struct StoredSharedAlbum {
+    let id: UUID
+    let sharedGroupID: UUID
+    let name: String
+    let photoCount: Int
+    let createdByUserID: UUID?
+    let createdByDisplayName: String?
+    let isCreator: Bool
+    let createdAt: Date
+    let updatedAt: Date
+}
