@@ -8,6 +8,9 @@
 import SwiftUI
 
 struct PictureView: View {
+    @AppStorage("hasSeenPictureIntroduction") private var hasSeenPictureIntroduction = false
+    @State private var showPictureIntroduction = false
+
     let viewModel: PictureViewModel
     let onOpenFilter: () -> Void
     let onOpenPhoto: (Photo) -> Void
@@ -27,10 +30,6 @@ struct PictureView: View {
         return ScrollView {
             VStack(alignment: .leading, spacing: 8) {
                 ScrollableHeaderTitle("사진", isVisible: !viewModel.isSelectionMode)
-
-                if !viewModel.isSelectionMode {
-                    PhotoRecommendationPlaceholder()
-                }
 
                 PhotoGallery(
                     sections: viewModel.sections,
@@ -72,6 +71,18 @@ struct PictureView: View {
                 Task { await viewModel.deleteSelectedPhotos() }
             }
         )
+        .bottomSheetAlert(
+            isPresented: $showPictureIntroduction,
+            title: "세컨폰·디카 사진만 모아봤어요.",
+            message: "날짜가 장소가 어긋난 사진을 바로잡고,\n필요한 사진을 쉽게 찾아 앨범을 정리할 수 있어요.",
+            primaryTitle: "사진 정리하기",
+            onPrimaryTap: { showPictureIntroduction = false }
+        )
+        .onAppear {
+            guard !hasSeenPictureIntroduction else { return }
+            hasSeenPictureIntroduction = true
+            showPictureIntroduction = true
+        }
     }
 
     private var floatingButton: some View {
@@ -89,14 +100,6 @@ struct PictureView: View {
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 4)
-    }
-}
-
-private struct PhotoRecommendationPlaceholder: View {
-    var body: some View {
-        Color.grey100
-            .frame(height: 207)
-            .accessibilityHidden(true)
     }
 }
 

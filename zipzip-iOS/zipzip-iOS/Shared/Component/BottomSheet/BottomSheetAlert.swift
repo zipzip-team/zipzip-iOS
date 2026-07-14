@@ -10,7 +10,7 @@ import SwiftUI
 struct BottomSheetAlert: View {
     private let title: String
     private let message: String
-    private let secondaryTitle: String
+    private let secondaryTitle: String?
     private let primaryTitle: String
     private let onSecondaryTap: () -> Void
     private let onPrimaryTap: () -> Void
@@ -18,7 +18,7 @@ struct BottomSheetAlert: View {
     init(
         title: String,
         message: String,
-        secondaryTitle: String,
+        secondaryTitle: String? = nil,
         primaryTitle: String,
         onSecondaryTap: @escaping () -> Void = {},
         onPrimaryTap: @escaping () -> Void = {}
@@ -52,13 +52,15 @@ struct BottomSheetAlert: View {
                 .padding(.top, 12)
 
             HStack(spacing: 0) {
-                CommonButton(
-                    title: secondaryTitle,
-                    property1: .secondary,
-                    action: onSecondaryTap
-                )
+                if let secondaryTitle {
+                    CommonButton(
+                        title: secondaryTitle,
+                        property1: .secondary,
+                        action: onSecondaryTap
+                    )
 
-                Spacer(minLength: 16)
+                    Spacer(minLength: 16)
+                }
 
                 CommonButton(
                     title: primaryTitle,
