@@ -159,9 +159,9 @@ private enum ShareGroupEndpoint: APIEndpoint {
     var headers: HTTPHeaders? {
         switch self {
         case let .create(_, idempotencyKey):
-            ["Idempotency-Key": idempotencyKey.uuidString]
+            return ["Idempotency-Key": idempotencyKey.uuidString]
         default:
-            nil
+            return nil
         }
     }
 
@@ -174,9 +174,9 @@ private enum ShareGroupEndpoint: APIEndpoint {
             }
             return parameters
         case let .create(name, _):
-            ["name": name]
+            return ["name": name]
         case .detail, .inviteCode:
-            nil
+            return nil
         }
     }
 
