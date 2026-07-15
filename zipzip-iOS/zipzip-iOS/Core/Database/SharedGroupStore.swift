@@ -179,6 +179,33 @@ nonisolated struct SharedGroupStore {
         }
     }
 
+    func upsertJoinedGroup(_ response: ShareGroupJoinResponse) async throws {
+        try await database.write { db in
+            let joinedAt = Self.date(response.joinedAt)
+            let existing = try SharedGroupRecord
+                .where { $0.id.eq(response.sharedGroupId.uuidString) }
+                .fetchOne(db)
+
+            try SharedGroupRecord.upsert {
+                SharedGroupRecord.Draft(
+                    id: response.sharedGroupId.uuidString,
+                    createdByUserID: existing?.createdByUserID,
+                    createdByDisplayName: existing?.createdByDisplayName,
+                    name: response.name,
+                    inviteCode: existing?.inviteCode,
+                    createdAt: existing?.createdAt,
+                    joinedAt: joinedAt,
+                    updatedAt: joinedAt,
+                    memberCount: max(existing?.memberCount ?? 0, 1),
+                    sharedAlbumCount: existing?.sharedAlbumCount ?? 0,
+                    photoCount: existing?.photoCount ?? 0,
+                    myRole: response.myRole.rawValue
+                )
+            }
+            .execute(db)
+        }
+    }
+
     func updateInviteCode(_ response: InviteCodeResponse) async throws {
         try await database.write { db in
             try SharedGroupRecord

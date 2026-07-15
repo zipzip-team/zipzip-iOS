@@ -86,6 +86,44 @@ final class ShareGroupAPITests: XCTestCase {
         XCTAssertEqual(try requestBody(request)["name"] as? String, "우리 가족")
     }
 
+    @MainActor
+    func testJoinPreviewRequestMatchesDocumentedContract() async throws {
+        let provider = ShareGroupRecordingNetworkProvider(json: Self.joinPreviewJSON)
+        let api = DefaultShareGroupAPI(networkProvider: provider)
+
+        let response = try await api.previewJoin(inviteCode: "ZZ7K9P2Q")
+
+        XCTAssertEqual(response.name, "여행 친구")
+        XCTAssertFalse(response.alreadyJoined)
+        let request = try XCTUnwrap(provider.request)
+        XCTAssertEqual(request.url?.path, "/api/v1/shared-groups/join-preview")
+        XCTAssertEqual(request.httpMethod, "GET")
+        let queryItems = try XCTUnwrap(URLComponents(
+            url: try XCTUnwrap(request.url),
+            resolvingAgainstBaseURL: false
+        )?.queryItems)
+        XCTAssertEqual(queryItems.first(where: { $0.name == "inviteCode" })?.value, "ZZ7K9P2Q")
+    }
+
+    @MainActor
+    func testJoinRequestMatchesDocumentedContract() async throws {
+        let provider = ShareGroupRecordingNetworkProvider(json: Self.joinJSON)
+        let api = DefaultShareGroupAPI(networkProvider: provider)
+        let idempotencyKey = UUID()
+
+        let response = try await api.join(
+            inviteCode: "ZZ7K9P2Q",
+            idempotencyKey: idempotencyKey
+        )
+
+        XCTAssertEqual(response.name, "여행 친구")
+        let request = try XCTUnwrap(provider.request)
+        XCTAssertEqual(request.url?.path, "/api/v1/shared-groups/join")
+        XCTAssertEqual(request.httpMethod, "POST")
+        XCTAssertEqual(request.value(forHTTPHeaderField: "Idempotency-Key"), idempotencyKey.uuidString)
+        XCTAssertEqual(try requestBody(request)["inviteCode"] as? String, "ZZ7K9P2Q")
+    }
+
     private func requestBody(_ request: URLRequest) throws -> [String: Any] {
         let data = try XCTUnwrap(request.httpBody)
         return try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
@@ -165,6 +203,35 @@ final class ShareGroupAPITests: XCTestCase {
         "id": "11111111-1111-1111-1111-111111111111",
         "name": "우리 가족",
         "inviteCode": "ZZ7K9P2Q"
+      }
+    }
+    """
+
+    private static let joinPreviewJSON = """
+    {
+      "data": {
+        "sharedGroupId": "44444444-4444-4444-4444-444444444444",
+        "name": "여행 친구",
+        "representativeImageUrl": null,
+        "representativeImageUrlExpiresAt": null,
+        "createdBy": {
+          "userId": null,
+          "displayName": "집집이"
+        },
+        "memberCount": 4,
+        "members": [],
+        "alreadyJoined": false
+      }
+    }
+    """
+
+    private static let joinJSON = """
+    {
+      "data": {
+        "sharedGroupId": "44444444-4444-4444-4444-444444444444",
+        "name": "여행 친구",
+        "myRole": "MEMBER",
+        "joinedAt": "2026-07-15T10:15:30Z"
       }
     }
     """

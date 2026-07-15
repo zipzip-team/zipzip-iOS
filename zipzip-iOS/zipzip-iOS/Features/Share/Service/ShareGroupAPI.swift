@@ -12,6 +12,8 @@ protocol ShareGroupAPI {
     func fetchInviteCode(groupID: UUID) async throws -> InviteCodeResponse
     func fetchSharedAlbums(groupID: UUID, cursor: String?, size: Int) async throws -> SharedAlbumListPageResponse
     func createGroup(name: String, idempotencyKey: UUID) async throws -> CreateSharedGroupResponse
+    func previewJoin(inviteCode: String) async throws -> ShareGroupJoinPreviewResponse
+    func join(inviteCode: String, idempotencyKey: UUID) async throws -> ShareGroupJoinResponse
 }
 
 final class DefaultShareGroupAPI: ShareGroupAPI {
@@ -56,6 +58,20 @@ final class DefaultShareGroupAPI: ShareGroupAPI {
     func createGroup(name: String, idempotencyKey: UUID) async throws -> CreateSharedGroupResponse {
         let response: APIEnvelope<CreateSharedGroupResponse> = try await networkProvider.request(
             ShareGroupEndpoint.create(name: name, idempotencyKey: idempotencyKey)
+        )
+        return response.data
+    }
+
+    func previewJoin(inviteCode: String) async throws -> ShareGroupJoinPreviewResponse {
+        let response: APIEnvelope<ShareGroupJoinPreviewResponse> = try await networkProvider.request(
+            ShareGroupEndpoint.joinPreview(inviteCode: inviteCode)
+        )
+        return response.data
+    }
+
+    func join(inviteCode: String, idempotencyKey: UUID) async throws -> ShareGroupJoinResponse {
+        let response: APIEnvelope<ShareGroupJoinResponse> = try await networkProvider.request(
+            ShareGroupEndpoint.join(inviteCode: inviteCode, idempotencyKey: idempotencyKey)
         )
         return response.data
     }
@@ -127,12 +143,40 @@ nonisolated struct CreateSharedGroupResponse: Decodable {
     let inviteCode: String
 }
 
+nonisolated struct ShareGroupJoinPreviewResponse: Decodable {
+    let sharedGroupId: UUID
+    let name: String
+    let representativeImageUrl: String?
+    let representativeImageUrlExpiresAt: String?
+    let createdBy: ShareGroupUserResponse
+    let memberCount: Int
+    let members: [ShareGroupMemberResponse]
+    let alreadyJoined: Bool
+}
+
+nonisolated struct ShareGroupMemberResponse: Decodable {
+    let userId: UUID
+    let displayName: String
+    let role: ShareGroupRoleResponse
+    let isMe: Bool?
+    let joinedAt: String?
+}
+
+nonisolated struct ShareGroupJoinResponse: Decodable {
+    let sharedGroupId: UUID
+    let name: String
+    let myRole: ShareGroupRoleResponse
+    let joinedAt: String
+}
+
 private enum ShareGroupEndpoint: APIEndpoint {
     case list(cursor: String?, size: Int)
     case detail(id: UUID)
     case inviteCode(groupID: UUID)
     case sharedAlbums(groupID: UUID, cursor: String?, size: Int)
     case create(name: String, idempotencyKey: UUID)
+    case joinPreview(inviteCode: String)
+    case join(inviteCode: String, idempotencyKey: UUID)
 
     var path: String {
         switch self {
@@ -144,14 +188,18 @@ private enum ShareGroupEndpoint: APIEndpoint {
             "/api/v1/shared-groups/\(groupID.uuidString)/invite-code"
         case let .sharedAlbums(groupID, _, _):
             "/api/v1/shared-groups/\(groupID.uuidString)/shared-albums"
+        case .joinPreview:
+            "/api/v1/shared-groups/join-preview"
+        case .join:
+            "/api/v1/shared-groups/join"
         }
     }
 
     var method: HTTPMethod {
         switch self {
-        case .list, .detail, .inviteCode, .sharedAlbums:
+        case .list, .detail, .inviteCode, .sharedAlbums, .joinPreview:
             .get
-        case .create:
+        case .create, .join:
             .post
         }
     }
@@ -159,6 +207,8 @@ private enum ShareGroupEndpoint: APIEndpoint {
     var headers: HTTPHeaders? {
         switch self {
         case let .create(_, idempotencyKey):
+            return ["Idempotency-Key": idempotencyKey.uuidString]
+        case let .join(_, idempotencyKey):
             return ["Idempotency-Key": idempotencyKey.uuidString]
         default:
             return nil
@@ -175,6 +225,10 @@ private enum ShareGroupEndpoint: APIEndpoint {
             return parameters
         case let .create(name, _):
             return ["name": name]
+        case let .joinPreview(inviteCode):
+            return ["inviteCode": inviteCode]
+        case let .join(inviteCode, _):
+            return ["inviteCode": inviteCode]
         case .detail, .inviteCode:
             return nil
         }
@@ -182,9 +236,9 @@ private enum ShareGroupEndpoint: APIEndpoint {
 
     var encoding: ParameterEncoding {
         switch self {
-        case .create:
+        case .create, .join:
             JSONEncoding.default
-        case .list, .detail, .inviteCode, .sharedAlbums:
+        case .list, .detail, .inviteCode, .sharedAlbums, .joinPreview:
             URLEncoding(destination: .queryString)
         }
     }

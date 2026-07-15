@@ -230,6 +230,78 @@ final class ShareViewModelTests: XCTestCase {
         XCTAssertEqual(offlineViewModel.group(withID: groupID)?.albums.map(\.count), [42])
     }
 
+    @MainActor
+    func testPreviewsAndJoinsGroupWithSameLogicalRequest() async throws {
+        let groupID = try XCTUnwrap(UUID(uuidString: "44444444-4444-4444-4444-444444444444"))
+        let api = JoinTrackingShareGroupAPI(
+            previewResponse: makeJoinPreview(groupID: groupID, alreadyJoined: false),
+            joinResponse: ShareGroupJoinResponse(
+                sharedGroupId: groupID,
+                name: "여행 친구",
+                myRole: .member,
+                joinedAt: "2026-07-15T10:15:30Z"
+            )
+        )
+        let viewModel = ShareViewModel(
+            groups: [],
+            repository: makeRepository(api: api, store: try makeStore())
+        )
+        viewModel.presentJoinSheet()
+        viewModel.joinCode = "  ZZ7K9P2Q  "
+
+        await viewModel.confirmJoinCode()
+
+        XCTAssertFalse(viewModel.isJoinSheetPresented)
+        XCTAssertTrue(viewModel.isJoinConfirmationPresented)
+        XCTAssertEqual(viewModel.pendingJoinGroup?.id, groupID)
+        XCTAssertEqual(api.previewInviteCodes, ["ZZ7K9P2Q"])
+
+        let joinedGroupID = await viewModel.completeJoin()
+
+        XCTAssertEqual(joinedGroupID, groupID)
+        XCTAssertEqual(viewModel.groups.map(\.id), [groupID])
+        XCTAssertFalse(viewModel.isJoinConfirmationPresented)
+        XCTAssertEqual(api.joinInviteCodes, ["ZZ7K9P2Q"])
+        XCTAssertEqual(api.joinIdempotencyKeys.count, 1)
+    }
+
+    @MainActor
+    func testAlreadyJoinedPreviewSkipsJoinRequest() async throws {
+        let groupID = try XCTUnwrap(UUID(uuidString: "44444444-4444-4444-4444-444444444444"))
+        let api = JoinTrackingShareGroupAPI(
+            previewResponse: makeJoinPreview(groupID: groupID, alreadyJoined: true),
+            joinResponse: nil
+        )
+        let viewModel = ShareViewModel(
+            groups: [],
+            repository: makeRepository(api: api, store: try makeStore())
+        )
+        viewModel.presentJoinSheet()
+        viewModel.joinCode = "ZZ7K9P2Q"
+
+        await viewModel.confirmJoinCode()
+        let joinedGroupID = await viewModel.completeJoin()
+
+        XCTAssertEqual(joinedGroupID, groupID)
+        XCTAssertTrue(api.joinInviteCodes.isEmpty)
+    }
+
+    private func makeJoinPreview(
+        groupID: UUID,
+        alreadyJoined: Bool
+    ) -> ShareGroupJoinPreviewResponse {
+        ShareGroupJoinPreviewResponse(
+            sharedGroupId: groupID,
+            name: "여행 친구",
+            representativeImageUrl: nil,
+            representativeImageUrlExpiresAt: nil,
+            createdBy: ShareGroupUserResponse(userId: nil, displayName: "집집이"),
+            memberCount: 4,
+            members: [],
+            alreadyJoined: alreadyJoined
+        )
+    }
+
     private func makeStore() throws -> SharedGroupStore {
         SharedGroupStore(database: try appDatabase())
     }
@@ -250,6 +322,8 @@ private struct StubShareGroupAPI: ShareGroupAPI {
     var inviteCodeResponse: InviteCodeResponse?
     var sharedAlbumListResponse = SharedAlbumListPageResponse(items: [], nextCursor: nil, hasNext: false)
     var createResponse: CreateSharedGroupResponse?
+    var joinPreviewResponse: ShareGroupJoinPreviewResponse?
+    var joinResponse: ShareGroupJoinResponse?
 
     func fetchGroups(cursor: String?, size: Int) async throws -> ShareGroupListPageResponse {
         cursor == nil ? groupListResponse : nextGroupListResponse ?? groupListResponse
@@ -273,6 +347,14 @@ private struct StubShareGroupAPI: ShareGroupAPI {
 
     func createGroup(name: String, idempotencyKey: UUID) async throws -> CreateSharedGroupResponse {
         try XCTUnwrap(createResponse)
+    }
+
+    func previewJoin(inviteCode: String) async throws -> ShareGroupJoinPreviewResponse {
+        try XCTUnwrap(joinPreviewResponse)
+    }
+
+    func join(inviteCode: String, idempotencyKey: UUID) async throws -> ShareGroupJoinResponse {
+        try XCTUnwrap(joinResponse)
     }
 }
 
@@ -299,5 +381,64 @@ private struct UnavailableShareGroupAPI: ShareGroupAPI {
 
     func createGroup(name: String, idempotencyKey: UUID) async throws -> CreateSharedGroupResponse {
         throw URLError(.notConnectedToInternet)
+    }
+
+    func previewJoin(inviteCode: String) async throws -> ShareGroupJoinPreviewResponse {
+        throw URLError(.notConnectedToInternet)
+    }
+
+    func join(inviteCode: String, idempotencyKey: UUID) async throws -> ShareGroupJoinResponse {
+        throw URLError(.notConnectedToInternet)
+    }
+}
+
+private final class JoinTrackingShareGroupAPI: ShareGroupAPI {
+    let previewResponse: ShareGroupJoinPreviewResponse
+    let joinResponse: ShareGroupJoinResponse?
+    private(set) var previewInviteCodes: [String] = []
+    private(set) var joinInviteCodes: [String] = []
+    private(set) var joinIdempotencyKeys: [UUID] = []
+
+    init(
+        previewResponse: ShareGroupJoinPreviewResponse,
+        joinResponse: ShareGroupJoinResponse?
+    ) {
+        self.previewResponse = previewResponse
+        self.joinResponse = joinResponse
+    }
+
+    func fetchGroups(cursor: String?, size: Int) async throws -> ShareGroupListPageResponse {
+        ShareGroupListPageResponse(items: [], nextCursor: nil, hasNext: false)
+    }
+
+    func fetchGroup(id: UUID) async throws -> ShareGroupDetailResponse {
+        throw URLError(.notConnectedToInternet)
+    }
+
+    func fetchInviteCode(groupID: UUID) async throws -> InviteCodeResponse {
+        throw URLError(.notConnectedToInternet)
+    }
+
+    func fetchSharedAlbums(
+        groupID: UUID,
+        cursor: String?,
+        size: Int
+    ) async throws -> SharedAlbumListPageResponse {
+        SharedAlbumListPageResponse(items: [], nextCursor: nil, hasNext: false)
+    }
+
+    func createGroup(name: String, idempotencyKey: UUID) async throws -> CreateSharedGroupResponse {
+        throw URLError(.unsupportedURL)
+    }
+
+    func previewJoin(inviteCode: String) async throws -> ShareGroupJoinPreviewResponse {
+        previewInviteCodes.append(inviteCode)
+        return previewResponse
+    }
+
+    func join(inviteCode: String, idempotencyKey: UUID) async throws -> ShareGroupJoinResponse {
+        joinInviteCodes.append(inviteCode)
+        joinIdempotencyKeys.append(idempotencyKey)
+        return try XCTUnwrap(joinResponse)
     }
 }

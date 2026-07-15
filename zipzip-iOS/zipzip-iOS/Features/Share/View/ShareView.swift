@@ -28,8 +28,13 @@ struct ShareView: View {
                     title: "공유 그룹 입장하기",
                     placeholder: "코드 입력",
                     value: $viewModel.joinCode,
+                    isConfirming: viewModel.isPreviewingJoin,
                     onCancel: { viewModel.isJoinSheetPresented = false },
-                    onConfirm: viewModel.confirmJoinCode
+                    onConfirm: {
+                        Task {
+                            await viewModel.confirmJoinCode()
+                        }
+                    }
                 )
             }
             .bottomSheet(
@@ -62,7 +67,12 @@ struct ShareView: View {
                 ShareJoinConfirmationSheet(
                     group: viewModel.pendingJoinGroup,
                     onCancel: viewModel.cancelJoinConfirmation,
-                    onConfirm: viewModel.completeJoin
+                    onConfirm: {
+                        Task {
+                            guard let groupID = await viewModel.completeJoin() else { return }
+                            router.push(.shareGroup(groupID))
+                        }
+                    }
                 )
             }
             .bottomSheet(

@@ -31,6 +31,9 @@ final class ShareViewModel {
     var isAlbumManagementPresented = false
     var isShareManagementPresented = false
     private(set) var isCreatingGroup = false
+    private(set) var isPreviewingJoin = false
+    private(set) var isJoiningGroup = false
+    private(set) var joinErrorCode: String?
 
     private(set) var hasLoadedGroups = false
     private(set) var isLoadingGroups = false
@@ -49,6 +52,9 @@ final class ShareViewModel {
 
     private var groupCreationName: String?
     private var groupCreationIdempotencyKey: UUID?
+    private var joinRequestInviteCode: String?
+    private var joinIdempotencyKey: UUID?
+    private var pendingJoinAlreadyJoined = false
     private var nextGroupCursor: String?
     private var groupsHaveNextPage = false
     private var loadedGroupDetailIDs: Set<ShareAlbum.ID> = []
@@ -261,6 +267,7 @@ final class ShareViewModel {
         visibleGroupIDs = nil
         visibleSharedAlbumIDs = [:]
         inviteCode = ""
+        resetJoinState()
     }
 
     func enterAddMode() {
@@ -272,24 +279,87 @@ final class ShareViewModel {
     }
 
     func presentJoinSheet() {
+        resetJoinState()
         joinCode = ""
         isJoinSheetPresented = true
     }
 
-    func confirmJoinCode() {
+    func confirmJoinCode() async {
         let trimmedCode = joinCode.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmedCode.isEmpty else { return }
+        guard !trimmedCode.isEmpty, !isPreviewingJoin else { return }
+
+        isPreviewingJoin = true
+        joinErrorCode = nil
+        defer { isPreviewingJoin = false }
+
+        do {
+            let preview = try await repository.previewJoin(inviteCode: trimmedCode)
+            joinCode = trimmedCode
+            joinRequestInviteCode = trimmedCode
+            joinIdempotencyKey = preview.alreadyJoined ? nil : UUID()
+            pendingJoinGroup = preview.group
+            pendingJoinAlreadyJoined = preview.alreadyJoined
+            isJoinSheetPresented = false
+            isJoinConfirmationPresented = true
+        } catch let error as ShareGroupRepositoryError {
+            joinErrorCode = String(describing: error)
+        } catch let error as NetworkError {
+            joinErrorCode = error.serverCode ?? "NETWORK_ERROR"
+        } catch {
+            joinErrorCode = "UNKNOWN_ERROR"
+        }
     }
 
     func cancelJoinConfirmation() {
-        pendingJoinGroup = nil
         isJoinConfirmationPresented = false
+        pendingJoinGroup = nil
+        pendingJoinAlreadyJoined = false
+        joinRequestInviteCode = nil
+        joinIdempotencyKey = nil
     }
 
-    func completeJoin() {
-        pendingJoinGroup = nil
-        isJoinConfirmationPresented = false
-        isAddMode = false
+    func completeJoin() async -> ShareAlbum.ID? {
+        guard let pendingJoinGroup,
+              let joinRequestInviteCode,
+              !isJoiningGroup
+        else {
+            return nil
+        }
+
+        if pendingJoinAlreadyJoined {
+            await prepareJoinedGroup(id: pendingJoinGroup.id)
+            finishJoin()
+            return pendingJoinGroup.id
+        }
+
+        let idempotencyKey = joinIdempotencyKey ?? UUID()
+        joinIdempotencyKey = idempotencyKey
+        isJoiningGroup = true
+        joinErrorCode = nil
+        defer { isJoiningGroup = false }
+
+        do {
+            let groupID = try await repository.join(
+                inviteCode: joinRequestInviteCode,
+                idempotencyKey: idempotencyKey
+            )
+            await prepareJoinedGroup(id: groupID)
+            finishJoin()
+            return groupID
+        } catch ShareGroupRepositoryError.alreadyJoined {
+            await prepareJoinedGroup(id: pendingJoinGroup.id)
+            finishJoin()
+            return pendingJoinGroup.id
+        } catch let error as ShareGroupRepositoryError {
+            joinErrorCode = String(describing: error)
+            return nil
+        } catch let error as NetworkError {
+            joinErrorCode = error.serverCode ?? "NETWORK_ERROR"
+            return nil
+        } catch {
+            joinErrorCode = "UNKNOWN_ERROR"
+            return nil
+        }
     }
 
     func presentCreateSheet() {
@@ -407,6 +477,7 @@ final class ShareViewModel {
         isShareManagementPresented = false
         pendingJoinGroup = nil
         managedShareGroup = nil
+        resetJoinState()
         dismissAlbumManagement()
     }
 
@@ -464,5 +535,42 @@ final class ShareViewModel {
         if managedShareGroup?.id == id {
             dismissShareManagement()
         }
+    }
+
+    private func prepareJoinedGroup(id: ShareAlbum.ID) async {
+        if var groupIDs = visibleGroupIDs {
+            groupIDs.removeAll { $0 == id }
+            groupIDs.insert(id, at: 0)
+            visibleGroupIDs = groupIDs
+        } else {
+            visibleGroupIDs = [id] + groups.map(\.id).filter { $0 != id }
+        }
+
+        try? await repository.syncGroup(id: id)
+        try? await reloadGroups()
+        hasLoadedGroups = true
+        loadedGroupDetailIDs.insert(id)
+    }
+
+    private func finishJoin() {
+        isJoinSheetPresented = false
+        isJoinConfirmationPresented = false
+        isAddMode = false
+        pendingJoinGroup = nil
+        pendingJoinAlreadyJoined = false
+        joinRequestInviteCode = nil
+        joinIdempotencyKey = nil
+        joinErrorCode = nil
+    }
+
+    private func resetJoinState() {
+        isPreviewingJoin = false
+        isJoiningGroup = false
+        joinErrorCode = nil
+        joinRequestInviteCode = nil
+        joinIdempotencyKey = nil
+        pendingJoinAlreadyJoined = false
+        pendingJoinGroup = nil
+        isJoinConfirmationPresented = false
     }
 }

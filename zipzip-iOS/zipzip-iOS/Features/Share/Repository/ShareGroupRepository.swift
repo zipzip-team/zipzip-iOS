@@ -16,8 +16,15 @@ struct CreatedShareGroup {
     let inviteCode: String
 }
 
-enum ShareGroupRepositoryError: Error {
+struct ShareGroupJoinPreview {
+    let group: ShareAlbum
+    let alreadyJoined: Bool
+}
+
+enum ShareGroupRepositoryError: Error, Equatable {
     case groupNotFound
+    case invalidInviteCode
+    case alreadyJoined
 }
 
 @MainActor
@@ -32,6 +39,8 @@ protocol ShareGroupRepository {
     ) async throws -> ShareGroupRepositoryPage
     func inviteCode(groupID: ShareAlbum.ID) async throws -> String?
     func createGroup(name: String, idempotencyKey: UUID) async throws -> CreatedShareGroup
+    func previewJoin(inviteCode: String) async throws -> ShareGroupJoinPreview
+    func join(inviteCode: String, idempotencyKey: UUID) async throws -> ShareAlbum.ID
     func deleteGroup(id: ShareAlbum.ID) async throws
 }
 
@@ -108,6 +117,43 @@ final class DefaultShareGroupRepository: ShareGroupRepository {
         let response = try await api.createGroup(name: name, idempotencyKey: idempotencyKey)
         try await store.upsertCreatedGroup(response)
         return CreatedShareGroup(id: response.id, inviteCode: response.inviteCode)
+    }
+
+    func previewJoin(inviteCode: String) async throws -> ShareGroupJoinPreview {
+        do {
+            let response = try await api.previewJoin(inviteCode: inviteCode)
+            return ShareGroupJoinPreview(
+                group: ShareAlbum(
+                    id: response.sharedGroupId,
+                    name: response.name,
+                    date: .now,
+                    memberCount: response.memberCount,
+                    currentUserRole: .participant,
+                    createdBy: Self.makeUser(
+                        id: response.createdBy.userId,
+                        displayName: response.createdBy.displayName
+                    )
+                ),
+                alreadyJoined: response.alreadyJoined
+            )
+        } catch let error as NetworkError where error.serverCode == "INVALID_INVITE_CODE" {
+            throw ShareGroupRepositoryError.invalidInviteCode
+        }
+    }
+
+    func join(inviteCode: String, idempotencyKey: UUID) async throws -> ShareAlbum.ID {
+        do {
+            let response = try await api.join(
+                inviteCode: inviteCode,
+                idempotencyKey: idempotencyKey
+            )
+            try await store.upsertJoinedGroup(response)
+            return response.sharedGroupId
+        } catch let error as NetworkError where error.serverCode == "ALREADY_JOINED_SHARED_GROUP" {
+            throw ShareGroupRepositoryError.alreadyJoined
+        } catch let error as NetworkError where error.serverCode == "INVALID_INVITE_CODE" {
+            throw ShareGroupRepositoryError.invalidInviteCode
+        }
     }
 
     func deleteGroup(id: ShareAlbum.ID) async throws {
