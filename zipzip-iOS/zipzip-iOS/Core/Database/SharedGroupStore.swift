@@ -18,6 +18,24 @@ nonisolated struct SharedGroupStore {
         }
     }
 
+    func prepareCache(for userID: UUID) async throws {
+        try await database.write { db in
+            let userID = userID.uuidString
+            let owner = try SharedCacheOwnerRecord
+                .where { $0.id.eq(1) }
+                .fetchOne(db)
+            guard owner?.userID != userID else { return }
+
+            try #sql(#"DELETE FROM "shared_photo""#).execute(db)
+            try #sql(#"DELETE FROM "shared_album""#).execute(db)
+            try #sql(#"DELETE FROM "shared_group""#).execute(db)
+            try SharedCacheOwnerRecord.upsert {
+                SharedCacheOwnerRecord.Draft(id: 1, userID: userID)
+            }
+            .execute(db)
+        }
+    }
+
     func fetchGroups() async throws -> [StoredSharedGroup] {
         try await database.read { db in
             let groupRecords = try SharedGroupRecord

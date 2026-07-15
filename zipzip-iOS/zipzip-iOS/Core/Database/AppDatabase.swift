@@ -289,6 +289,18 @@ func appDatabase() throws -> any DatabaseWriter {
         try #sql(#"CREATE INDEX "idx_photo_device_pending" ON "photo"("device_pending")"#).execute(db)
     }
 
+    migrator.registerMigration("Scope shared cache to authenticated user") { db in
+        try #sql(
+            """
+            CREATE TABLE "shared_cache_owner"(
+              "id" INTEGER NOT NULL PRIMARY KEY CHECK ("id" = 1),
+              "user_id" TEXT NOT NULL
+            ) STRICT
+            """
+        )
+        .execute(db)
+    }
+
     do {
         try migrator.migrate(database)
         return database

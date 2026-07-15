@@ -80,6 +80,7 @@ final class ShareViewModel {
     private var chatSessionID: UUID?
     private var bulkDeleteAlbumIDs: Set<SharedAlbum.ID>?
     private var bulkDeleteIdempotencyKey: UUID?
+    private var cacheOwnerID: UUID?
 
     init(repository: ShareGroupRepository) {
         self.groups = []
@@ -156,12 +157,25 @@ final class ShareViewModel {
         )
     }
 
-    func loadGroups(refresh: Bool = false) async {
+    func loadGroups(for userID: UUID, refresh: Bool = false) async {
         guard !isLoadingGroups, !isLoadingMoreGroups else { return }
+        if cacheOwnerID != userID {
+            resetRemoteData()
+        }
         guard refresh || !hasLoadedGroups else { return }
 
         isLoadingGroups = true
         defer { isLoadingGroups = false }
+
+        if cacheOwnerID != userID {
+            do {
+                try await repository.prepareCache(for: userID)
+                cacheOwnerID = userID
+            } catch {
+                presentError(error, fallback: "공유 데이터를 준비하지 못했어요.")
+                return
+            }
+        }
 
         if !refresh, !hasLoadedGroups {
             try? await reloadGroups()
@@ -467,6 +481,7 @@ final class ShareViewModel {
 
     func resetRemoteData() {
         groups = []
+        cacheOwnerID = nil
         hasLoadedGroups = false
         isLoadingGroups = false
         isLoadingMoreGroups = false

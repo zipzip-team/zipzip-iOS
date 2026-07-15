@@ -69,6 +69,7 @@ enum ShareGroupRepositoryError: Error, Equatable {
 
 @MainActor
 protocol ShareGroupRepository {
+    func prepareCache(for userID: UUID) async throws
     func groups() async throws -> [ShareAlbum]
     func syncGroups(cursor: String?, size: Int) async throws -> ShareGroupRepositoryPage
     func syncGroup(id: ShareAlbum.ID) async throws
@@ -108,6 +109,10 @@ final class DefaultShareGroupRepository: ShareGroupRepository {
     init(api: ShareGroupAPI, store: SharedGroupStore = SharedGroupStore()) {
         self.api = api
         self.store = store
+    }
+
+    func prepareCache(for userID: UUID) async throws {
+        try await store.prepareCache(for: userID)
     }
 
     func groups() async throws -> [ShareAlbum] {

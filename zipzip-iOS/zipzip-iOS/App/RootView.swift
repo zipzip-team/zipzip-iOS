@@ -169,9 +169,9 @@ struct RootView: View {
             )
             await authenticationState.checkAppleCredentialState()
         }
-        .task(id: authenticationState.isLoggedIn) {
-            if authenticationState.isLoggedIn {
-                await shareViewModel.loadGroups()
+        .task(id: authenticationState.currentUser?.id) {
+            if let userID = authenticationState.currentUser?.id {
+                await shareViewModel.loadGroups(for: userID)
             } else {
                 shareViewModel.resetRemoteData()
             }

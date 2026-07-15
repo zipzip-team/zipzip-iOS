@@ -1,6 +1,8 @@
 import XCTest
 @testable import zipzip_iOS
 
+private let testCacheOwnerID = UUID()
+
 extension ShareGroupAPI {
     func renameSharedAlbum(id: UUID, name: String) async throws -> SharedAlbumRenameResponse {
         throw URLError(.unsupportedURL)
@@ -129,7 +131,7 @@ final class ShareViewModelTests: XCTestCase {
             repository: makeRepository(api: api, store: try makeStore())
         )
 
-        await viewModel.loadGroups()
+        await viewModel.loadGroups(for: testCacheOwnerID)
         await viewModel.loadGroup(id: groupID)
         await viewModel.loadSharedAlbums(groupID: groupID)
         await viewModel.loadInviteCode(groupID: groupID)
@@ -166,7 +168,7 @@ final class ShareViewModelTests: XCTestCase {
             repository: makeRepository(api: api, store: try makeStore())
         )
 
-        await viewModel.loadGroups()
+        await viewModel.loadGroups(for: testCacheOwnerID)
         viewModel.resetRemoteData()
 
         XCTAssertTrue(viewModel.groups.isEmpty)
@@ -213,7 +215,7 @@ final class ShareViewModelTests: XCTestCase {
             repository: makeRepository(api: api, store: try makeStore())
         )
 
-        await viewModel.loadGroups()
+        await viewModel.loadGroups(for: testCacheOwnerID)
         await viewModel.loadMoreGroupsIfNeeded(currentGroupID: firstID)
 
         XCTAssertEqual(viewModel.groups.map(\.id), [firstID, secondID])
@@ -257,17 +259,57 @@ final class ShareViewModelTests: XCTestCase {
             repository: makeRepository(api: api, store: store)
         )
 
-        await onlineViewModel.loadGroups()
+        await onlineViewModel.loadGroups(for: testCacheOwnerID)
         await onlineViewModel.loadSharedAlbums(groupID: groupID)
 
         let offlineViewModel = ShareViewModel(
             repository: makeRepository(api: UnavailableShareGroupAPI(), store: store)
         )
-        await offlineViewModel.loadGroups()
+        await offlineViewModel.loadGroups(for: testCacheOwnerID)
 
         XCTAssertEqual(offlineViewModel.groups.map(\.id), [groupID])
         XCTAssertEqual(offlineViewModel.group(withID: groupID)?.albums.map(\.id), [albumID])
         XCTAssertEqual(offlineViewModel.group(withID: groupID)?.albums.map(\.count), [42])
+    }
+
+    @MainActor
+    func testChangingAuthenticatedUserClearsPreviousSharedCache() async throws {
+        let groupID = try XCTUnwrap(UUID(uuidString: "11111111-1111-1111-1111-111111111111"))
+        let firstUserID = try XCTUnwrap(UUID(uuidString: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"))
+        let secondUserID = try XCTUnwrap(UUID(uuidString: "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"))
+        let store = try makeStore()
+        let onlineViewModel = ShareViewModel(
+            repository: makeRepository(
+                api: StubShareGroupAPI(
+                    groupListResponse: ShareGroupListPageResponse(
+                        items: [ShareGroupSummaryResponse(
+                            id: groupID,
+                            name: "첫 번째 계정의 공유 그룹",
+                            myRole: .host,
+                            memberCount: 1,
+                            sharedAlbumCount: 0,
+                            photoCount: 0,
+                            joinedAt: "2026-07-03T10:15:30Z",
+                            updatedAt: "2026-07-03T10:15:30Z"
+                        )],
+                        nextCursor: nil,
+                        hasNext: false
+                    )
+                ),
+                store: store
+            )
+        )
+        await onlineViewModel.loadGroups(for: firstUserID)
+        XCTAssertEqual(onlineViewModel.groups.map(\.id), [groupID])
+
+        let switchedViewModel = ShareViewModel(
+            repository: makeRepository(api: UnavailableShareGroupAPI(), store: store)
+        )
+        await switchedViewModel.loadGroups(for: secondUserID)
+
+        XCTAssertTrue(switchedViewModel.groups.isEmpty)
+        let storedGroups = try await store.fetchGroups()
+        XCTAssertTrue(storedGroups.isEmpty)
     }
 
     @MainActor
@@ -354,7 +396,7 @@ final class ShareViewModelTests: XCTestCase {
             repository: makeRepository(api: api, store: try makeStore())
         )
 
-        await viewModel.loadGroups()
+        await viewModel.loadGroups(for: testCacheOwnerID)
         await viewModel.loadMembers(groupID: groupID)
 
         XCTAssertEqual(viewModel.members(for: groupID).map(\.id), [firstMemberID, secondMemberID])
@@ -370,7 +412,7 @@ final class ShareViewModelTests: XCTestCase {
         let viewModel = ShareViewModel(
             repository: makeRepository(api: api, store: try makeStore())
         )
-        await viewModel.loadGroups()
+        await viewModel.loadGroups(for: testCacheOwnerID)
         viewModel.presentShareManagement(groupID: groupID)
         viewModel.shareGroupNameDraft = "  여름 여행  "
 
@@ -395,7 +437,7 @@ final class ShareViewModelTests: XCTestCase {
         let viewModel = ShareViewModel(
             repository: makeRepository(api: api, store: try makeStore())
         )
-        await viewModel.loadGroups()
+        await viewModel.loadGroups(for: testCacheOwnerID)
         viewModel.presentShareManagement(groupID: groupID)
         viewModel.shareGroupNameDraft = "수정 시도"
 
@@ -435,7 +477,7 @@ final class ShareViewModelTests: XCTestCase {
         let viewModel = ShareViewModel(
             repository: makeRepository(api: api, store: try makeStore())
         )
-        await viewModel.loadGroups()
+        await viewModel.loadGroups(for: testCacheOwnerID)
         viewModel.presentComments(groupID: groupID)
 
         await viewModel.loadChatTimeline()
@@ -473,7 +515,7 @@ final class ShareViewModelTests: XCTestCase {
         let viewModel = ShareViewModel(
             repository: makeRepository(api: api, store: try makeStore())
         )
-        await viewModel.loadGroups()
+        await viewModel.loadGroups(for: testCacheOwnerID)
         viewModel.presentComments(groupID: groupID)
         await viewModel.loadChatTimeline()
         viewModel.commentDraft = "  사진 더 올려줘  "
@@ -499,7 +541,7 @@ final class ShareViewModelTests: XCTestCase {
         let viewModel = ShareViewModel(
             repository: makeRepository(api: api, store: try makeStore())
         )
-        await viewModel.loadGroups()
+        await viewModel.loadGroups(for: testCacheOwnerID)
         await viewModel.loadSharedAlbums(groupID: groupID)
         let didRename = await viewModel.renameSharedAlbum(
             id: albumID,
@@ -535,7 +577,7 @@ final class ShareViewModelTests: XCTestCase {
         let viewModel = ShareViewModel(
             repository: makeRepository(api: api, store: try makeStore())
         )
-        await viewModel.loadGroups()
+        await viewModel.loadGroups(for: testCacheOwnerID)
         await viewModel.loadSharedAlbums(groupID: groupID)
 
         let didDelete = await viewModel.deleteSharedAlbums([firstID, secondID], from: groupID)

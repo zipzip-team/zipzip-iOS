@@ -134,13 +134,6 @@ struct ShareView: View {
                     }
                 }
             }
-            .task(id: authenticationState.isLoggedIn) {
-                if authenticationState.isLoggedIn {
-                    await viewModel.loadGroups()
-                } else {
-                    viewModel.resetRemoteData()
-                }
-            }
     }
 
     @ViewBuilder private var rootContent: some View {
@@ -210,6 +203,7 @@ struct ShareAlbumDetailDestinationView: View {
 }
 
 private struct ShareGroupListView: View {
+    @Environment(AuthenticationState.self) private var authenticationState
     let viewModel: ShareViewModel
     let onOpenGroup: (ShareAlbum.ID) -> Void
 
@@ -267,7 +261,8 @@ private struct ShareGroupListView: View {
             }
             .ignoresSafeArea(edges: .top)
             .refreshable {
-                await viewModel.loadGroups(refresh: true)
+                guard let userID = authenticationState.currentUser?.id else { return }
+                await viewModel.loadGroups(for: userID, refresh: true)
             }
         }
         .overlay(alignment: .topLeading) {
