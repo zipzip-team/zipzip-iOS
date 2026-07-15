@@ -61,7 +61,8 @@ actor SessionCredentialController {
 
     func commitLogin(
         response: LoginResponse,
-        appleUserIdentifier: String
+        appleUserIdentifier: String,
+        developmentUserKey: String? = nil
     ) async throws -> StoredSessionCredential {
         guard !isTerminating else {
             throw AuthSessionError.staleOperation
@@ -78,7 +79,8 @@ actor SessionCredentialController {
         let stored = StoredSessionCredential(
             credential: response.credential(),
             user: response.user,
-            appleUserIdentifier: appleUserIdentifier
+            appleUserIdentifier: appleUserIdentifier,
+            developmentUserKey: developmentUserKey
         )
         try await store.save(stored)
 
@@ -220,6 +222,7 @@ actor SessionCredentialController {
                 credential: base.credential,
                 user: base.user,
                 appleUserIdentifier: base.appleUserIdentifier,
+                developmentUserKey: base.developmentUserKey,
                 refreshTokenVersion: base.refreshTokenVersion,
                 pendingRefreshIdempotencyKey: operationKey,
                 refreshBlockedCode: base.refreshBlockedCode
@@ -267,6 +270,7 @@ actor SessionCredentialController {
             credential: response.credential(),
             user: base.user,
             appleUserIdentifier: base.appleUserIdentifier,
+            developmentUserKey: base.developmentUserKey,
             refreshTokenVersion: base.refreshTokenVersion + 1
         )
         try await store.save(refreshed)
@@ -323,6 +327,7 @@ actor SessionCredentialController {
             credential: current.credential,
             user: current.user,
             appleUserIdentifier: current.appleUserIdentifier,
+            developmentUserKey: current.developmentUserKey,
             refreshTokenVersion: current.refreshTokenVersion,
             pendingRefreshIdempotencyKey: current.pendingRefreshIdempotencyKey,
             refreshBlockedCode: code

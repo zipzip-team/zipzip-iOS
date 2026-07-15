@@ -177,6 +177,40 @@ final class AuthenticationState {
         }
     }
 
+    #if DEBUG
+        func loginForDevelopment() async {
+            guard let configuration = DevelopmentAuthConfiguration.current else { return }
+            await loginForDevelopment(configuration: configuration)
+        }
+
+        func loginForDevelopment(configuration: DevelopmentAuthConfiguration) async {
+            guard operation == .idle, loginIntent != nil else { return }
+
+            loginAttemptID &+= 1
+            let attemptID = loginAttemptID
+            operation = .authenticating
+            loginErrorMessage = nil
+
+            do {
+                let response = try await authAPI.issueDevelopmentTokens(
+                    DevelopmentTokenRequest(
+                        testUserKey: configuration.testUserKey,
+                        displayName: configuration.displayName
+                    )
+                )
+                try await completeLogin(
+                    response,
+                    attemptID: attemptID,
+                    appleUserIdentifier: "",
+                    developmentUserKey: configuration.testUserKey
+                )
+            } catch {
+                loginErrorMessage = error.localizedDescription
+                operation = .idle
+            }
+        }
+    #endif
+
     func logout() async {
         guard operation == .idle else { return }
         operation = .loggingOut
@@ -198,15 +232,22 @@ final class AuthenticationState {
         accountErrorMessage = nil
 
         do {
+            guard let current = await credentialController.current() else {
+                throw AuthSessionError.missingCredential
+            }
             guard let stored = await credentialController.beginTermination(
-                requiresFreshCredential: true
+                requiresFreshCredential: current.developmentUserKey == nil
             ) else {
                 throw AuthSessionError.missingCredential
             }
-            try await authAPI.withdraw(
-                accessToken: stored.credential.accessToken,
-                tokenType: stored.credential.tokenType
-            )
+            if let testUserKey = stored.developmentUserKey {
+                try await authAPI.deleteDevelopmentUser(testUserKey: testUserKey)
+            } else {
+                try await authAPI.withdraw(
+                    accessToken: stored.credential.accessToken,
+                    tokenType: stored.credential.tokenType
+                )
+            }
             defaults.set(true, forKey: localInvalidationMarkerKey)
             try? await credentialController.clear()
             sessionPhase = .signedOut
@@ -230,12 +271,16 @@ final class AuthenticationState {
     }
 
     func handleAppleCredentialRevocation() async {
+        guard let stored = await credentialController.current(),
+              stored.developmentUserKey == nil
+        else { return }
         await invalidateLocalSession()
     }
 
     func checkAppleCredentialState() async {
         guard !isCheckingCredentialState,
-              let stored = await credentialController.current()
+              let stored = await credentialController.current(),
+              stored.developmentUserKey == nil
         else { return }
 
         isCheckingCredentialState = true
@@ -297,34 +342,11 @@ final class AuthenticationState {
                     displayName: displayName
                 )
             )
-            guard attemptID == loginAttemptID, loginIntent != nil else {
-                try? await authAPI.logout(credential: response.credential())
-                operation = .idle
-                return
-            }
-            let stored: StoredSessionCredential
-            do {
-                stored = try await credentialController.commitLogin(
-                    response: response,
-                    appleUserIdentifier: credential.user
-                )
-            } catch {
-                try? await authAPI.logout(credential: response.credential())
-                throw error
-            }
-            guard attemptID == loginAttemptID,
-                  loginIntent != nil,
-                  await credentialController.current() == stored
-            else {
-                try? await authAPI.logout(credential: stored.credential)
-                operation = .idle
-                return
-            }
-            defaults.removeObject(forKey: localInvalidationMarkerKey)
-            sessionPhase = .signedIn(stored.user)
-            accessAvailability = .ready
-            operation = .idle
-            resetLoginPresentation()
+            try await completeLogin(
+                response,
+                attemptID: attemptID,
+                appleUserIdentifier: credential.user
+            )
         } catch let error as NetworkError where error.serverCode == "DISPLAY_NAME_REQUIRED"
             || error.serverCode == "INVALID_DISPLAY_NAME" {
             requiresDisplayName = true
@@ -334,6 +356,46 @@ final class AuthenticationState {
             loginErrorMessage = error.localizedDescription
             operation = .idle
         }
+    }
+
+    private func completeLogin(
+        _ response: LoginResponse,
+        attemptID: UInt64,
+        appleUserIdentifier: String,
+        developmentUserKey: String? = nil
+    ) async throws {
+        guard attemptID == loginAttemptID, loginIntent != nil else {
+            try? await authAPI.logout(credential: response.credential())
+            operation = .idle
+            return
+        }
+
+        let stored: StoredSessionCredential
+        do {
+            stored = try await credentialController.commitLogin(
+                response: response,
+                appleUserIdentifier: appleUserIdentifier,
+                developmentUserKey: developmentUserKey
+            )
+        } catch {
+            try? await authAPI.logout(credential: response.credential())
+            throw error
+        }
+
+        guard attemptID == loginAttemptID,
+              loginIntent != nil,
+              await credentialController.current() == stored
+        else {
+            try? await authAPI.logout(credential: stored.credential)
+            operation = .idle
+            return
+        }
+
+        defaults.removeObject(forKey: localInvalidationMarkerKey)
+        sessionPhase = .signedIn(stored.user)
+        accessAvailability = .ready
+        operation = .idle
+        resetLoginPresentation()
     }
 
     private func invalidateLocalSession() async {
@@ -415,6 +477,12 @@ extension String {
         func loginWithApple(_ request: AppleLoginRequest) async throws -> LoginResponse {
             throw AuthSessionError.missingCredential
         }
+
+        func issueDevelopmentTokens(_ request: DevelopmentTokenRequest) async throws -> LoginResponse {
+            throw AuthSessionError.missingCredential
+        }
+
+        func deleteDevelopmentUser(testUserKey: String) async throws {}
 
         func refresh(refreshToken: String, idempotencyKey: UUID) async throws -> TokenRefreshResponse {
             throw AuthSessionError.missingCredential

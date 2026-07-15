@@ -83,6 +83,16 @@ struct ShareLoginView: View {
                     || (authenticationState.requiresDisplayName && !authenticationState.isDisplayNameValid)
             )
 
+            #if DEBUG
+                if DevelopmentAuthConfiguration.current != nil {
+                    CommonButton(title: "개발 계정으로 로그인", property1: .secondary) {
+                        Task { await authenticationState.loginForDevelopment() }
+                    }
+                    .frame(width: 320)
+                    .disabled(authenticationState.isAuthenticating)
+                }
+            #endif
+
             if let errorMessage = authenticationState.loginErrorMessage {
                 Text(errorMessage)
                     .font(.b2_md)

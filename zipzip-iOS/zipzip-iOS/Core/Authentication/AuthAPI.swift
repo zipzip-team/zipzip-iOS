@@ -8,6 +8,8 @@ import Foundation
 
 protocol AuthAPI: Sendable {
     func loginWithApple(_ request: AppleLoginRequest) async throws -> LoginResponse
+    func issueDevelopmentTokens(_ request: DevelopmentTokenRequest) async throws -> LoginResponse
+    func deleteDevelopmentUser(testUserKey: String) async throws
     func refresh(refreshToken: String, idempotencyKey: UUID) async throws -> TokenRefreshResponse
     func logout(credential: AuthCredential) async throws
     func withdraw(accessToken: String, tokenType: String) async throws
@@ -25,6 +27,19 @@ final class DefaultAuthAPI: AuthAPI, @unchecked Sendable {
             AuthEndpoint.apple(request)
         )
         return response.data
+    }
+
+    func issueDevelopmentTokens(_ request: DevelopmentTokenRequest) async throws -> LoginResponse {
+        let response: APIEnvelope<LoginResponse> = try await networkProvider.request(
+            AuthEndpoint.developmentTokens(request)
+        )
+        return response.data
+    }
+
+    func deleteDevelopmentUser(testUserKey: String) async throws {
+        let _: APIVoidEnvelope = try await networkProvider.request(
+            AuthEndpoint.deleteDevelopmentUser(testUserKey: testUserKey)
+        )
     }
 
     func refresh(refreshToken: String, idempotencyKey: UUID) async throws -> TokenRefreshResponse {
@@ -49,6 +64,8 @@ final class DefaultAuthAPI: AuthAPI, @unchecked Sendable {
 
 private enum AuthEndpoint: APIEndpoint {
     case apple(AppleLoginRequest)
+    case developmentTokens(DevelopmentTokenRequest)
+    case deleteDevelopmentUser(testUserKey: String)
     case refresh(refreshToken: String, idempotencyKey: UUID)
     case logout(AuthCredential)
     case withdraw(accessToken: String, tokenType: String)
@@ -57,6 +74,10 @@ private enum AuthEndpoint: APIEndpoint {
         switch self {
         case .apple:
             "/api/v1/auth/apple"
+        case .developmentTokens:
+            "/api/v1/dev/auth/tokens"
+        case let .deleteDevelopmentUser(testUserKey):
+            "/api/v1/dev/auth/users/\(testUserKey)"
         case .refresh:
             "/api/v1/auth/refresh"
         case .logout:
@@ -68,16 +89,16 @@ private enum AuthEndpoint: APIEndpoint {
 
     var method: HTTPMethod {
         switch self {
-        case .apple, .refresh, .logout:
+        case .apple, .developmentTokens, .refresh, .logout:
             .post
-        case .withdraw:
+        case .deleteDevelopmentUser, .withdraw:
             .delete
         }
     }
 
     var headers: HTTPHeaders? {
         switch self {
-        case .apple:
+        case .apple, .developmentTokens, .deleteDevelopmentUser:
             nil
         case let .refresh(_, idempotencyKey):
             ["Idempotency-Key": idempotencyKey.uuidString]
@@ -100,6 +121,13 @@ private enum AuthEndpoint: APIEndpoint {
                 parameters["displayName"] = displayName
             }
             return parameters
+        case let .developmentTokens(request):
+            return [
+                "testUserKey": request.testUserKey,
+                "displayName": request.displayName
+            ]
+        case .deleteDevelopmentUser:
+            return nil
         case let .refresh(refreshToken, _):
             return ["refreshToken": refreshToken]
         case let .logout(credential):

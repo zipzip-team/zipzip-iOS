@@ -225,7 +225,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "set -e\ncase \"${BASE_URL:-}\" in\n  \"\"|'$(BASE_URL)')\n    echo \"error: BASE_URL is not configured. Copy App/Config.example.xcconfig to App/Config.xcconfig and set the API host.\"\n    exit 1\n    ;;\nesac\n";
+			shellScript = "set -e\ncase \"${BASE_URL:-}\" in\n  \"\"|'$(BASE_URL)')\n    echo \"error: BASE_URL is not configured. Copy App/Config.example.xcconfig to App/Config.xcconfig and set the API host.\"\n    exit 1\n    ;;\nesac\n\nif [ \"${CONFIGURATION:-}\" = \"Debug\" ]; then\n  case \"${DEV_AUTH_ENABLED:-NO}\" in\n    YES)\n      case \"${DEV_AUTH_TEST_USER_KEY:-}\" in\n        \"\"|'$(DEV_AUTH_TEST_USER_KEY)')\n          echo \"error: DEV_AUTH_TEST_USER_KEY is required when DEV_AUTH_ENABLED is YES.\"\n          exit 1\n          ;;\n      esac\n      case \"${DEV_AUTH_DISPLAY_NAME:-}\" in\n        \"\"|'$(DEV_AUTH_DISPLAY_NAME)')\n          echo \"error: DEV_AUTH_DISPLAY_NAME is required when DEV_AUTH_ENABLED is YES.\"\n          exit 1\n          ;;\n      esac\n      ;;\n    NO|'')\n      ;;\n    *)\n      echo \"error: DEV_AUTH_ENABLED must be YES or NO.\"\n      exit 1\n      ;;\n  esac\nfi\n";
 		};
 		CA881D002FF5000000AA3125 /* SwiftFormat */ = {
 			isa = PBXShellScriptBuildPhase;
