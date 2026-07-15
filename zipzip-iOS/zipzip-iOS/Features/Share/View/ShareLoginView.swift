@@ -36,13 +36,14 @@ struct ShareLoginView: View {
         .navigationBarBackButtonHidden(true)
         .toolbarVisibility(.hidden, for: .navigationBar)
         .overlay(alignment: .topLeading) {
-            FloatingHeader(.leading) {
-                RoundedIconButton(items: [
-                    .init(id: "share-login-back", icon: .iconChevronLeft, accessibilityLabel: "뒤로가기") {
-                        authenticationState.cancelLogin()
-                    }
-                ])
-                .disabled(authenticationState.isAuthenticating)
+            if !authenticationState.isAuthenticating {
+                FloatingHeader(.leading) {
+                    RoundedIconButton(items: [
+                        .init(id: "share-login-back", icon: .iconChevronLeft, accessibilityLabel: "뒤로가기") {
+                            authenticationState.cancelLogin()
+                        }
+                    ])
+                }
             }
         }
     }
