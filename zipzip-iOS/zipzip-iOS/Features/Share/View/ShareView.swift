@@ -127,7 +127,11 @@ struct ShareView: View {
                         inviteCode: viewModel.inviteCode(for: group.id) ?? "",
                         isInviteCodeAvailable: viewModel.isInviteCodeAvailable(for: group.id),
                         onClose: viewModel.dismissShareManagement,
-                        onComplete: viewModel.completeShareManagement,
+                        onComplete: {
+                            Task {
+                                await viewModel.completeShareManagement()
+                            }
+                        },
                         onLeave: leaveManagedShareGroup
                     )
                     .task(id: group.id) {
@@ -158,10 +162,12 @@ struct ShareView: View {
     }
 
     private func leaveManagedShareGroup() {
-        guard viewModel.leaveManagedShareGroup() else {
-            return
+        Task {
+            guard await viewModel.leaveManagedShareGroup() else {
+                return
+            }
+            router.popToRoot()
         }
-        router.popToRoot()
     }
 }
 

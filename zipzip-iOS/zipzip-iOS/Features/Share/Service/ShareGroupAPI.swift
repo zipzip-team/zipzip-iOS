@@ -9,11 +9,15 @@ import Foundation
 protocol ShareGroupAPI {
     func fetchGroups(cursor: String?, size: Int) async throws -> ShareGroupListPageResponse
     func fetchGroup(id: UUID) async throws -> ShareGroupDetailResponse
+    func fetchMembers(groupID: UUID, cursor: String?, size: Int) async throws -> ShareGroupMemberListPageResponse
     func fetchInviteCode(groupID: UUID) async throws -> InviteCodeResponse
     func fetchSharedAlbums(groupID: UUID, cursor: String?, size: Int) async throws -> SharedAlbumListPageResponse
     func createGroup(name: String, idempotencyKey: UUID) async throws -> CreateSharedGroupResponse
     func previewJoin(inviteCode: String) async throws -> ShareGroupJoinPreviewResponse
     func join(inviteCode: String, idempotencyKey: UUID) async throws -> ShareGroupJoinResponse
+    func updateGroupName(groupID: UUID, name: String) async throws -> ShareGroupUpdateResponse
+    func deleteGroup(groupID: UUID) async throws
+    func leaveGroup(groupID: UUID) async throws
 }
 
 final class DefaultShareGroupAPI: ShareGroupAPI {
@@ -33,6 +37,17 @@ final class DefaultShareGroupAPI: ShareGroupAPI {
     func fetchGroup(id: UUID) async throws -> ShareGroupDetailResponse {
         let response: APIEnvelope<ShareGroupDetailResponse> = try await networkProvider.request(
             ShareGroupEndpoint.detail(id: id)
+        )
+        return response.data
+    }
+
+    func fetchMembers(
+        groupID: UUID,
+        cursor: String?,
+        size: Int = 50
+    ) async throws -> ShareGroupMemberListPageResponse {
+        let response: APIEnvelope<ShareGroupMemberListPageResponse> = try await networkProvider.request(
+            ShareGroupEndpoint.members(groupID: groupID, cursor: cursor, size: size)
         )
         return response.data
     }
@@ -75,6 +90,25 @@ final class DefaultShareGroupAPI: ShareGroupAPI {
         )
         return response.data
     }
+
+    func updateGroupName(groupID: UUID, name: String) async throws -> ShareGroupUpdateResponse {
+        let response: APIEnvelope<ShareGroupUpdateResponse> = try await networkProvider.request(
+            ShareGroupEndpoint.updateName(groupID: groupID, name: name)
+        )
+        return response.data
+    }
+
+    func deleteGroup(groupID: UUID) async throws {
+        let _: APIVoidEnvelope = try await networkProvider.request(
+            ShareGroupEndpoint.delete(groupID: groupID)
+        )
+    }
+
+    func leaveGroup(groupID: UUID) async throws {
+        let _: APIVoidEnvelope = try await networkProvider.request(
+            ShareGroupEndpoint.leave(groupID: groupID)
+        )
+    }
 }
 
 nonisolated struct ShareGroupListPageResponse: Decodable {
@@ -104,6 +138,12 @@ nonisolated struct ShareGroupDetailResponse: Decodable {
     let photoCount: Int
     let createdAt: String
     let updatedAt: String
+}
+
+nonisolated struct ShareGroupMemberListPageResponse: Decodable {
+    let items: [ShareGroupMemberResponse]
+    let nextCursor: String?
+    let hasNext: Bool
 }
 
 nonisolated struct InviteCodeResponse: Decodable {
@@ -169,21 +209,33 @@ nonisolated struct ShareGroupJoinResponse: Decodable {
     let joinedAt: String
 }
 
+nonisolated struct ShareGroupUpdateResponse: Decodable {
+    let id: UUID
+    let name: String
+    let updatedAt: String
+}
+
 private enum ShareGroupEndpoint: APIEndpoint {
     case list(cursor: String?, size: Int)
     case detail(id: UUID)
+    case members(groupID: UUID, cursor: String?, size: Int)
     case inviteCode(groupID: UUID)
     case sharedAlbums(groupID: UUID, cursor: String?, size: Int)
     case create(name: String, idempotencyKey: UUID)
     case joinPreview(inviteCode: String)
     case join(inviteCode: String, idempotencyKey: UUID)
+    case updateName(groupID: UUID, name: String)
+    case delete(groupID: UUID)
+    case leave(groupID: UUID)
 
     var path: String {
         switch self {
         case .list, .create:
             "/api/v1/shared-groups"
-        case let .detail(id):
+        case let .detail(id), let .updateName(id, _), let .delete(id):
             "/api/v1/shared-groups/\(id.uuidString)"
+        case let .members(groupID, _, _):
+            "/api/v1/shared-groups/\(groupID.uuidString)/members"
         case let .inviteCode(groupID):
             "/api/v1/shared-groups/\(groupID.uuidString)/invite-code"
         case let .sharedAlbums(groupID, _, _):
@@ -192,15 +244,21 @@ private enum ShareGroupEndpoint: APIEndpoint {
             "/api/v1/shared-groups/join-preview"
         case .join:
             "/api/v1/shared-groups/join"
+        case let .leave(groupID):
+            "/api/v1/shared-groups/\(groupID.uuidString)/members/me"
         }
     }
 
     var method: HTTPMethod {
         switch self {
-        case .list, .detail, .inviteCode, .sharedAlbums, .joinPreview:
+        case .list, .detail, .members, .inviteCode, .sharedAlbums, .joinPreview:
             .get
         case .create, .join:
             .post
+        case .updateName:
+            .patch
+        case .delete, .leave:
+            .delete
         }
     }
 
@@ -217,7 +275,9 @@ private enum ShareGroupEndpoint: APIEndpoint {
 
     var parameters: Parameters? {
         switch self {
-        case let .list(cursor, size), let .sharedAlbums(_, cursor, size):
+        case let .list(cursor, size),
+             let .members(_, cursor, size),
+             let .sharedAlbums(_, cursor, size):
             var parameters: Parameters = ["size": size]
             if let cursor {
                 parameters["cursor"] = cursor
@@ -229,16 +289,18 @@ private enum ShareGroupEndpoint: APIEndpoint {
             return ["inviteCode": inviteCode]
         case let .join(inviteCode, _):
             return ["inviteCode": inviteCode]
-        case .detail, .inviteCode:
+        case let .updateName(_, name):
+            return ["name": name]
+        case .detail, .inviteCode, .delete, .leave:
             return nil
         }
     }
 
     var encoding: ParameterEncoding {
         switch self {
-        case .create, .join:
+        case .create, .join, .updateName:
             JSONEncoding.default
-        case .list, .detail, .inviteCode, .sharedAlbums, .joinPreview:
+        case .list, .detail, .members, .inviteCode, .sharedAlbums, .joinPreview, .delete, .leave:
             URLEncoding(destination: .queryString)
         }
     }

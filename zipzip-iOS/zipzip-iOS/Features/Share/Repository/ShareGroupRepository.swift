@@ -21,10 +21,26 @@ struct ShareGroupJoinPreview {
     let alreadyJoined: Bool
 }
 
+struct ShareGroupMember: Identifiable, Equatable {
+    let id: UUID
+    let displayName: String
+    let role: ShareGroupRole
+    let isMe: Bool
+    let joinedAt: Date
+}
+
+struct ShareGroupMemberPage {
+    let items: [ShareGroupMember]
+    let nextCursor: String?
+    let hasNext: Bool
+}
+
 enum ShareGroupRepositoryError: Error, Equatable {
     case groupNotFound
     case invalidInviteCode
     case alreadyJoined
+    case hostRequired
+    case memberRequired
 }
 
 @MainActor
@@ -32,6 +48,7 @@ protocol ShareGroupRepository {
     func groups() async throws -> [ShareAlbum]
     func syncGroups(cursor: String?, size: Int) async throws -> ShareGroupRepositoryPage
     func syncGroup(id: ShareAlbum.ID) async throws
+    func members(groupID: ShareAlbum.ID, cursor: String?, size: Int) async throws -> ShareGroupMemberPage
     func syncSharedAlbums(
         groupID: ShareAlbum.ID,
         cursor: String?,
@@ -41,7 +58,10 @@ protocol ShareGroupRepository {
     func createGroup(name: String, idempotencyKey: UUID) async throws -> CreatedShareGroup
     func previewJoin(inviteCode: String) async throws -> ShareGroupJoinPreview
     func join(inviteCode: String, idempotencyKey: UUID) async throws -> ShareAlbum.ID
-    func deleteGroup(id: ShareAlbum.ID) async throws
+    func updateGroupName(id: ShareAlbum.ID, name: String) async throws
+    func deleteRemoteGroup(id: ShareAlbum.ID) async throws
+    func leaveGroup(id: ShareAlbum.ID) async throws
+    func removeCachedGroup(id: ShareAlbum.ID) async throws
 }
 
 @MainActor
@@ -72,6 +92,31 @@ final class DefaultShareGroupRepository: ShareGroupRepository {
         do {
             let detail = try await api.fetchGroup(id: id)
             try await store.upsertGroupDetail(detail)
+        } catch let error as NetworkError where error.serverCode == "SHARED_GROUP_NOT_FOUND" {
+            throw ShareGroupRepositoryError.groupNotFound
+        }
+    }
+
+    func members(
+        groupID: ShareAlbum.ID,
+        cursor: String?,
+        size: Int
+    ) async throws -> ShareGroupMemberPage {
+        do {
+            let page = try await api.fetchMembers(groupID: groupID, cursor: cursor, size: size)
+            return ShareGroupMemberPage(
+                items: page.items.map {
+                    ShareGroupMember(
+                        id: $0.userId,
+                        displayName: $0.displayName,
+                        role: ShareGroupRole(rawValue: $0.role.rawValue) ?? .participant,
+                        isMe: $0.isMe ?? false,
+                        joinedAt: Self.date($0.joinedAt) ?? .distantPast
+                    )
+                },
+                nextCursor: page.nextCursor,
+                hasNext: page.hasNext
+            )
         } catch let error as NetworkError where error.serverCode == "SHARED_GROUP_NOT_FOUND" {
             throw ShareGroupRepositoryError.groupNotFound
         }
@@ -156,8 +201,51 @@ final class DefaultShareGroupRepository: ShareGroupRepository {
         }
     }
 
-    func deleteGroup(id: ShareAlbum.ID) async throws {
+    func updateGroupName(id: ShareAlbum.ID, name: String) async throws {
+        guard try await cachedRole(groupID: id) == .admin else {
+            throw ShareGroupRepositoryError.hostRequired
+        }
+
+        do {
+            let response = try await api.updateGroupName(groupID: id, name: name)
+            try await store.updateGroup(response)
+        } catch let error as NetworkError where error.serverCode == "SHARED_GROUP_NOT_FOUND" {
+            throw ShareGroupRepositoryError.groupNotFound
+        }
+    }
+
+    func deleteRemoteGroup(id: ShareAlbum.ID) async throws {
+        guard try await cachedRole(groupID: id) == .admin else {
+            throw ShareGroupRepositoryError.hostRequired
+        }
+
+        do {
+            try await api.deleteGroup(groupID: id)
+            try await store.deleteGroup(id: id)
+        } catch let error as NetworkError where error.serverCode == "SHARED_GROUP_NOT_FOUND" {
+            throw ShareGroupRepositoryError.groupNotFound
+        }
+    }
+
+    func leaveGroup(id: ShareAlbum.ID) async throws {
+        guard try await cachedRole(groupID: id) == .participant else {
+            throw ShareGroupRepositoryError.memberRequired
+        }
+
+        do {
+            try await api.leaveGroup(groupID: id)
+            try await store.deleteGroup(id: id)
+        } catch let error as NetworkError where error.serverCode == "SHARED_GROUP_NOT_FOUND" {
+            throw ShareGroupRepositoryError.groupNotFound
+        }
+    }
+
+    func removeCachedGroup(id: ShareAlbum.ID) async throws {
         try await store.deleteGroup(id: id)
+    }
+
+    private func cachedRole(groupID: ShareAlbum.ID) async throws -> ShareGroupRole? {
+        try await groups().first { $0.id == groupID }?.currentUserRole
     }
 
     private static func makeGroup(from stored: StoredSharedGroup) -> ShareAlbum {
@@ -197,5 +285,16 @@ final class DefaultShareGroupRepository: ShareGroupRepository {
     private static func makeUser(id: UUID?, displayName: String?) -> ShareGroupUser? {
         guard id != nil || displayName != nil else { return nil }
         return ShareGroupUser(id: id, displayName: displayName)
+    }
+
+    private static func date(_ value: String?) -> Date? {
+        guard let value else { return nil }
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        if let date = formatter.date(from: value) {
+            return date
+        }
+        formatter.formatOptions = [.withInternetDateTime]
+        return formatter.date(from: value)
     }
 }

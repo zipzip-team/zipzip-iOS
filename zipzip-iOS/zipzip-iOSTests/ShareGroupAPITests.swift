@@ -124,6 +124,65 @@ final class ShareGroupAPITests: XCTestCase {
         XCTAssertEqual(try requestBody(request)["inviteCode"] as? String, "ZZ7K9P2Q")
     }
 
+    @MainActor
+    func testMemberListRequestMatchesDocumentedContract() async throws {
+        let provider = ShareGroupRecordingNetworkProvider(json: Self.memberListJSON)
+        let api = DefaultShareGroupAPI(networkProvider: provider)
+        let groupID = try XCTUnwrap(UUID(uuidString: "11111111-1111-1111-1111-111111111111"))
+
+        let response = try await api.fetchMembers(groupID: groupID, cursor: "member-cursor", size: 50)
+
+        XCTAssertEqual(response.items.first?.displayName, "집집이")
+        let request = try XCTUnwrap(provider.request)
+        XCTAssertEqual(request.url?.path, "/api/v1/shared-groups/\(groupID.uuidString)/members")
+        XCTAssertEqual(request.httpMethod, "GET")
+        let queryItems = try XCTUnwrap(URLComponents(
+            url: try XCTUnwrap(request.url),
+            resolvingAgainstBaseURL: false
+        )?.queryItems)
+        XCTAssertEqual(queryItems.first(where: { $0.name == "cursor" })?.value, "member-cursor")
+        XCTAssertEqual(queryItems.first(where: { $0.name == "size" })?.value, "50")
+    }
+
+    @MainActor
+    func testUpdateGroupRequestMatchesDocumentedContract() async throws {
+        let provider = ShareGroupRecordingNetworkProvider(json: Self.updateGroupJSON)
+        let api = DefaultShareGroupAPI(networkProvider: provider)
+        let groupID = try XCTUnwrap(UUID(uuidString: "11111111-1111-1111-1111-111111111111"))
+
+        let response = try await api.updateGroupName(groupID: groupID, name: "여름 여행")
+
+        XCTAssertEqual(response.name, "여름 여행")
+        let request = try XCTUnwrap(provider.request)
+        XCTAssertEqual(request.url?.path, "/api/v1/shared-groups/\(groupID.uuidString)")
+        XCTAssertEqual(request.httpMethod, "PATCH")
+        XCTAssertEqual(try requestBody(request)["name"] as? String, "여름 여행")
+    }
+
+    @MainActor
+    func testDeleteGroupRequestMatchesDocumentedContract() async throws {
+        let provider = ShareGroupRecordingNetworkProvider(json: Self.voidJSON)
+        let api = DefaultShareGroupAPI(networkProvider: provider)
+        let groupID = try XCTUnwrap(UUID(uuidString: "11111111-1111-1111-1111-111111111111"))
+
+        try await api.deleteGroup(groupID: groupID)
+
+        XCTAssertEqual(provider.request?.url?.path, "/api/v1/shared-groups/\(groupID.uuidString)")
+        XCTAssertEqual(provider.request?.httpMethod, "DELETE")
+    }
+
+    @MainActor
+    func testLeaveGroupRequestMatchesDocumentedContract() async throws {
+        let provider = ShareGroupRecordingNetworkProvider(json: Self.voidJSON)
+        let api = DefaultShareGroupAPI(networkProvider: provider)
+        let groupID = try XCTUnwrap(UUID(uuidString: "11111111-1111-1111-1111-111111111111"))
+
+        try await api.leaveGroup(groupID: groupID)
+
+        XCTAssertEqual(provider.request?.url?.path, "/api/v1/shared-groups/\(groupID.uuidString)/members/me")
+        XCTAssertEqual(provider.request?.httpMethod, "DELETE")
+    }
+
     private func requestBody(_ request: URLRequest) throws -> [String: Any] {
         let data = try XCTUnwrap(request.httpBody)
         return try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
@@ -233,6 +292,41 @@ final class ShareGroupAPITests: XCTestCase {
         "myRole": "MEMBER",
         "joinedAt": "2026-07-15T10:15:30Z"
       }
+    }
+    """
+
+    private static let memberListJSON = """
+    {
+      "data": {
+        "items": [{
+          "userId": "22222222-2222-2222-2222-222222222222",
+          "displayName": "집집이",
+          "role": "HOST",
+          "isMe": true,
+          "joinedAt": "2026-07-03T10:15:30Z"
+        }],
+        "nextCursor": null,
+        "hasNext": false
+      }
+    }
+    """
+
+    private static let updateGroupJSON = """
+    {
+      "data": {
+        "id": "11111111-1111-1111-1111-111111111111",
+        "name": "여름 여행",
+        "updatedAt": "2026-07-15T10:15:30Z"
+      }
+    }
+    """
+
+    private static let voidJSON = """
+    {
+      "status": 200,
+      "code": "SUCCESS",
+      "message": "success",
+      "data": null
     }
     """
 }

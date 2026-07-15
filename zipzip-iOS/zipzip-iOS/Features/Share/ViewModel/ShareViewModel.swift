@@ -33,7 +33,11 @@ final class ShareViewModel {
     private(set) var isCreatingGroup = false
     private(set) var isPreviewingJoin = false
     private(set) var isJoiningGroup = false
+    private(set) var isUpdatingGroup = false
+    private(set) var isLeavingGroup = false
     private(set) var joinErrorCode: String?
+    private(set) var groupManagementErrorCode: String?
+    private(set) var membersByGroupID: [ShareAlbum.ID: [ShareGroupMember]] = [:]
 
     private(set) var hasLoadedGroups = false
     private(set) var isLoadingGroups = false
@@ -66,6 +70,7 @@ final class ShareViewModel {
     private var sharedAlbumHasNextPage: [ShareAlbum.ID: Bool] = [:]
     private var inviteCodes: [ShareAlbum.ID: String] = [:]
     private var loadingInviteCodeGroupIDs: Set<ShareAlbum.ID> = []
+    private var loadingMemberGroupIDs: Set<ShareAlbum.ID> = []
     private var visibleGroupIDs: [ShareAlbum.ID]?
     private var visibleSharedAlbumIDs: [ShareAlbum.ID: [SharedAlbum.ID]] = [:]
 
@@ -94,6 +99,10 @@ final class ShareViewModel {
 
     func inviteCode(for groupID: ShareAlbum.ID) -> String? {
         inviteCodes[groupID]
+    }
+
+    func members(for groupID: ShareAlbum.ID) -> [ShareGroupMember] {
+        membersByGroupID[groupID] ?? []
     }
 
     func isInviteCodeAvailable(for groupID: ShareAlbum.ID) -> Bool {
@@ -248,6 +257,29 @@ final class ShareViewModel {
         } catch {}
     }
 
+    func loadMembers(groupID: ShareAlbum.ID, refresh: Bool = false) async {
+        guard !loadingMemberGroupIDs.contains(groupID) else { return }
+        guard refresh || membersByGroupID[groupID] == nil else { return }
+
+        loadingMemberGroupIDs.insert(groupID)
+        defer { loadingMemberGroupIDs.remove(groupID) }
+
+        do {
+            var members: [ShareGroupMember] = []
+            var cursor: String?
+            repeat {
+                let page = try await repository.members(groupID: groupID, cursor: cursor, size: 100)
+                for member in page.items where !members.contains(where: { $0.id == member.id }) {
+                    members.append(member)
+                }
+                cursor = page.hasNext ? page.nextCursor : nil
+            } while cursor != nil
+            membersByGroupID[groupID] = members
+        } catch ShareGroupRepositoryError.groupNotFound {
+            await removeMissingGroup(id: groupID)
+        } catch {}
+    }
+
     func resetRemoteData() {
         groups = []
         hasLoadedGroups = false
@@ -264,6 +296,8 @@ final class ShareViewModel {
         sharedAlbumHasNextPage = [:]
         inviteCodes = [:]
         loadingInviteCodeGroupIDs = []
+        membersByGroupID = [:]
+        loadingMemberGroupIDs = []
         visibleGroupIDs = nil
         visibleSharedAlbumIDs = [:]
         inviteCode = ""
@@ -450,21 +484,81 @@ final class ShareViewModel {
         guard let group = group(withID: groupID) else { return }
         shareGroupNameDraft = group.name
         managedShareGroup = group
+        groupManagementErrorCode = nil
         isShareManagementPresented = true
     }
 
-    func completeShareManagement() {
-        dismissShareManagement()
+    func completeShareManagement() async {
+        guard let group = managedShareGroup, !isUpdatingGroup else { return }
+        guard group.currentUserRole == .admin else {
+            dismissShareManagement()
+            return
+        }
+
+        let trimmedName = shareGroupNameDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedName.isEmpty else { return }
+        guard trimmedName != group.name else {
+            dismissShareManagement()
+            return
+        }
+
+        groupManagementErrorCode = nil
+        isUpdatingGroup = true
+        defer { isUpdatingGroup = false }
+        do {
+            try await repository.updateGroupName(id: group.id, name: trimmedName)
+            try await reloadGroups()
+            dismissShareManagement()
+        } catch let error as ShareGroupRepositoryError {
+            groupManagementErrorCode = String(describing: error)
+        } catch let error as NetworkError {
+            groupManagementErrorCode = error.serverCode ?? "NETWORK_ERROR"
+        } catch {
+            groupManagementErrorCode = "UNKNOWN_ERROR"
+        }
     }
 
     @discardableResult
-    func leaveManagedShareGroup() -> Bool {
-        false
+    func leaveManagedShareGroup() async -> Bool {
+        guard let group = managedShareGroup, !isLeavingGroup else { return false }
+
+        groupManagementErrorCode = nil
+        isLeavingGroup = true
+        defer { isLeavingGroup = false }
+        do {
+            switch group.currentUserRole {
+            case .admin:
+                try await repository.deleteRemoteGroup(id: group.id)
+            case .participant:
+                try await repository.leaveGroup(id: group.id)
+            }
+            removeGroupState(id: group.id)
+            try await reloadGroups()
+            dismissShareManagement()
+            return true
+        } catch ShareGroupRepositoryError.groupNotFound {
+            removeGroupState(id: group.id)
+            try? await reloadGroups()
+            dismissShareManagement()
+            return true
+        } catch let error as ShareGroupRepositoryError {
+            groupManagementErrorCode = String(describing: error)
+            return false
+        } catch let error as NetworkError {
+            groupManagementErrorCode = error.serverCode ?? "NETWORK_ERROR"
+            return false
+        } catch {
+            groupManagementErrorCode = "UNKNOWN_ERROR"
+            return false
+        }
     }
 
     func dismissShareManagement() {
         isShareManagementPresented = false
         managedShareGroup = nil
+        groupManagementErrorCode = nil
+        isUpdatingGroup = false
+        isLeavingGroup = false
     }
 
     func resetTransientUI() {
@@ -523,18 +617,23 @@ final class ShareViewModel {
     }
 
     private func removeMissingGroup(id: ShareAlbum.ID) async {
-        try? await repository.deleteGroup(id: id)
+        try? await repository.removeCachedGroup(id: id)
+        removeGroupState(id: id)
+        try? await reloadGroups()
+        if managedShareGroup?.id == id {
+            dismissShareManagement()
+        }
+    }
+
+    private func removeGroupState(id: ShareAlbum.ID) {
         visibleGroupIDs?.removeAll { $0 == id }
         visibleSharedAlbumIDs.removeValue(forKey: id)
-        try? await reloadGroups()
         loadedGroupDetailIDs.remove(id)
         loadedSharedAlbumGroupIDs.remove(id)
         sharedAlbumNextCursors.removeValue(forKey: id)
         sharedAlbumHasNextPage.removeValue(forKey: id)
         inviteCodes.removeValue(forKey: id)
-        if managedShareGroup?.id == id {
-            dismissShareManagement()
-        }
+        membersByGroupID.removeValue(forKey: id)
     }
 
     private func prepareJoinedGroup(id: ShareAlbum.ID) async {

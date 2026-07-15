@@ -124,7 +124,8 @@ struct ShareGroupDetailView: View {
         .task(id: groupID) {
             async let groupRequest: Void = viewModel.loadGroup(id: groupID)
             async let albumRequest: Void = viewModel.loadSharedAlbums(groupID: groupID)
-            _ = await(groupRequest, albumRequest)
+            async let memberRequest: Void = viewModel.loadMembers(groupID: groupID)
+            _ = await(groupRequest, albumRequest, memberRequest)
         }
     }
 

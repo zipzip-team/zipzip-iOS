@@ -286,6 +286,91 @@ final class ShareViewModelTests: XCTestCase {
         XCTAssertTrue(api.joinInviteCodes.isEmpty)
     }
 
+    @MainActor
+    func testLoadsAllMemberPagesWithoutDuplicates() async throws {
+        let groupID = try XCTUnwrap(UUID(uuidString: "11111111-1111-1111-1111-111111111111"))
+        let firstMemberID = try XCTUnwrap(UUID(uuidString: "22222222-2222-2222-2222-222222222222"))
+        let secondMemberID = try XCTUnwrap(UUID(uuidString: "33333333-3333-3333-3333-333333333333"))
+        let api = ManagementTrackingShareGroupAPI(
+            groupID: groupID,
+            role: .host,
+            memberPages: [
+                ShareGroupMemberListPageResponse(
+                    items: [makeMember(id: firstMemberID, role: .host, isMe: true)],
+                    nextCursor: "next-member",
+                    hasNext: true
+                ),
+                ShareGroupMemberListPageResponse(
+                    items: [
+                        makeMember(id: firstMemberID, role: .host, isMe: true),
+                        makeMember(id: secondMemberID, role: .member, isMe: false)
+                    ],
+                    nextCursor: nil,
+                    hasNext: false
+                )
+            ]
+        )
+        let viewModel = ShareViewModel(
+            repository: makeRepository(api: api, store: try makeStore())
+        )
+
+        await viewModel.loadGroups()
+        await viewModel.loadMembers(groupID: groupID)
+
+        XCTAssertEqual(viewModel.members(for: groupID).map(\.id), [firstMemberID, secondMemberID])
+        XCTAssertEqual(api.memberCursors.count, 2)
+        XCTAssertNil(api.memberCursors[0])
+        XCTAssertEqual(api.memberCursors[1], "next-member")
+    }
+
+    @MainActor
+    func testHostCanRenameAndDeleteManagedGroup() async throws {
+        let groupID = try XCTUnwrap(UUID(uuidString: "11111111-1111-1111-1111-111111111111"))
+        let api = ManagementTrackingShareGroupAPI(groupID: groupID, role: .host)
+        let viewModel = ShareViewModel(
+            repository: makeRepository(api: api, store: try makeStore())
+        )
+        await viewModel.loadGroups()
+        viewModel.presentShareManagement(groupID: groupID)
+        viewModel.shareGroupNameDraft = "  여름 여행  "
+
+        await viewModel.completeShareManagement()
+
+        XCTAssertEqual(api.updatedNames, ["여름 여행"])
+        XCTAssertEqual(viewModel.group(withID: groupID)?.name, "여름 여행")
+
+        viewModel.presentShareManagement(groupID: groupID)
+        let didLeave = await viewModel.leaveManagedShareGroup()
+
+        XCTAssertTrue(didLeave)
+        XCTAssertEqual(api.deletedGroupIDs, [groupID])
+        XCTAssertTrue(api.leftGroupIDs.isEmpty)
+        XCTAssertTrue(viewModel.groups.isEmpty)
+    }
+
+    @MainActor
+    func testMemberSkipsRenameAndUsesLeaveEndpoint() async throws {
+        let groupID = try XCTUnwrap(UUID(uuidString: "11111111-1111-1111-1111-111111111111"))
+        let api = ManagementTrackingShareGroupAPI(groupID: groupID, role: .member)
+        let viewModel = ShareViewModel(
+            repository: makeRepository(api: api, store: try makeStore())
+        )
+        await viewModel.loadGroups()
+        viewModel.presentShareManagement(groupID: groupID)
+        viewModel.shareGroupNameDraft = "수정 시도"
+
+        await viewModel.completeShareManagement()
+
+        XCTAssertTrue(api.updatedNames.isEmpty)
+        viewModel.presentShareManagement(groupID: groupID)
+        let didLeave = await viewModel.leaveManagedShareGroup()
+
+        XCTAssertTrue(didLeave)
+        XCTAssertEqual(api.leftGroupIDs, [groupID])
+        XCTAssertTrue(api.deletedGroupIDs.isEmpty)
+        XCTAssertTrue(viewModel.groups.isEmpty)
+    }
+
     private func makeJoinPreview(
         groupID: UUID,
         alreadyJoined: Bool
@@ -299,6 +384,20 @@ final class ShareViewModelTests: XCTestCase {
             memberCount: 4,
             members: [],
             alreadyJoined: alreadyJoined
+        )
+    }
+
+    private func makeMember(
+        id: UUID,
+        role: ShareGroupRoleResponse,
+        isMe: Bool
+    ) -> ShareGroupMemberResponse {
+        ShareGroupMemberResponse(
+            userId: id,
+            displayName: isMe ? "나" : "친구",
+            role: role,
+            isMe: isMe,
+            joinedAt: "2026-07-15T10:15:30Z"
         )
     }
 
@@ -324,6 +423,8 @@ private struct StubShareGroupAPI: ShareGroupAPI {
     var createResponse: CreateSharedGroupResponse?
     var joinPreviewResponse: ShareGroupJoinPreviewResponse?
     var joinResponse: ShareGroupJoinResponse?
+    var memberListResponse = ShareGroupMemberListPageResponse(items: [], nextCursor: nil, hasNext: false)
+    var updateResponse: ShareGroupUpdateResponse?
 
     func fetchGroups(cursor: String?, size: Int) async throws -> ShareGroupListPageResponse {
         cursor == nil ? groupListResponse : nextGroupListResponse ?? groupListResponse
@@ -331,6 +432,14 @@ private struct StubShareGroupAPI: ShareGroupAPI {
 
     func fetchGroup(id: UUID) async throws -> ShareGroupDetailResponse {
         try XCTUnwrap(groupDetailResponse)
+    }
+
+    func fetchMembers(
+        groupID: UUID,
+        cursor: String?,
+        size: Int
+    ) async throws -> ShareGroupMemberListPageResponse {
+        memberListResponse
     }
 
     func fetchInviteCode(groupID: UUID) async throws -> InviteCodeResponse {
@@ -356,6 +465,14 @@ private struct StubShareGroupAPI: ShareGroupAPI {
     func join(inviteCode: String, idempotencyKey: UUID) async throws -> ShareGroupJoinResponse {
         try XCTUnwrap(joinResponse)
     }
+
+    func updateGroupName(groupID: UUID, name: String) async throws -> ShareGroupUpdateResponse {
+        try XCTUnwrap(updateResponse)
+    }
+
+    func deleteGroup(groupID: UUID) async throws {}
+
+    func leaveGroup(groupID: UUID) async throws {}
 }
 
 private struct UnavailableShareGroupAPI: ShareGroupAPI {
@@ -364,6 +481,14 @@ private struct UnavailableShareGroupAPI: ShareGroupAPI {
     }
 
     func fetchGroup(id: UUID) async throws -> ShareGroupDetailResponse {
+        throw URLError(.notConnectedToInternet)
+    }
+
+    func fetchMembers(
+        groupID: UUID,
+        cursor: String?,
+        size: Int
+    ) async throws -> ShareGroupMemberListPageResponse {
         throw URLError(.notConnectedToInternet)
     }
 
@@ -388,6 +513,18 @@ private struct UnavailableShareGroupAPI: ShareGroupAPI {
     }
 
     func join(inviteCode: String, idempotencyKey: UUID) async throws -> ShareGroupJoinResponse {
+        throw URLError(.notConnectedToInternet)
+    }
+
+    func updateGroupName(groupID: UUID, name: String) async throws -> ShareGroupUpdateResponse {
+        throw URLError(.notConnectedToInternet)
+    }
+
+    func deleteGroup(groupID: UUID) async throws {
+        throw URLError(.notConnectedToInternet)
+    }
+
+    func leaveGroup(groupID: UUID) async throws {
         throw URLError(.notConnectedToInternet)
     }
 }
@@ -415,6 +552,14 @@ private final class JoinTrackingShareGroupAPI: ShareGroupAPI {
         throw URLError(.notConnectedToInternet)
     }
 
+    func fetchMembers(
+        groupID: UUID,
+        cursor: String?,
+        size: Int
+    ) async throws -> ShareGroupMemberListPageResponse {
+        ShareGroupMemberListPageResponse(items: [], nextCursor: nil, hasNext: false)
+    }
+
     func fetchInviteCode(groupID: UUID) async throws -> InviteCodeResponse {
         throw URLError(.notConnectedToInternet)
     }
@@ -440,5 +585,110 @@ private final class JoinTrackingShareGroupAPI: ShareGroupAPI {
         joinInviteCodes.append(inviteCode)
         joinIdempotencyKeys.append(idempotencyKey)
         return try XCTUnwrap(joinResponse)
+    }
+
+    func updateGroupName(groupID: UUID, name: String) async throws -> ShareGroupUpdateResponse {
+        throw URLError(.unsupportedURL)
+    }
+
+    func deleteGroup(groupID: UUID) async throws {
+        throw URLError(.unsupportedURL)
+    }
+
+    func leaveGroup(groupID: UUID) async throws {
+        throw URLError(.unsupportedURL)
+    }
+}
+
+private final class ManagementTrackingShareGroupAPI: ShareGroupAPI {
+    let groupID: UUID
+    let role: ShareGroupRoleResponse
+    var memberPages: [ShareGroupMemberListPageResponse]
+    private(set) var memberCursors: [String?] = []
+    private(set) var updatedNames: [String] = []
+    private(set) var deletedGroupIDs: [UUID] = []
+    private(set) var leftGroupIDs: [UUID] = []
+
+    init(
+        groupID: UUID,
+        role: ShareGroupRoleResponse,
+        memberPages: [ShareGroupMemberListPageResponse] = []
+    ) {
+        self.groupID = groupID
+        self.role = role
+        self.memberPages = memberPages
+    }
+
+    func fetchGroups(cursor: String?, size: Int) async throws -> ShareGroupListPageResponse {
+        ShareGroupListPageResponse(
+            items: [ShareGroupSummaryResponse(
+                id: groupID,
+                name: "우리 가족",
+                myRole: role,
+                memberCount: 2,
+                sharedAlbumCount: 0,
+                photoCount: 0,
+                joinedAt: "2026-07-15T10:15:30Z",
+                updatedAt: "2026-07-15T10:15:30Z"
+            )],
+            nextCursor: nil,
+            hasNext: false
+        )
+    }
+
+    func fetchGroup(id: UUID) async throws -> ShareGroupDetailResponse {
+        throw URLError(.unsupportedURL)
+    }
+
+    func fetchMembers(
+        groupID: UUID,
+        cursor: String?,
+        size: Int
+    ) async throws -> ShareGroupMemberListPageResponse {
+        memberCursors.append(cursor)
+        return memberPages.isEmpty
+            ? ShareGroupMemberListPageResponse(items: [], nextCursor: nil, hasNext: false)
+            : memberPages.removeFirst()
+    }
+
+    func fetchInviteCode(groupID: UUID) async throws -> InviteCodeResponse {
+        throw URLError(.unsupportedURL)
+    }
+
+    func fetchSharedAlbums(
+        groupID: UUID,
+        cursor: String?,
+        size: Int
+    ) async throws -> SharedAlbumListPageResponse {
+        SharedAlbumListPageResponse(items: [], nextCursor: nil, hasNext: false)
+    }
+
+    func createGroup(name: String, idempotencyKey: UUID) async throws -> CreateSharedGroupResponse {
+        throw URLError(.unsupportedURL)
+    }
+
+    func previewJoin(inviteCode: String) async throws -> ShareGroupJoinPreviewResponse {
+        throw URLError(.unsupportedURL)
+    }
+
+    func join(inviteCode: String, idempotencyKey: UUID) async throws -> ShareGroupJoinResponse {
+        throw URLError(.unsupportedURL)
+    }
+
+    func updateGroupName(groupID: UUID, name: String) async throws -> ShareGroupUpdateResponse {
+        updatedNames.append(name)
+        return ShareGroupUpdateResponse(
+            id: groupID,
+            name: name,
+            updatedAt: "2026-07-15T11:15:30Z"
+        )
+    }
+
+    func deleteGroup(groupID: UUID) async throws {
+        deletedGroupIDs.append(groupID)
+    }
+
+    func leaveGroup(groupID: UUID) async throws {
+        leftGroupIDs.append(groupID)
     }
 }
