@@ -126,7 +126,10 @@ struct FilteredPictureView: View {
             secondaryTitle: "취소",
             primaryTitle: "삭제",
             onSecondaryTap: { pictureViewModel.showDeleteAlert = false },
-            onPrimaryTap: { pictureViewModel.showDeleteAlert = false } // TODO: 삭제 실행 연결
+            onPrimaryTap: {
+                pictureViewModel.showDeleteAlert = false
+                Task { await pictureViewModel.deleteSelectedPhotos() }
+            }
         )
         .overlay(alignment: .topLeading) {
             FloatingHeaderBar {
@@ -169,9 +172,12 @@ struct FilteredPictureView: View {
     }
 
     private var actionBar: some View {
-        ActionBar(items: [
-            .init(icon: .moveToAlbum, title: "집으로") { showShareSheet = true },
-            .init(icon: .metadata, title: "정보 수정") {
+        let hasSelection = !pictureViewModel.selectedPhotoIDs.isEmpty
+        return ActionBar(items: [
+            .init(icon: .moveToAlbum, title: "집으로", isDisabled: !hasSelection) {
+                showShareSheet = true
+            },
+            .init(icon: .metadata, title: "정보 수정", isDisabled: !hasSelection) {
                 if let metadata = pictureViewModel.firstSelectedMetadata {
                     router.push(.photoInfoEdit(PhotoInfoEditDestination(
                         metadata: metadata,
@@ -180,7 +186,9 @@ struct FilteredPictureView: View {
                     )))
                 }
             },
-            .init(icon: .delete, title: "삭제") { pictureViewModel.requestDelete() }
+            .init(icon: .delete, title: "삭제", isDisabled: !hasSelection) {
+                pictureViewModel.requestDelete()
+            }
         ])
         .padding(.bottom, 8)
     }

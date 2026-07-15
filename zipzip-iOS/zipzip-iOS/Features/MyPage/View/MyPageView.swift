@@ -156,7 +156,7 @@ struct MyPageView: View {
                 .frame(height: 10)
 
             VStack(spacing: 0) {
-                MyPageMenuRow(title: "버전 정보", trailingText: viewModel.appVersion) {}
+                MyPageMenuRow(title: "버전 정보", trailingText: viewModel.appVersion)
                 MyPageMenuRow(title: "앱 정보") {
                     openLink(.appInfo)
                 }

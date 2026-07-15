@@ -69,7 +69,11 @@ struct RootTabView: View {
                     title: "집으로",
                     isDisabled: pictureViewModel.selectedPhotoIDs.isEmpty
                 ) { showShareSheet = true },
-                .init(icon: .metadata, title: "정보 수정") {
+                .init(
+                    icon: .metadata,
+                    title: "정보 수정",
+                    isDisabled: pictureViewModel.selectedPhotoIDs.isEmpty
+                ) {
                     if let metadata = pictureViewModel.firstSelectedMetadata {
                         router.push(.photoInfoEdit(PhotoInfoEditDestination(
                             metadata: metadata,
@@ -78,7 +82,11 @@ struct RootTabView: View {
                         )))
                     }
                 },
-                .init(icon: .delete, title: "삭제") { pictureViewModel.requestDelete() }
+                .init(
+                    icon: .delete,
+                    title: "삭제",
+                    isDisabled: pictureViewModel.selectedPhotoIDs.isEmpty
+                ) { pictureViewModel.requestDelete() }
             ])
             .padding(.bottom, 26.5)
             .ignoresSafeArea(.container, edges: .bottom)
