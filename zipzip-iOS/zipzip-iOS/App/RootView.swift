@@ -159,6 +159,11 @@ struct RootView: View {
             ShareLoginView()
         }
         .alert("요청을 완료하지 못했어요", isPresented: $shareViewModel.isErrorAlertPresented) {
+            if shareViewModel.canRetryError {
+                Button("다시 시도") {
+                    Task { await shareViewModel.retryErrorAction() }
+                }
+            }
             Button("확인", role: .cancel, action: shareViewModel.dismissErrorAlert)
         } message: {
             Text(shareViewModel.errorAlertMessage)

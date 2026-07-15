@@ -43,10 +43,16 @@ final class ShareViewModelTests: XCTestCase {
                 store: store
             )
         )
+        viewModel.enterAddMode()
         viewModel.presentCreateSheet()
         viewModel.groupNameDraft = "우리 가족"
 
         await viewModel.createGroup()
+
+        XCTAssertFalse(viewModel.isCreateSheetPresented)
+        XCTAssertFalse(viewModel.isInviteSheetPresented)
+        XCTAssertEqual(viewModel.displayedSheet, .createGroup)
+        viewModel.shareSheetDidDismiss()
 
         XCTAssertFalse(viewModel.isCreateSheetPresented)
         XCTAssertTrue(viewModel.isInviteSheetPresented)
@@ -67,7 +73,10 @@ final class ShareViewModelTests: XCTestCase {
         await restoredViewModel.loadInviteCode(groupID: response.id)
         XCTAssertEqual(restoredViewModel.inviteCode(for: response.id), response.inviteCode)
 
-        viewModel.completeInvitation()
+        viewModel.dismissPresentedSheet()
+        viewModel.shareSheetDidDismiss()
+        XCTAssertFalse(viewModel.isAddMode)
+        XCTAssertTrue(viewModel.groupNameDraft.isEmpty)
         XCTAssertEqual(viewModel.groups.count, 1)
     }
 
@@ -92,6 +101,31 @@ final class ShareViewModelTests: XCTestCase {
 
         viewModel.dismissErrorAlert()
         XCTAssertFalse(viewModel.isErrorAlertPresented)
+    }
+
+    @MainActor
+    func testGroupListFailureOffersRetryAndRetryLoadsGroups() async throws {
+        let groupID = try XCTUnwrap(UUID(uuidString: "11111111-1111-1111-1111-111111111111"))
+        let api = ManagementTrackingShareGroupAPI(
+            groupID: groupID,
+            role: .host,
+            groupListErrors: [.noResponse, nil]
+        )
+        let viewModel = ShareViewModel(
+            repository: makeRepository(api: api, store: try makeStore())
+        )
+
+        await viewModel.loadGroups(for: testCacheOwnerID)
+
+        XCTAssertTrue(viewModel.isErrorAlertPresented)
+        XCTAssertTrue(viewModel.canRetryError)
+        XCTAssertTrue(viewModel.groups.isEmpty)
+
+        await viewModel.retryErrorAction()
+
+        XCTAssertFalse(viewModel.isErrorAlertPresented)
+        XCTAssertFalse(viewModel.canRetryError)
+        XCTAssertEqual(viewModel.groups.map(\.id), [groupID])
     }
 
     @MainActor
@@ -346,6 +380,11 @@ final class ShareViewModelTests: XCTestCase {
         await viewModel.confirmJoinCode()
 
         XCTAssertFalse(viewModel.isJoinSheetPresented)
+        XCTAssertFalse(viewModel.isJoinConfirmationPresented)
+        XCTAssertEqual(viewModel.displayedSheet, .joinEntry)
+        viewModel.shareSheetDidDismiss()
+
+        XCTAssertFalse(viewModel.isJoinSheetPresented)
         XCTAssertTrue(viewModel.isJoinConfirmationPresented)
         XCTAssertEqual(viewModel.pendingJoinGroup?.id, groupID)
         XCTAssertEqual(api.previewInviteCodes, ["ZZ7K9P2Q"])
@@ -374,6 +413,7 @@ final class ShareViewModelTests: XCTestCase {
         viewModel.joinCode = "ZZ7K9P2Q"
 
         await viewModel.confirmJoinCode()
+        viewModel.shareSheetDidDismiss()
         let joinedGroupID = await viewModel.completeJoin()
 
         XCTAssertEqual(joinedGroupID, groupID)
@@ -1095,6 +1135,7 @@ private final class ManagementTrackingShareGroupAPI: ShareGroupAPI {
     var chatPages: [ChatTimelinePageResponse]
     var sharedAlbums: [SharedAlbumResponse]
     var groupDetailError: NetworkError?
+    var groupListErrors: [NetworkError?]
     var deleteGroupErrors: [NetworkError?]
     var leaveGroupErrors: [NetworkError?]
     var deleteSharedAlbumErrors: [NetworkError?]
@@ -1118,6 +1159,7 @@ private final class ManagementTrackingShareGroupAPI: ShareGroupAPI {
         memberPages: [ShareGroupMemberListPageResponse] = [],
         chatPages: [ChatTimelinePageResponse] = [],
         sharedAlbums: [SharedAlbumResponse] = [],
+        groupListErrors: [NetworkError?] = [],
         groupDetailError: NetworkError? = nil,
         deleteGroupErrors: [NetworkError?] = [],
         leaveGroupErrors: [NetworkError?] = [],
@@ -1129,6 +1171,7 @@ private final class ManagementTrackingShareGroupAPI: ShareGroupAPI {
         self.memberPages = memberPages
         self.chatPages = chatPages
         self.sharedAlbums = sharedAlbums
+        self.groupListErrors = groupListErrors
         self.groupDetailError = groupDetailError
         self.deleteGroupErrors = deleteGroupErrors
         self.leaveGroupErrors = leaveGroupErrors
@@ -1137,7 +1180,10 @@ private final class ManagementTrackingShareGroupAPI: ShareGroupAPI {
     }
 
     func fetchGroups(cursor: String?, size: Int) async throws -> ShareGroupListPageResponse {
-        ShareGroupListPageResponse(
+        if !groupListErrors.isEmpty, let error = groupListErrors.removeFirst() {
+            throw error
+        }
+        return ShareGroupListPageResponse(
             items: [ShareGroupSummaryResponse(
                 id: groupID,
                 name: "우리 가족",

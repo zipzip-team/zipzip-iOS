@@ -159,7 +159,7 @@ struct ShareGroupDetailView: View {
             .init(
                 icon: .delete,
                 title: "삭제",
-                isDisabled: selectedAlbumIDs.isEmpty,
+                isDisabled: selectedAlbumIDs.isEmpty || viewModel.isDeletingSharedAlbums,
                 action: { isDeleteAlertPresented = true }
             )
         ]

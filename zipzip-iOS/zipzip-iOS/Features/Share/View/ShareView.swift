@@ -18,122 +18,105 @@ struct ShareView: View {
         rootContent
             .toolbarVisibility(.hidden, for: .navigationBar)
             .bottomSheet(
-                isPresented: $viewModel.isJoinSheetPresented,
-                detents: [.height(552)],
-                initialDetent: .height(552),
-                showsDragIndicator: .visible,
-                expandsToLargestDetentOnScroll: false
-            ) { _ in
-                ShareEntryFormSheet(
-                    title: "공유 그룹 입장하기",
-                    placeholder: "코드 입력",
-                    value: $viewModel.joinCode,
-                    isConfirming: viewModel.isPreviewingJoin,
-                    onCancel: { viewModel.isJoinSheetPresented = false },
-                    onConfirm: {
-                        Task {
-                            await viewModel.confirmJoinCode()
+                isPresented: Binding(
+                    get: { viewModel.presentedSheet != nil },
+                    set: { isPresented in
+                        if !isPresented {
+                            viewModel.dismissPresentedSheet()
                         }
                     }
-                )
-            }
-            .bottomSheet(
-                isPresented: $viewModel.isCreateSheetPresented,
-                detents: [.height(552)],
-                initialDetent: .height(552),
+                ),
+                detents: sheetDetents,
+                initialDetent: sheetDetents.first,
                 showsDragIndicator: .visible,
-                expandsToLargestDetentOnScroll: false
+                expandsToLargestDetentOnScroll: false,
+                isInteractiveDismissDisabled: viewModel.isPresentedSheetBusy,
+                onDismiss: viewModel.shareSheetDidDismiss
             ) { _ in
-                ShareEntryFormSheet(
-                    title: "공유 그룹 생성하기",
-                    placeholder: "공유 그룹 이름",
-                    value: $viewModel.groupNameDraft,
-                    isConfirming: viewModel.isCreatingGroup,
-                    onCancel: { viewModel.isCreateSheetPresented = false },
-                    onConfirm: {
-                        Task {
-                            await viewModel.createGroup()
-                        }
-                    }
-                )
+                presentedSheetContent
             }
-            .bottomSheet(
-                isPresented: $viewModel.isJoinConfirmationPresented,
-                detents: [.height(477)],
-                initialDetent: .height(477),
-                showsDragIndicator: .visible,
-                expandsToLargestDetentOnScroll: false
-            ) { _ in
-                ShareJoinConfirmationSheet(
-                    group: viewModel.pendingJoinGroup,
-                    onCancel: viewModel.cancelJoinConfirmation,
-                    onConfirm: {
-                        Task {
-                            guard let groupID = await viewModel.completeJoin() else { return }
-                            router.push(.shareGroup(groupID))
-                        }
-                    }
-                )
-            }
-            .bottomSheet(
-                isPresented: $viewModel.isInviteSheetPresented,
-                detents: [.height(552)],
-                initialDetent: .height(552),
-                showsDragIndicator: .visible,
-                expandsToLargestDetentOnScroll: false
-            ) { _ in
-                ShareInvitationSheet(
-                    code: viewModel.inviteCode,
-                    onComplete: viewModel.completeInvitation
-                )
-            }
-            .bottomSheet(
-                isPresented: $viewModel.isCommentsPresented,
-                detents: [.height(562)],
-                initialDetent: .height(562),
-                showsDragIndicator: .visible,
-                expandsToLargestDetentOnScroll: false
-            ) { _ in
-                ShareCommentsSheet(
-                    messages: viewModel.chatItems,
-                    comment: $viewModel.commentDraft,
-                    onClose: viewModel.dismissComments,
-                    onSend: {
-                        Task {
-                            await viewModel.sendChatMessage()
-                        }
-                    }
-                )
-                .task(id: viewModel.activeChatGroupID) {
-                    await viewModel.loadChatTimeline()
-                }
-            }
-            .bottomSheet(
-                isPresented: $viewModel.isShareManagementPresented,
-                detents: [.full],
-                initialDetent: .full,
-                showsDragIndicator: .visible,
-                expandsToLargestDetentOnScroll: false
-            ) { _ in
-                if let group = viewModel.managedShareGroup {
-                    ShareGroupManagementSheet(
-                        group: group,
-                        groupName: $viewModel.shareGroupNameDraft,
-                        inviteCode: viewModel.inviteCode(for: group.id) ?? "",
-                        isInviteCodeAvailable: viewModel.isInviteCodeAvailable(for: group.id),
-                        onClose: viewModel.dismissShareManagement,
-                        onComplete: {
-                            Task {
-                                await viewModel.completeShareManagement()
-                            }
-                        },
-                        onLeave: leaveManagedShareGroup
-                    )
-                    .task(id: group.id) {
-                        await viewModel.loadInviteCode(groupID: group.id)
+    }
+
+    private var sheetDetents: [BottomSheetSize] {
+        switch viewModel.displayedSheet {
+        case .joinConfirmation:
+            [.height(477)]
+        case .comments:
+            [.height(562)]
+        case .management:
+            [.full]
+        default:
+            [.height(552)]
+        }
+    }
+
+    @ViewBuilder private var presentedSheetContent: some View {
+        @Bindable var viewModel = viewModel
+        switch viewModel.displayedSheet {
+        case .joinEntry:
+            ShareEntryFormSheet(
+                title: "공유 그룹 입장하기",
+                placeholder: "코드 입력",
+                value: $viewModel.joinCode,
+                isConfirming: viewModel.isPreviewingJoin,
+                onCancel: viewModel.dismissPresentedSheet,
+                onConfirm: { Task { await viewModel.confirmJoinCode() } }
+            )
+        case .createGroup:
+            ShareEntryFormSheet(
+                title: "공유 그룹 생성하기",
+                placeholder: "공유 그룹 이름",
+                value: $viewModel.groupNameDraft,
+                isConfirming: viewModel.isCreatingGroup,
+                onCancel: viewModel.dismissPresentedSheet,
+                onConfirm: { Task { await viewModel.createGroup() } }
+            )
+        case .joinConfirmation:
+            ShareJoinConfirmationSheet(
+                group: viewModel.pendingJoinGroup,
+                isConfirming: viewModel.isJoiningGroup,
+                onCancel: viewModel.cancelJoinConfirmation,
+                onConfirm: {
+                    Task {
+                        guard let groupID = await viewModel.completeJoin() else { return }
+                        router.push(.shareGroup(groupID))
                     }
                 }
+            )
+        case .invitation:
+            ShareInvitationSheet(code: viewModel.inviteCode, onComplete: viewModel.completeInvitation)
+        case .comments:
+            ShareCommentsSheet(
+                messages: viewModel.chatItems,
+                comment: $viewModel.commentDraft,
+                isLoading: viewModel.isLoadingChat,
+                isSending: viewModel.isSendingChatMessage,
+                onClose: viewModel.dismissComments,
+                onSend: { Task { await viewModel.sendChatMessage() } }
+            )
+            .task(id: viewModel.activeChatGroupID) {
+                await viewModel.loadChatTimeline()
             }
+        case .management:
+            if let group = viewModel.managedShareGroup {
+                ShareGroupManagementSheet(
+                    group: group,
+                    groupName: $viewModel.shareGroupNameDraft,
+                    inviteCode: viewModel.inviteCode(for: group.id) ?? "",
+                    isInviteCodeAvailable: viewModel.isInviteCodeAvailable(for: group.id),
+                    isUpdating: viewModel.isUpdatingGroup,
+                    isLeaving: viewModel.isLeavingGroup,
+                    onClose: viewModel.dismissShareManagement,
+                    onComplete: { Task { await viewModel.completeShareManagement() } },
+                    onLeave: leaveManagedShareGroup
+                )
+                .task(id: group.id) {
+                    await viewModel.loadInviteCode(groupID: group.id)
+                }
+            }
+        case nil:
+            EmptyView()
+        }
     }
 
     @ViewBuilder private var rootContent: some View {
@@ -424,6 +407,7 @@ private struct ShareEntryFormSheet: View {
 
 private struct ShareJoinConfirmationSheet: View {
     let group: ShareAlbum?
+    let isConfirming: Bool
     let onCancel: () -> Void
     let onConfirm: () -> Void
 
@@ -450,8 +434,13 @@ private struct ShareJoinConfirmationSheet: View {
 
                 HStack(spacing: 16) {
                     CommonButton(title: "취소", property1: .secondary, action: onCancel)
-                    CommonButton(title: "확인", property1: .cta, action: onConfirm)
+                    CommonButton(
+                        title: "확인",
+                        property1: isConfirming ? .disabled : .cta,
+                        action: onConfirm
+                    )
                 }
+                .disabled(isConfirming)
             }
             .padding(.horizontal, 16)
             .padding(.top, 12)
@@ -499,6 +488,8 @@ private struct ShareInvitationSheet: View {
 private struct ShareCommentsSheet: View {
     let messages: [ShareGroupChatItem]
     @Binding var comment: String
+    let isLoading: Bool
+    let isSending: Bool
     let onClose: () -> Void
     let onSend: () -> Void
 
@@ -525,12 +516,18 @@ private struct ShareCommentsSheet: View {
 
                 HStack(spacing: 12) {
                     TextInput("메시지 입력", text: $comment, style: .comment)
+                        .disabled(isLoading || isSending)
                     ExtraSmallButton(icon: .send, action: onSend)
+                        .disabled(isSendDisabled)
                 }
                 .padding(.horizontal, 16)
                 .padding(.bottom, 12)
             }
         }
+    }
+
+    private var isSendDisabled: Bool {
+        isLoading || isSending || comment.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 }
 

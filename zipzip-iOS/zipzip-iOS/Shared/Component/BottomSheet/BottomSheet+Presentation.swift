@@ -24,6 +24,7 @@ extension View {
         initialDetent: BottomSheetSize? = nil,
         showsDragIndicator: Visibility = .visible,
         expandsToLargestDetentOnScroll: Bool = true,
+        isInteractiveDismissDisabled: Bool = false,
         onDismiss: @escaping () -> Void = {},
         @ViewBuilder content: @escaping () -> SheetContent
     ) -> some View {
@@ -33,6 +34,7 @@ extension View {
             initialDetent: initialDetent,
             showsDragIndicator: showsDragIndicator,
             expandsToLargestDetentOnScroll: expandsToLargestDetentOnScroll,
+            isInteractiveDismissDisabled: isInteractiveDismissDisabled,
             onDismiss: onDismiss
         ) { _ in
             content()
@@ -45,6 +47,7 @@ extension View {
         initialDetent: BottomSheetSize? = nil,
         showsDragIndicator: Visibility = .visible,
         expandsToLargestDetentOnScroll: Bool = true,
+        isInteractiveDismissDisabled: Bool = false,
         onDismiss: @escaping () -> Void = {},
         @ViewBuilder content: @escaping (@escaping () -> Void) -> SheetContent
     ) -> some View {
@@ -55,6 +58,7 @@ extension View {
                 initialDetent: initialDetent,
                 showsDragIndicator: showsDragIndicator,
                 expandsToLargestDetentOnScroll: expandsToLargestDetentOnScroll,
+                isInteractiveDismissDisabled: isInteractiveDismissDisabled,
                 onDismiss: onDismiss,
                 sheetContent: content
             )
@@ -80,6 +84,7 @@ extension View {
                 initialDetent: initialDetent,
                 showsDragIndicator: .hidden,
                 expandsToLargestDetentOnScroll: false,
+                isInteractiveDismissDisabled: false,
                 onDismiss: {}
             ) { _ in
                 BottomSheetAlert(
@@ -112,6 +117,7 @@ private struct BottomSheetPresentationModifier<SheetContent: View>: ViewModifier
     private let initialDetent: BottomSheetSize?
     private let showsDragIndicator: Visibility
     private let expandsToLargestDetentOnScroll: Bool
+    private let isInteractiveDismissDisabled: Bool
     private let onDismiss: () -> Void
     private let sheetContent: (@escaping () -> Void) -> SheetContent
 
@@ -121,6 +127,7 @@ private struct BottomSheetPresentationModifier<SheetContent: View>: ViewModifier
         initialDetent: BottomSheetSize?,
         showsDragIndicator: Visibility,
         expandsToLargestDetentOnScroll: Bool,
+        isInteractiveDismissDisabled: Bool,
         onDismiss: @escaping () -> Void,
         @ViewBuilder sheetContent: @escaping (@escaping () -> Void) -> SheetContent
     ) {
@@ -129,6 +136,7 @@ private struct BottomSheetPresentationModifier<SheetContent: View>: ViewModifier
         self.initialDetent = initialDetent
         self.showsDragIndicator = showsDragIndicator
         self.expandsToLargestDetentOnScroll = expandsToLargestDetentOnScroll
+        self.isInteractiveDismissDisabled = isInteractiveDismissDisabled
         self.onDismiss = onDismiss
         self.sheetContent = sheetContent
         _selectedSize = State(initialValue: initialDetent ?? (detents.first ?? .content))
@@ -144,6 +152,7 @@ private struct BottomSheetPresentationModifier<SheetContent: View>: ViewModifier
                         expandsToLargestDetentOnScroll ? .resizes : .scrolls
                     )
                     .presentationDragIndicator(.hidden)
+                    .interactiveDismissDisabled(isInteractiveDismissDisabled)
                     .presentationCornerRadius(32)
                     .presentationBackground(.grey950)
                     .onAppear {

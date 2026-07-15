@@ -11,6 +11,15 @@ enum ShareImportSelection: Hashable {
     case albums
 }
 
+enum ShareSheetPresentation: Equatable {
+    case joinEntry
+    case joinConfirmation
+    case createGroup
+    case invitation
+    case comments
+    case management
+}
+
 @Observable
 @MainActor
 final class ShareViewModel {
@@ -18,12 +27,9 @@ final class ShareViewModel {
     private let repository: ShareGroupRepository
 
     var isAddMode = false
-    var isJoinSheetPresented = false
-    var isJoinConfirmationPresented = false
-    var isCreateSheetPresented = false
-    var isInviteSheetPresented = false
-    var isCommentsPresented = false
-    var isShareManagementPresented = false
+    private(set) var presentedSheet: ShareSheetPresentation?
+    private var dismissingSheet: ShareSheetPresentation?
+    private var pendingSheet: ShareSheetPresentation?
     private(set) var isCreatingGroup = false
     private(set) var isPreviewingJoin = false
     private(set) var isJoiningGroup = false
@@ -81,6 +87,56 @@ final class ShareViewModel {
     private var bulkDeleteAlbumIDs: Set<SharedAlbum.ID>?
     private var bulkDeleteIdempotencyKey: UUID?
     private var cacheOwnerID: UUID?
+    private var errorRetryAction: (() async -> Void)?
+
+    var displayedSheet: ShareSheetPresentation? {
+        presentedSheet ?? dismissingSheet
+    }
+
+    var isPresentedSheetBusy: Bool {
+        switch displayedSheet {
+        case .joinEntry:
+            isPreviewingJoin
+        case .joinConfirmation:
+            isJoiningGroup
+        case .createGroup:
+            isCreatingGroup
+        case .comments:
+            isSendingChatMessage
+        case .management:
+            isUpdatingGroup || isLeavingGroup
+        case .invitation, nil:
+            false
+        }
+    }
+
+    var isJoinSheetPresented: Bool {
+        presentedSheet == .joinEntry
+    }
+
+    var isJoinConfirmationPresented: Bool {
+        presentedSheet == .joinConfirmation
+    }
+
+    var isCreateSheetPresented: Bool {
+        presentedSheet == .createGroup
+    }
+
+    var isInviteSheetPresented: Bool {
+        presentedSheet == .invitation
+    }
+
+    var isCommentsPresented: Bool {
+        presentedSheet == .comments
+    }
+
+    var isShareManagementPresented: Bool {
+        presentedSheet == .management
+    }
+
+    var canRetryError: Bool {
+        errorRetryAction != nil
+    }
 
     init(repository: ShareGroupRepository) {
         self.groups = []
@@ -190,7 +246,13 @@ final class ShareViewModel {
             hasLoadedGroups = true
         } catch {
             hasLoadedGroups = true
-            presentError(error, fallback: "공유 그룹을 불러오지 못했어요.")
+            presentError(
+                error,
+                fallback: "공유 그룹을 불러오지 못했어요.",
+                retry: { [weak self] in
+                    await self?.loadGroups(for: userID, refresh: true)
+                }
+            )
         }
     }
 
@@ -364,11 +426,15 @@ final class ShareViewModel {
         chatMessageIdempotencyKey = nil
         isLoadingChat = false
         isSendingChatMessage = false
-        isCommentsPresented = true
+        presentSheet(.comments)
     }
 
     func dismissComments() {
-        isCommentsPresented = false
+        guard !isSendingChatMessage else { return }
+        dismissSheet(if: .comments)
+    }
+
+    private func clearCommentsState() {
         activeChatGroupID = nil
         chatItems = []
         commentDraft = ""
@@ -501,8 +567,7 @@ final class ShareViewModel {
         visibleGroupIDs = nil
         visibleSharedAlbumIDs = [:]
         inviteCode = ""
-        dismissComments()
-        resetJoinState()
+        resetTransientUI()
         dismissErrorAlert()
     }
 
@@ -514,10 +579,42 @@ final class ShareViewModel {
         isAddMode = false
     }
 
+    func dismissPresentedSheet() {
+        guard !isPresentedSheetBusy else { return }
+        dismissSheet()
+    }
+
+    func shareSheetDidDismiss() {
+        let dismissed = dismissingSheet
+        dismissingSheet = nil
+        if let pendingSheet {
+            self.pendingSheet = nil
+            presentedSheet = pendingSheet
+            return
+        }
+
+        switch dismissed {
+        case .invitation:
+            isAddMode = false
+            groupNameDraft = ""
+        case .comments:
+            clearCommentsState()
+        case .management:
+            clearManagementState()
+        case .joinEntry, .joinConfirmation:
+            resetJoinState()
+        case .createGroup:
+            groupCreationName = nil
+            groupCreationIdempotencyKey = nil
+        case nil:
+            break
+        }
+    }
+
     func presentJoinSheet() {
         resetJoinState()
         joinCode = ""
-        isJoinSheetPresented = true
+        presentSheet(.joinEntry)
     }
 
     func confirmJoinCode() async {
@@ -535,8 +632,7 @@ final class ShareViewModel {
             joinIdempotencyKey = preview.alreadyJoined ? nil : UUID()
             pendingJoinGroup = preview.group
             pendingJoinAlreadyJoined = preview.alreadyJoined
-            isJoinSheetPresented = false
-            isJoinConfirmationPresented = true
+            transitionSheet(to: .joinConfirmation)
         } catch let error as ShareGroupRepositoryError {
             joinErrorCode = String(describing: error)
             presentError(error, fallback: "공유 그룹 입장 정보를 확인하지 못했어요.")
@@ -550,11 +646,8 @@ final class ShareViewModel {
     }
 
     func cancelJoinConfirmation() {
-        isJoinConfirmationPresented = false
-        pendingJoinGroup = nil
-        pendingJoinAlreadyJoined = false
-        joinRequestInviteCode = nil
-        joinIdempotencyKey = nil
+        guard !isJoiningGroup else { return }
+        dismissSheet(if: .joinConfirmation)
     }
 
     func completeJoin() async -> ShareAlbum.ID? {
@@ -608,7 +701,7 @@ final class ShareViewModel {
         groupNameDraft = ""
         groupCreationName = nil
         groupCreationIdempotencyKey = nil
-        isCreateSheetPresented = true
+        presentSheet(.createGroup)
     }
 
     func createGroup() async {
@@ -643,16 +736,14 @@ final class ShareViewModel {
             inviteCodes[createdGroup.id] = inviteCode
             groupCreationName = nil
             groupCreationIdempotencyKey = nil
-            isCreateSheetPresented = false
-            isInviteSheetPresented = true
+            transitionSheet(to: .invitation)
         } catch {
             presentError(error, fallback: "공유 그룹을 만들지 못했어요.")
         }
     }
 
     func completeInvitation() {
-        isInviteSheetPresented = false
-        isAddMode = false
+        dismissSheet(if: .invitation)
     }
 
     @discardableResult
@@ -818,7 +909,7 @@ final class ShareViewModel {
         shareGroupNameDraft = group.name
         managedShareGroup = group
         groupManagementErrorCode = nil
-        isShareManagementPresented = true
+        presentSheet(.management)
     }
 
     func completeShareManagement() async {
@@ -896,7 +987,11 @@ final class ShareViewModel {
     }
 
     func dismissShareManagement() {
-        isShareManagementPresented = false
+        guard !isUpdatingGroup, !isLeavingGroup else { return }
+        dismissSheet(if: .management)
+    }
+
+    private func clearManagementState() {
         managedShareGroup = nil
         groupManagementErrorCode = nil
         isUpdatingGroup = false
@@ -905,18 +1000,24 @@ final class ShareViewModel {
 
     func dismissErrorAlert() {
         isErrorAlertPresented = false
+        errorRetryAction = nil
+    }
+
+    func retryErrorAction() async {
+        guard let errorRetryAction else { return }
+        isErrorAlertPresented = false
+        self.errorRetryAction = nil
+        await errorRetryAction()
     }
 
     func resetTransientUI() {
         isAddMode = false
-        isJoinSheetPresented = false
-        isJoinConfirmationPresented = false
-        isCreateSheetPresented = false
-        isInviteSheetPresented = false
-        dismissComments()
-        isShareManagementPresented = false
+        presentedSheet = nil
+        dismissingSheet = nil
+        pendingSheet = nil
+        clearCommentsState()
         pendingJoinGroup = nil
-        managedShareGroup = nil
+        clearManagementState()
         resetJoinState()
         sharedAlbumErrorCode = nil
     }
@@ -1016,14 +1117,36 @@ final class ShareViewModel {
     }
 
     private func finishJoin() {
-        isJoinSheetPresented = false
-        isJoinConfirmationPresented = false
+        dismissSheet()
         isAddMode = false
-        pendingJoinGroup = nil
-        pendingJoinAlreadyJoined = false
-        joinRequestInviteCode = nil
-        joinIdempotencyKey = nil
-        joinErrorCode = nil
+    }
+
+    private func presentSheet(_ sheet: ShareSheetPresentation) {
+        guard presentedSheet != sheet else { return }
+        if presentedSheet != nil || dismissingSheet != nil {
+            transitionSheet(to: sheet)
+        } else {
+            presentedSheet = sheet
+        }
+    }
+
+    private func transitionSheet(to sheet: ShareSheetPresentation) {
+        pendingSheet = sheet
+        if let presentedSheet {
+            dismissingSheet = presentedSheet
+            self.presentedSheet = nil
+        }
+    }
+
+    private func dismissSheet(if expectedSheet: ShareSheetPresentation? = nil) {
+        if let expectedSheet, presentedSheet != expectedSheet, dismissingSheet != expectedSheet {
+            return
+        }
+        pendingSheet = nil
+        if let presentedSheet {
+            dismissingSheet = presentedSheet
+            self.presentedSheet = nil
+        }
     }
 
     private func resetJoinState() {
@@ -1034,11 +1157,15 @@ final class ShareViewModel {
         joinIdempotencyKey = nil
         pendingJoinAlreadyJoined = false
         pendingJoinGroup = nil
-        isJoinConfirmationPresented = false
     }
 
-    private func presentError(_ error: Error, fallback: String) {
+    private func presentError(
+        _ error: Error,
+        fallback: String,
+        retry: (() async -> Void)? = nil
+    ) {
         errorAlertMessage = userFacingMessage(for: error, fallback: fallback)
+        errorRetryAction = retry
         isErrorAlertPresented = true
     }
 
