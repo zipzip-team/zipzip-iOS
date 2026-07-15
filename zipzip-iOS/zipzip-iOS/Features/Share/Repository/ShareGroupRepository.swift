@@ -52,12 +52,19 @@ struct ShareGroupChatPage {
     let hasNext: Bool
 }
 
+struct SharedAlbumDeletionResult: Equatable {
+    let deletedAlbumCount: Int
+    let deletedPhotoCount: Int
+}
+
 enum ShareGroupRepositoryError: Error, Equatable {
     case groupNotFound
     case invalidInviteCode
     case alreadyJoined
     case hostRequired
     case memberRequired
+    case sharedAlbumNotFound
+    case invalidSharedAlbumSelection
 }
 
 @MainActor
@@ -84,6 +91,12 @@ protocol ShareGroupRepository {
         content: String,
         idempotencyKey: UUID
     ) async throws
+    func renameSharedAlbum(id: SharedAlbum.ID, name: String) async throws
+    func deleteSharedAlbum(id: SharedAlbum.ID) async throws
+    func deleteSharedAlbums(
+        ids: [SharedAlbum.ID],
+        idempotencyKey: UUID
+    ) async throws -> SharedAlbumDeletionResult
     func removeCachedGroup(id: ShareAlbum.ID) async throws
 }
 
@@ -293,6 +306,48 @@ final class DefaultShareGroupRepository: ShareGroupRepository {
             )
         } catch let error as NetworkError where error.serverCode == "SHARED_GROUP_NOT_FOUND" {
             throw ShareGroupRepositoryError.groupNotFound
+        }
+    }
+
+    func renameSharedAlbum(id: SharedAlbum.ID, name: String) async throws {
+        do {
+            let response = try await api.renameSharedAlbum(id: id, name: name)
+            try await store.updateSharedAlbum(response)
+        } catch let error as NetworkError where error.serverCode == "SHARED_ALBUM_NOT_FOUND" {
+            throw ShareGroupRepositoryError.sharedAlbumNotFound
+        }
+    }
+
+    func deleteSharedAlbum(id: SharedAlbum.ID) async throws {
+        do {
+            try await api.deleteSharedAlbum(id: id)
+            try await store.deleteSharedAlbums(ids: [id])
+        } catch let error as NetworkError where error.serverCode == "SHARED_ALBUM_NOT_FOUND" {
+            throw ShareGroupRepositoryError.sharedAlbumNotFound
+        }
+    }
+
+    func deleteSharedAlbums(
+        ids: [SharedAlbum.ID],
+        idempotencyKey: UUID
+    ) async throws -> SharedAlbumDeletionResult {
+        let uniqueIDs = Array(Set(ids)).sorted { $0.uuidString < $1.uuidString }
+        guard 1 ... 100 ~= uniqueIDs.count else {
+            throw ShareGroupRepositoryError.invalidSharedAlbumSelection
+        }
+
+        do {
+            let response = try await api.deleteSharedAlbums(
+                ids: uniqueIDs,
+                idempotencyKey: idempotencyKey
+            )
+            try await store.deleteSharedAlbums(ids: uniqueIDs)
+            return SharedAlbumDeletionResult(
+                deletedAlbumCount: response.deletedAlbumCount,
+                deletedPhotoCount: response.deletedPhotoCount
+            )
+        } catch let error as NetworkError where error.serverCode == "SHARED_ALBUM_NOT_FOUND" {
+            throw ShareGroupRepositoryError.sharedAlbumNotFound
         }
     }
 

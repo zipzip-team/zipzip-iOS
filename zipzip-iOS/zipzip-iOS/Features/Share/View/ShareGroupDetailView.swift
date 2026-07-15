@@ -157,7 +157,7 @@ struct ShareGroupDetailView: View {
             .init(
                 icon: .delete,
                 title: "삭제",
-                isDisabled: true,
+                isDisabled: selectedAlbumIDs.isEmpty,
                 action: { isDeleteAlertPresented = true }
             )
         ]
@@ -208,7 +208,11 @@ struct ShareGroupDetailView: View {
 
     private func deleteSelectedAlbums() {
         isDeleteAlertPresented = false
-        exitSelectionMode()
+        let albumIDs = Set(selectedAlbumIDs)
+        Task {
+            guard await viewModel.deleteSharedAlbums(albumIDs, from: groupID) else { return }
+            exitSelectionMode()
+        }
     }
 }
 

@@ -1,6 +1,23 @@
 import XCTest
 @testable import zipzip_iOS
 
+extension ShareGroupAPI {
+    func renameSharedAlbum(id: UUID, name: String) async throws -> SharedAlbumRenameResponse {
+        throw URLError(.unsupportedURL)
+    }
+
+    func deleteSharedAlbum(id: UUID) async throws {
+        throw URLError(.unsupportedURL)
+    }
+
+    func deleteSharedAlbums(
+        ids: [UUID],
+        idempotencyKey: UUID
+    ) async throws -> SharedAlbumBulkDeleteResponse {
+        throw URLError(.unsupportedURL)
+    }
+}
+
 final class ShareViewModelTests: XCTestCase {
     @MainActor
     func testCreateGroupImmediatelyAddsResponseToGroups() async throws {
@@ -447,6 +464,64 @@ final class ShareViewModelTests: XCTestCase {
         XCTAssertTrue(viewModel.commentDraft.isEmpty)
     }
 
+    @MainActor
+    func testRenamesAndDeletesManagedSharedAlbum() async throws {
+        let groupID = try XCTUnwrap(UUID(uuidString: "11111111-1111-1111-1111-111111111111"))
+        let albumID = try XCTUnwrap(UUID(uuidString: "33333333-3333-3333-3333-333333333333"))
+        let api = ManagementTrackingShareGroupAPI(
+            groupID: groupID,
+            role: .member,
+            sharedAlbums: [makeSharedAlbum(id: albumID, name: "제주도")]
+        )
+        let viewModel = ShareViewModel(
+            repository: makeRepository(api: api, store: try makeStore())
+        )
+        await viewModel.loadGroups()
+        await viewModel.loadSharedAlbums(groupID: groupID)
+        viewModel.presentAlbumManagement(groupID: groupID, albumID: albumID)
+        viewModel.albumNameDraft = "  제주 여름  "
+
+        await viewModel.completeAlbumManagement()
+
+        XCTAssertEqual(api.renamedAlbumIDs, [albumID])
+        XCTAssertEqual(api.renamedAlbumNames, ["제주 여름"])
+        XCTAssertEqual(viewModel.album(groupID: groupID, albumID: albumID)?.name, "제주 여름")
+
+        viewModel.presentAlbumManagement(groupID: groupID, albumID: albumID)
+        let didDelete = await viewModel.deleteManagedAlbum()
+
+        XCTAssertTrue(didDelete)
+        XCTAssertEqual(api.deletedAlbumIDs, [albumID])
+        XCTAssertTrue(viewModel.group(withID: groupID)?.albums.isEmpty == true)
+    }
+
+    @MainActor
+    func testBulkDeletesSelectedSharedAlbums() async throws {
+        let groupID = try XCTUnwrap(UUID(uuidString: "11111111-1111-1111-1111-111111111111"))
+        let firstID = try XCTUnwrap(UUID(uuidString: "33333333-3333-3333-3333-333333333333"))
+        let secondID = try XCTUnwrap(UUID(uuidString: "44444444-4444-4444-4444-444444444444"))
+        let api = ManagementTrackingShareGroupAPI(
+            groupID: groupID,
+            role: .member,
+            sharedAlbums: [
+                makeSharedAlbum(id: firstID, name: "제주도"),
+                makeSharedAlbum(id: secondID, name: "부산")
+            ]
+        )
+        let viewModel = ShareViewModel(
+            repository: makeRepository(api: api, store: try makeStore())
+        )
+        await viewModel.loadGroups()
+        await viewModel.loadSharedAlbums(groupID: groupID)
+
+        let didDelete = await viewModel.deleteSharedAlbums([firstID, secondID], from: groupID)
+
+        XCTAssertTrue(didDelete)
+        XCTAssertEqual(Set(api.bulkDeletedAlbumIDs), Set([firstID, secondID]))
+        XCTAssertEqual(api.bulkDeleteIdempotencyKeys.count, 1)
+        XCTAssertTrue(viewModel.group(withID: groupID)?.albums.isEmpty == true)
+    }
+
     private func makeJoinPreview(
         groupID: UUID,
         alreadyJoined: Bool
@@ -489,6 +564,18 @@ final class ShareViewModelTests: XCTestCase {
             content: content,
             author: ChatAuthorResponse(userId: nil, displayName: "집집이"),
             isAuthor: isAuthor,
+            createdAt: "2026-07-15T10:15:30Z",
+            updatedAt: "2026-07-15T10:15:30Z"
+        )
+    }
+
+    private func makeSharedAlbum(id: UUID, name: String) -> SharedAlbumResponse {
+        SharedAlbumResponse(
+            id: id,
+            name: name,
+            photoCount: 1,
+            createdBy: nil,
+            isCreator: false,
             createdAt: "2026-07-15T10:15:30Z",
             updatedAt: "2026-07-15T10:15:30Z"
         )
@@ -746,6 +833,7 @@ private final class ManagementTrackingShareGroupAPI: ShareGroupAPI {
     let role: ShareGroupRoleResponse
     var memberPages: [ShareGroupMemberListPageResponse]
     var chatPages: [ChatTimelinePageResponse]
+    let sharedAlbums: [SharedAlbumResponse]
     private(set) var memberCursors: [String?] = []
     private(set) var updatedNames: [String] = []
     private(set) var deletedGroupIDs: [UUID] = []
@@ -753,17 +841,24 @@ private final class ManagementTrackingShareGroupAPI: ShareGroupAPI {
     private(set) var chatCursors: [String?] = []
     private(set) var sentChatContents: [String] = []
     private(set) var chatIdempotencyKeys: [UUID] = []
+    private(set) var renamedAlbumIDs: [UUID] = []
+    private(set) var renamedAlbumNames: [String] = []
+    private(set) var deletedAlbumIDs: [UUID] = []
+    private(set) var bulkDeletedAlbumIDs: [UUID] = []
+    private(set) var bulkDeleteIdempotencyKeys: [UUID] = []
 
     init(
         groupID: UUID,
         role: ShareGroupRoleResponse,
         memberPages: [ShareGroupMemberListPageResponse] = [],
-        chatPages: [ChatTimelinePageResponse] = []
+        chatPages: [ChatTimelinePageResponse] = [],
+        sharedAlbums: [SharedAlbumResponse] = []
     ) {
         self.groupID = groupID
         self.role = role
         self.memberPages = memberPages
         self.chatPages = chatPages
+        self.sharedAlbums = sharedAlbums
     }
 
     func fetchGroups(cursor: String?, size: Int) async throws -> ShareGroupListPageResponse {
@@ -773,8 +868,8 @@ private final class ManagementTrackingShareGroupAPI: ShareGroupAPI {
                 name: "우리 가족",
                 myRole: role,
                 memberCount: 2,
-                sharedAlbumCount: 0,
-                photoCount: 0,
+                sharedAlbumCount: sharedAlbums.count,
+                photoCount: sharedAlbums.reduce(0) { $0 + $1.photoCount },
                 joinedAt: "2026-07-15T10:15:30Z",
                 updatedAt: "2026-07-15T10:15:30Z"
             )],
@@ -807,7 +902,7 @@ private final class ManagementTrackingShareGroupAPI: ShareGroupAPI {
         cursor: String?,
         size: Int
     ) async throws -> SharedAlbumListPageResponse {
-        SharedAlbumListPageResponse(items: [], nextCursor: nil, hasNext: false)
+        SharedAlbumListPageResponse(items: sharedAlbums, nextCursor: nil, hasNext: false)
     }
 
     func createGroup(name: String, idempotencyKey: UUID) async throws -> CreateSharedGroupResponse {
@@ -864,6 +959,32 @@ private final class ManagementTrackingShareGroupAPI: ShareGroupAPI {
             isAuthor: true,
             createdAt: "2026-07-15T10:15:30Z",
             updatedAt: "2026-07-15T10:15:30Z"
+        )
+    }
+
+    func renameSharedAlbum(id: UUID, name: String) async throws -> SharedAlbumRenameResponse {
+        renamedAlbumIDs.append(id)
+        renamedAlbumNames.append(name)
+        return SharedAlbumRenameResponse(
+            id: id,
+            name: name,
+            updatedAt: "2026-07-15T11:15:30Z"
+        )
+    }
+
+    func deleteSharedAlbum(id: UUID) async throws {
+        deletedAlbumIDs.append(id)
+    }
+
+    func deleteSharedAlbums(
+        ids: [UUID],
+        idempotencyKey: UUID
+    ) async throws -> SharedAlbumBulkDeleteResponse {
+        bulkDeletedAlbumIDs = ids
+        bulkDeleteIdempotencyKeys.append(idempotencyKey)
+        return SharedAlbumBulkDeleteResponse(
+            deletedAlbumCount: ids.count,
+            deletedPhotoCount: 0
         )
     }
 }

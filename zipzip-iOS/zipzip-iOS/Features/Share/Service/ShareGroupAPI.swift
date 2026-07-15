@@ -24,6 +24,9 @@ protocol ShareGroupAPI {
         content: String,
         idempotencyKey: UUID
     ) async throws -> ChatMessageResponse
+    func renameSharedAlbum(id: UUID, name: String) async throws -> SharedAlbumRenameResponse
+    func deleteSharedAlbum(id: UUID) async throws
+    func deleteSharedAlbums(ids: [UUID], idempotencyKey: UUID) async throws -> SharedAlbumBulkDeleteResponse
 }
 
 final class DefaultShareGroupAPI: ShareGroupAPI {
@@ -138,6 +141,29 @@ final class DefaultShareGroupAPI: ShareGroupAPI {
                 content: content,
                 idempotencyKey: idempotencyKey
             )
+        )
+        return response.data
+    }
+
+    func renameSharedAlbum(id: UUID, name: String) async throws -> SharedAlbumRenameResponse {
+        let response: APIEnvelope<SharedAlbumRenameResponse> = try await networkProvider.request(
+            ShareGroupEndpoint.renameSharedAlbum(id: id, name: name)
+        )
+        return response.data
+    }
+
+    func deleteSharedAlbum(id: UUID) async throws {
+        let _: APIVoidEnvelope = try await networkProvider.request(
+            ShareGroupEndpoint.deleteSharedAlbum(id: id)
+        )
+    }
+
+    func deleteSharedAlbums(
+        ids: [UUID],
+        idempotencyKey: UUID
+    ) async throws -> SharedAlbumBulkDeleteResponse {
+        let response: APIEnvelope<SharedAlbumBulkDeleteResponse> = try await networkProvider.request(
+            ShareGroupEndpoint.deleteSharedAlbums(ids: ids, idempotencyKey: idempotencyKey)
         )
         return response.data
     }
@@ -283,6 +309,17 @@ nonisolated struct ChatMessageResponse: Decodable {
     let updatedAt: String
 }
 
+nonisolated struct SharedAlbumRenameResponse: Decodable {
+    let id: UUID
+    let name: String
+    let updatedAt: String
+}
+
+nonisolated struct SharedAlbumBulkDeleteResponse: Decodable {
+    let deletedAlbumCount: Int
+    let deletedPhotoCount: Int
+}
+
 private enum ShareGroupEndpoint: APIEndpoint {
     case list(cursor: String?, size: Int)
     case detail(id: UUID)
@@ -297,6 +334,9 @@ private enum ShareGroupEndpoint: APIEndpoint {
     case leave(groupID: UUID)
     case chatTimeline(groupID: UUID, cursor: String?, size: Int)
     case createChatMessage(groupID: UUID, content: String, idempotencyKey: UUID)
+    case renameSharedAlbum(id: UUID, name: String)
+    case deleteSharedAlbum(id: UUID)
+    case deleteSharedAlbums(ids: [UUID], idempotencyKey: UUID)
 
     var path: String {
         switch self {
@@ -318,6 +358,10 @@ private enum ShareGroupEndpoint: APIEndpoint {
             "/api/v1/shared-groups/\(groupID.uuidString)/members/me"
         case let .chatTimeline(groupID, _, _), let .createChatMessage(groupID, _, _):
             "/api/v1/shared-groups/\(groupID.uuidString)/chat-messages"
+        case let .renameSharedAlbum(id, _), let .deleteSharedAlbum(id):
+            "/api/v1/shared-albums/\(id.uuidString)"
+        case .deleteSharedAlbums:
+            "/api/v1/shared-albums/bulk-delete"
         }
     }
 
@@ -325,11 +369,11 @@ private enum ShareGroupEndpoint: APIEndpoint {
         switch self {
         case .list, .detail, .members, .inviteCode, .sharedAlbums, .joinPreview, .chatTimeline:
             .get
-        case .create, .join, .createChatMessage:
+        case .create, .join, .createChatMessage, .deleteSharedAlbums:
             .post
-        case .updateName:
+        case .updateName, .renameSharedAlbum:
             .patch
-        case .delete, .leave:
+        case .delete, .leave, .deleteSharedAlbum:
             .delete
         }
     }
@@ -341,6 +385,8 @@ private enum ShareGroupEndpoint: APIEndpoint {
         case let .join(_, idempotencyKey):
             return ["Idempotency-Key": idempotencyKey.uuidString]
         case let .createChatMessage(_, _, idempotencyKey):
+            return ["Idempotency-Key": idempotencyKey.uuidString]
+        case let .deleteSharedAlbums(_, idempotencyKey):
             return ["Idempotency-Key": idempotencyKey.uuidString]
         default:
             return nil
@@ -368,17 +414,21 @@ private enum ShareGroupEndpoint: APIEndpoint {
             return ["name": name]
         case let .createChatMessage(_, content, _):
             return ["content": content]
-        case .detail, .inviteCode, .delete, .leave:
+        case let .renameSharedAlbum(_, name):
+            return ["name": name]
+        case let .deleteSharedAlbums(ids, _):
+            return ["sharedAlbumIds": ids.map(\.uuidString)]
+        case .detail, .inviteCode, .delete, .leave, .deleteSharedAlbum:
             return nil
         }
     }
 
     var encoding: ParameterEncoding {
         switch self {
-        case .create, .join, .updateName, .createChatMessage:
+        case .create, .join, .updateName, .createChatMessage, .renameSharedAlbum, .deleteSharedAlbums:
             JSONEncoding.default
         case .list, .detail, .members, .inviteCode, .sharedAlbums, .joinPreview, .delete, .leave,
-             .chatTimeline:
+             .chatTimeline, .deleteSharedAlbum:
             URLEncoding(destination: .queryString)
         }
     }

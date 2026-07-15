@@ -227,6 +227,32 @@ nonisolated struct SharedGroupStore {
         }
     }
 
+    func updateSharedAlbum(_ response: SharedAlbumRenameResponse) async throws {
+        try await database.write { db in
+            try SharedAlbumRecord
+                .update {
+                    $0.name = #bind(response.name)
+                    $0.updatedAt = #bind(Self.date(response.updatedAt))
+                }
+                .where { $0.id.eq(response.id.uuidString) }
+                .execute(db)
+        }
+    }
+
+    func deleteSharedAlbums(ids: [UUID]) async throws {
+        let uniqueIDs = Set(ids.map(\.uuidString))
+        guard !uniqueIDs.isEmpty else { return }
+
+        try await database.write { db in
+            for id in uniqueIDs {
+                try SharedAlbumRecord
+                    .where { $0.id.eq(id) }
+                    .delete()
+                    .execute(db)
+            }
+        }
+    }
+
     func fetchInviteCode(groupID: UUID) async throws -> String? {
         try await database.read { db in
             try SharedGroupRecord

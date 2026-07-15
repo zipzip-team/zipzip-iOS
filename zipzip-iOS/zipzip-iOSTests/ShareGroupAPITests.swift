@@ -224,6 +224,57 @@ final class ShareGroupAPITests: XCTestCase {
         XCTAssertEqual(try requestBody(request)["content"] as? String, "사진 더 올려줘")
     }
 
+    @MainActor
+    func testRenameSharedAlbumRequestMatchesDocumentedContract() async throws {
+        let provider = ShareGroupRecordingNetworkProvider(json: Self.renameSharedAlbumJSON)
+        let api = DefaultShareGroupAPI(networkProvider: provider)
+        let albumID = try XCTUnwrap(UUID(uuidString: "33333333-3333-3333-3333-333333333333"))
+
+        let response = try await api.renameSharedAlbum(id: albumID, name: "제주 여름")
+
+        XCTAssertEqual(response.name, "제주 여름")
+        let request = try XCTUnwrap(provider.request)
+        XCTAssertEqual(request.url?.path, "/api/v1/shared-albums/\(albumID.uuidString)")
+        XCTAssertEqual(request.httpMethod, "PATCH")
+        XCTAssertEqual(try requestBody(request)["name"] as? String, "제주 여름")
+    }
+
+    @MainActor
+    func testDeleteSharedAlbumRequestMatchesDocumentedContract() async throws {
+        let provider = ShareGroupRecordingNetworkProvider(json: Self.voidJSON)
+        let api = DefaultShareGroupAPI(networkProvider: provider)
+        let albumID = try XCTUnwrap(UUID(uuidString: "33333333-3333-3333-3333-333333333333"))
+
+        try await api.deleteSharedAlbum(id: albumID)
+
+        XCTAssertEqual(provider.request?.url?.path, "/api/v1/shared-albums/\(albumID.uuidString)")
+        XCTAssertEqual(provider.request?.httpMethod, "DELETE")
+    }
+
+    @MainActor
+    func testBulkDeleteSharedAlbumsRequestMatchesDocumentedContract() async throws {
+        let provider = ShareGroupRecordingNetworkProvider(json: Self.bulkDeleteSharedAlbumsJSON)
+        let api = DefaultShareGroupAPI(networkProvider: provider)
+        let firstID = try XCTUnwrap(UUID(uuidString: "33333333-3333-3333-3333-333333333333"))
+        let secondID = try XCTUnwrap(UUID(uuidString: "44444444-4444-4444-4444-444444444444"))
+        let idempotencyKey = UUID()
+
+        let response = try await api.deleteSharedAlbums(
+            ids: [firstID, secondID],
+            idempotencyKey: idempotencyKey
+        )
+
+        XCTAssertEqual(response.deletedAlbumCount, 2)
+        let request = try XCTUnwrap(provider.request)
+        XCTAssertEqual(request.url?.path, "/api/v1/shared-albums/bulk-delete")
+        XCTAssertEqual(request.httpMethod, "POST")
+        XCTAssertEqual(request.value(forHTTPHeaderField: "Idempotency-Key"), idempotencyKey.uuidString)
+        XCTAssertEqual(
+            try requestBody(request)["sharedAlbumIds"] as? [String],
+            [firstID.uuidString, secondID.uuidString]
+        )
+    }
+
     private func requestBody(_ request: URLRequest) throws -> [String: Any] {
         let data = try XCTUnwrap(request.httpBody)
         return try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
@@ -405,6 +456,25 @@ final class ShareGroupAPITests: XCTestCase {
         "isAuthor": true,
         "createdAt": "2026-07-15T10:15:30Z",
         "updatedAt": "2026-07-15T10:15:30Z"
+      }
+    }
+    """
+
+    private static let renameSharedAlbumJSON = """
+    {
+      "data": {
+        "id": "33333333-3333-3333-3333-333333333333",
+        "name": "제주 여름",
+        "updatedAt": "2026-07-15T10:15:30Z"
+      }
+    }
+    """
+
+    private static let bulkDeleteSharedAlbumsJSON = """
+    {
+      "data": {
+        "deletedAlbumCount": 2,
+        "deletedPhotoCount": 3
       }
     }
     """

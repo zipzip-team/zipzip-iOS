@@ -118,8 +118,16 @@ struct ShareView: View {
                 ShareAlbumManagementSheet(
                     albumName: $viewModel.albumNameDraft,
                     onClose: viewModel.dismissAlbumManagement,
-                    onDelete: viewModel.deleteManagedAlbum,
-                    onComplete: viewModel.completeAlbumManagement
+                    onDelete: {
+                        Task {
+                            await viewModel.deleteManagedAlbum()
+                        }
+                    },
+                    onComplete: {
+                        Task {
+                            await viewModel.completeAlbumManagement()
+                        }
+                    }
                 )
             }
             .bottomSheet(

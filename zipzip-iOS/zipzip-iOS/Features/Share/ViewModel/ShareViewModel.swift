@@ -43,6 +43,9 @@ final class ShareViewModel {
     private(set) var isLoadingChat = false
     private(set) var isSendingChatMessage = false
     private(set) var chatErrorCode: String?
+    private(set) var isUpdatingSharedAlbum = false
+    private(set) var isDeletingSharedAlbums = false
+    private(set) var sharedAlbumErrorCode: String?
 
     private(set) var hasLoadedGroups = false
     private(set) var isLoadingGroups = false
@@ -81,6 +84,8 @@ final class ShareViewModel {
     private var chatMessageContent: String?
     private var chatMessageIdempotencyKey: UUID?
     private var chatSessionID: UUID?
+    private var bulkDeleteAlbumIDs: Set<SharedAlbum.ID>?
+    private var bulkDeleteIdempotencyKey: UUID?
 
     init(repository: ShareGroupRepository) {
         self.groups = []
@@ -592,22 +597,125 @@ final class ShareViewModel {
         guard let album = album(groupID: groupID, albumID: albumID) else { return }
         albumNameDraft = album.name
         albumManagementTarget = .init(groupID: groupID, albumID: albumID)
+        sharedAlbumErrorCode = nil
         isAlbumManagementPresented = true
     }
 
-    func completeAlbumManagement() {
-        dismissAlbumManagement()
+    func completeAlbumManagement() async {
+        guard let target = albumManagementTarget,
+              let album = album(groupID: target.groupID, albumID: target.albumID),
+              !isUpdatingSharedAlbum
+        else {
+            return
+        }
+
+        let name = albumNameDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !name.isEmpty else { return }
+        guard name != album.name else {
+            dismissAlbumManagement()
+            return
+        }
+
+        isUpdatingSharedAlbum = true
+        sharedAlbumErrorCode = nil
+        defer { isUpdatingSharedAlbum = false }
+
+        do {
+            try await repository.renameSharedAlbum(id: target.albumID, name: name)
+            try await reloadGroups()
+            dismissAlbumManagement()
+        } catch ShareGroupRepositoryError.sharedAlbumNotFound {
+            removeSharedAlbumState(id: target.albumID, groupID: target.groupID)
+            try? await reloadGroups()
+            dismissAlbumManagement()
+        } catch let error as ShareGroupRepositoryError {
+            sharedAlbumErrorCode = String(describing: error)
+        } catch let error as NetworkError {
+            sharedAlbumErrorCode = error.serverCode ?? "NETWORK_ERROR"
+        } catch {
+            sharedAlbumErrorCode = "UNKNOWN_ERROR"
+        }
     }
 
-    func renameAlbum(groupID: ShareAlbum.ID, albumID: SharedAlbum.ID, to name: String) {}
+    @discardableResult
+    func deleteManagedAlbum() async -> Bool {
+        guard let target = albumManagementTarget, !isDeletingSharedAlbums else { return false }
 
-    func deleteManagedAlbum() {
-        dismissAlbumManagement()
+        isDeletingSharedAlbums = true
+        sharedAlbumErrorCode = nil
+        defer { isDeletingSharedAlbums = false }
+
+        do {
+            try await repository.deleteSharedAlbum(id: target.albumID)
+            removeSharedAlbumState(id: target.albumID, groupID: target.groupID)
+            await refreshGroupAfterAlbumMutation(groupID: target.groupID)
+            dismissAlbumManagement()
+            return true
+        } catch ShareGroupRepositoryError.sharedAlbumNotFound {
+            removeSharedAlbumState(id: target.albumID, groupID: target.groupID)
+            try? await reloadGroups()
+            dismissAlbumManagement()
+            return true
+        } catch let error as ShareGroupRepositoryError {
+            sharedAlbumErrorCode = String(describing: error)
+            return false
+        } catch let error as NetworkError {
+            sharedAlbumErrorCode = error.serverCode ?? "NETWORK_ERROR"
+            return false
+        } catch {
+            sharedAlbumErrorCode = "UNKNOWN_ERROR"
+            return false
+        }
+    }
+
+    @discardableResult
+    func deleteSharedAlbums(
+        _ albumIDs: Set<SharedAlbum.ID>,
+        from groupID: ShareAlbum.ID
+    ) async -> Bool {
+        guard !albumIDs.isEmpty, !isDeletingSharedAlbums else { return false }
+
+        let idempotencyKey: UUID
+        if bulkDeleteAlbumIDs == albumIDs, let bulkDeleteIdempotencyKey {
+            idempotencyKey = bulkDeleteIdempotencyKey
+        } else {
+            idempotencyKey = UUID()
+            bulkDeleteAlbumIDs = albumIDs
+            bulkDeleteIdempotencyKey = idempotencyKey
+        }
+
+        isDeletingSharedAlbums = true
+        sharedAlbumErrorCode = nil
+        defer { isDeletingSharedAlbums = false }
+
+        do {
+            _ = try await repository.deleteSharedAlbums(
+                ids: Array(albumIDs),
+                idempotencyKey: idempotencyKey
+            )
+            for albumID in albumIDs {
+                removeSharedAlbumState(id: albumID, groupID: groupID)
+            }
+            bulkDeleteAlbumIDs = nil
+            bulkDeleteIdempotencyKey = nil
+            await refreshGroupAfterAlbumMutation(groupID: groupID)
+            return true
+        } catch let error as ShareGroupRepositoryError {
+            sharedAlbumErrorCode = String(describing: error)
+            return false
+        } catch let error as NetworkError {
+            sharedAlbumErrorCode = error.serverCode ?? "NETWORK_ERROR"
+            return false
+        } catch {
+            sharedAlbumErrorCode = "UNKNOWN_ERROR"
+            return false
+        }
     }
 
     func dismissAlbumManagement() {
         isAlbumManagementPresented = false
         albumManagementTarget = nil
+        sharedAlbumErrorCode = nil
     }
 
     func presentShareManagement(groupID: ShareAlbum.ID) {
@@ -767,6 +875,15 @@ final class ShareViewModel {
         if activeChatGroupID == id {
             dismissComments()
         }
+    }
+
+    private func removeSharedAlbumState(id: SharedAlbum.ID, groupID: ShareAlbum.ID) {
+        visibleSharedAlbumIDs[groupID]?.removeAll { $0 == id }
+    }
+
+    private func refreshGroupAfterAlbumMutation(groupID: ShareAlbum.ID) async {
+        try? await repository.syncGroup(id: groupID)
+        try? await reloadGroups()
     }
 
     private func prepareJoinedGroup(id: ShareAlbum.ID) async {
