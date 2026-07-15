@@ -6,6 +6,10 @@
 import Foundation
 import SQLiteData
 
+enum SharedGroupStoreError: Error {
+    case cacheOwnerChanged
+}
+
 nonisolated struct SharedGroupStore {
     private let database: any DatabaseWriter
 
@@ -94,8 +98,18 @@ nonisolated struct SharedGroupStore {
         )
     }
 
-    func upsertGroupSummaries(_ summaries: [ShareGroupSummaryResponse]) async throws {
+    func upsertGroupSummaries(
+        _ summaries: [ShareGroupSummaryResponse],
+        cacheOwnerID: UUID
+    ) async throws {
         try await database.write { db in
+            let owner = try SharedCacheOwnerRecord
+                .where { $0.id.eq(1) }
+                .fetchOne(db)
+            guard owner?.userID == cacheOwnerID.uuidString else {
+                throw SharedGroupStoreError.cacheOwnerChanged
+            }
+
             for summary in summaries {
                 let id = summary.id.uuidString
                 let existing = try SharedGroupRecord

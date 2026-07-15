@@ -97,6 +97,7 @@ final class ShareViewModel {
     private var bulkDeleteAlbumIDs: Set<SharedAlbum.ID>?
     private var bulkDeleteIdempotencyKey: UUID?
     private var cacheOwnerID: UUID?
+    private var remoteDataSessionID = UUID()
     private var errorRetryAction: (() async -> Void)?
 
     var displayedSheet: ShareSheetPresentation? {
@@ -222,20 +223,27 @@ final class ShareViewModel {
     }
 
     func loadGroups(for userID: UUID, refresh: Bool = false) async {
-        guard !isLoadingGroups, !isLoadingMoreGroups else { return }
         if cacheOwnerID != userID {
             resetRemoteData()
         }
+        guard !isLoadingGroups, !isLoadingMoreGroups else { return }
         guard refresh || !hasLoadedGroups else { return }
 
+        let sessionID = remoteDataSessionID
         isLoadingGroups = true
-        defer { isLoadingGroups = false }
+        defer {
+            if remoteDataSessionID == sessionID {
+                isLoadingGroups = false
+            }
+        }
 
         if cacheOwnerID != userID {
             do {
                 try await repository.prepareCache(for: userID)
+                guard remoteDataSessionID == sessionID else { return }
                 cacheOwnerID = userID
             } catch {
+                guard remoteDataSessionID == sessionID else { return }
                 presentError(error, fallback: "공유 데이터를 준비하지 못했어요.")
                 return
             }
@@ -247,12 +255,15 @@ final class ShareViewModel {
 
         do {
             let page = try await repository.syncGroups(cursor: nil, size: 20)
+            guard remoteDataSessionID == sessionID else { return }
             visibleGroupIDs = page.itemIDs
             try await reloadGroups()
+            guard remoteDataSessionID == sessionID else { return }
             nextGroupCursor = page.nextCursor
             groupsHaveNextPage = page.hasNext
             hasLoadedGroups = true
         } catch {
+            guard remoteDataSessionID == sessionID else { return }
             hasLoadedGroups = true
             presentError(
                 error,
@@ -625,6 +636,7 @@ final class ShareViewModel {
     }
 
     func resetRemoteData() {
+        remoteDataSessionID = UUID()
         groups = []
         cacheOwnerID = nil
         hasLoadedGroups = false

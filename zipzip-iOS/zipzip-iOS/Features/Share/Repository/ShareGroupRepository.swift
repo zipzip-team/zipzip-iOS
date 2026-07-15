@@ -109,6 +109,8 @@ protocol ShareGroupRepository {
 final class DefaultShareGroupRepository: ShareGroupRepository {
     private let api: ShareGroupAPI
     private let store: SharedGroupStore
+    private var cacheOwnerID: UUID?
+    private var cachePreparationID = UUID()
 
     init(api: ShareGroupAPI, store: SharedGroupStore = SharedGroupStore()) {
         self.api = api
@@ -116,7 +118,13 @@ final class DefaultShareGroupRepository: ShareGroupRepository {
     }
 
     func prepareCache(for userID: UUID) async throws {
+        let preparationID = UUID()
+        cachePreparationID = preparationID
         try await store.prepareCache(for: userID)
+        guard cachePreparationID == preparationID else {
+            throw CancellationError()
+        }
+        cacheOwnerID = userID
     }
 
     func groups() async throws -> [ShareAlbum] {
@@ -124,8 +132,11 @@ final class DefaultShareGroupRepository: ShareGroupRepository {
     }
 
     func syncGroups(cursor: String?, size: Int) async throws -> ShareGroupRepositoryPage {
+        guard let cacheOwnerID else {
+            throw SharedGroupStoreError.cacheOwnerChanged
+        }
         let page = try await api.fetchGroups(cursor: cursor, size: size)
-        try await store.upsertGroupSummaries(page.items)
+        try await store.upsertGroupSummaries(page.items, cacheOwnerID: cacheOwnerID)
         return ShareGroupRepositoryPage(
             itemIDs: page.items.map(\.id),
             nextCursor: page.nextCursor,
