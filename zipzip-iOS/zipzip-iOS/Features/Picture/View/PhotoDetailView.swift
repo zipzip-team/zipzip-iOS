@@ -56,13 +56,16 @@ struct PhotoDetailView: View {
     private let onAddToAlbums: ([String], [ShareDestination]) -> Void
     private let onMoveToAlbums: ([Int], [ShareDestination]) -> Void
     private let loadIsFavorite: (String) async -> Bool
-    private let onToggleFavorite: (String, Bool) -> Void
+    private let onToggleFavorite: (String, Bool) async -> Bool
 
     @State private var isEditingInfo = false
     @State private var showShareSheet = false
     @State private var showDeleteAlert = false
+    @State private var showOperationError = false
+    @State private var operationErrorMessage = ""
     @State private var isFavorite = false
     @State private var didToggleFavorite = false
+    @State private var isUpdatingFavorite = false
     @State private var imageViewModel = PhotoDetailImageViewModel()
     @State private var photoScale: CGFloat = 1
     @State private var photoOffset: CGSize = .zero
@@ -86,7 +89,7 @@ struct PhotoDetailView: View {
         onAddToAlbums: @escaping ([String], [ShareDestination]) -> Void = { _, _ in },
         onMoveToAlbums: @escaping ([Int], [ShareDestination]) -> Void = { _, _ in },
         loadIsFavorite: @escaping (String) async -> Bool = { _ in false },
-        onToggleFavorite: @escaping (String, Bool) -> Void = { _, _ in }
+        onToggleFavorite: @escaping (String, Bool) async -> Bool = { _, _ in true }
     ) {
         _photo = State(initialValue: photo)
         self.albums = albums
@@ -238,6 +241,11 @@ struct PhotoDetailView: View {
             onSecondaryTap: handleSecondaryDeleteAction,
             onPrimaryTap: handlePrimaryDeleteAction
         )
+        .alert("요청을 완료하지 못했어요.", isPresented: $showOperationError) {
+            Button("확인", role: .cancel) {}
+        } message: {
+            Text(operationErrorMessage)
+        }
     }
 
     private func loadSharedAlbums(groupID: ShareAlbum.ID) async {
@@ -288,7 +296,7 @@ struct PhotoDetailView: View {
             .init(
                 icon: isFavorite ? .starFilled : .starStroke,
                 title: "즐겨찾기",
-                isDisabled: photo.localIdentifier.isEmpty
+                isDisabled: photo.localIdentifier.isEmpty || isUpdatingFavorite
             ) { toggleFavorite() },
             .init(
                 icon: .moveToAlbum,
@@ -333,12 +341,20 @@ struct PhotoDetailView: View {
     }
 
     private func toggleFavorite() {
-        guard !photo.localIdentifier.isEmpty else { return }
+        guard !photo.localIdentifier.isEmpty, !isUpdatingFavorite else { return }
 
         didToggleFavorite = true
         let next = !isFavorite
         isFavorite = next
-        onToggleFavorite(photo.localIdentifier, next)
+        isUpdatingFavorite = true
+        Task {
+            defer { isUpdatingFavorite = false }
+            let didUpdate = await onToggleFavorite(photo.localIdentifier, next)
+            guard !didUpdate else { return }
+            isFavorite.toggle()
+            operationErrorMessage = "즐겨찾기를 변경하지 못했어요."
+            showOperationError = true
+        }
     }
 
     private func setInfoEditing(_ isEditing: Bool) {
@@ -508,6 +524,9 @@ struct PhotoDetailView: View {
         Task {
             if await onDelete(action, photo) {
                 dismiss()
+            } else {
+                operationErrorMessage = "사진을 삭제하지 못했어요."
+                showOperationError = true
             }
         }
     }

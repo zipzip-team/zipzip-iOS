@@ -6,6 +6,10 @@
 import Foundation
 import SQLiteData
 
+enum SharedGroupStoreError: Error {
+    case cacheOwnerChanged
+}
+
 nonisolated struct SharedGroupStore {
     private let database: any DatabaseWriter
 
@@ -15,6 +19,24 @@ nonisolated struct SharedGroupStore {
         } else {
             @Dependency(\.defaultDatabase) var defaultDatabase
             self.database = defaultDatabase
+        }
+    }
+
+    func prepareCache(for userID: UUID) async throws {
+        try await database.write { db in
+            let userID = userID.uuidString
+            let owner = try SharedCacheOwnerRecord
+                .where { $0.id.eq(1) }
+                .fetchOne(db)
+            guard owner?.userID != userID else { return }
+
+            try #sql(#"DELETE FROM "shared_photo""#).execute(db)
+            try #sql(#"DELETE FROM "shared_album""#).execute(db)
+            try #sql(#"DELETE FROM "shared_group""#).execute(db)
+            try SharedCacheOwnerRecord.upsert {
+                SharedCacheOwnerRecord.Draft(id: 1, userID: userID)
+            }
+            .execute(db)
         }
     }
 
@@ -76,8 +98,13 @@ nonisolated struct SharedGroupStore {
         )
     }
 
-    func upsertGroupSummaries(_ summaries: [ShareGroupSummaryResponse]) async throws {
+    func upsertGroupSummaries(
+        _ summaries: [ShareGroupSummaryResponse],
+        cacheOwnerID: UUID
+    ) async throws {
         try await database.write { db in
+            try Self.requireCacheOwner(cacheOwnerID, in: db)
+
             for summary in summaries {
                 let id = summary.id.uuidString
                 let existing = try SharedGroupRecord
@@ -106,8 +133,26 @@ nonisolated struct SharedGroupStore {
         }
     }
 
-    func upsertGroupDetail(_ detail: ShareGroupDetailResponse) async throws {
+    func reconcileGroups(serverIDs: Set<UUID>, cacheOwnerID: UUID) async throws {
+        let serverIDStrings = Set(serverIDs.map(\.uuidString))
         try await database.write { db in
+            try Self.requireCacheOwner(cacheOwnerID, in: db)
+            let cachedGroups = try SharedGroupRecord.fetchAll(db)
+            for group in cachedGroups where !serverIDStrings.contains(group.id) {
+                try SharedGroupRecord
+                    .where { $0.id.eq(group.id) }
+                    .delete()
+                    .execute(db)
+            }
+        }
+    }
+
+    func upsertGroupDetail(
+        _ detail: ShareGroupDetailResponse,
+        cacheOwnerID: UUID
+    ) async throws {
+        try await database.write { db in
+            try Self.requireCacheOwner(cacheOwnerID, in: db)
             let id = detail.id.uuidString
             let existing = try SharedGroupRecord
                 .where { $0.id.eq(id) }
@@ -135,9 +180,11 @@ nonisolated struct SharedGroupStore {
 
     func upsertSharedAlbums(
         _ albums: [SharedAlbumResponse],
-        groupID: UUID
+        groupID: UUID,
+        cacheOwnerID: UUID
     ) async throws {
         try await database.write { db in
+            try Self.requireCacheOwner(cacheOwnerID, in: db)
             for album in albums {
                 try SharedAlbumRecord.upsert {
                     SharedAlbumRecord.Draft(
@@ -157,13 +204,18 @@ nonisolated struct SharedGroupStore {
         }
     }
 
-    func upsertCreatedGroup(_ response: CreateSharedGroupResponse, createdAt: Date = .now) async throws {
+    func upsertCreatedGroup(
+        _ response: CreateSharedGroupResponse,
+        cacheOwnerID: UUID
+    ) async throws {
         try await database.write { db in
+            try Self.requireCacheOwner(cacheOwnerID, in: db)
+            let createdAt = Self.date(response.createdAt)
             try SharedGroupRecord.upsert {
                 SharedGroupRecord.Draft(
                     id: response.id.uuidString,
-                    createdByUserID: nil,
-                    createdByDisplayName: nil,
+                    createdByUserID: response.createdBy.userId?.uuidString,
+                    createdByDisplayName: response.createdBy.displayName,
                     name: response.name,
                     inviteCode: response.inviteCode,
                     createdAt: createdAt,
@@ -172,19 +224,101 @@ nonisolated struct SharedGroupStore {
                     memberCount: 1,
                     sharedAlbumCount: 0,
                     photoCount: 0,
-                    myRole: ShareGroupRoleResponse.host.rawValue
+                    myRole: response.myRole.rawValue
                 )
             }
             .execute(db)
         }
     }
 
-    func updateInviteCode(_ response: InviteCodeResponse) async throws {
+    func upsertJoinedGroup(
+        _ response: ShareGroupJoinResponse,
+        cacheOwnerID: UUID
+    ) async throws {
         try await database.write { db in
+            try Self.requireCacheOwner(cacheOwnerID, in: db)
+            let joinedAt = Self.date(response.joinedAt)
+            let existing = try SharedGroupRecord
+                .where { $0.id.eq(response.sharedGroupId.uuidString) }
+                .fetchOne(db)
+
+            try SharedGroupRecord.upsert {
+                SharedGroupRecord.Draft(
+                    id: response.sharedGroupId.uuidString,
+                    createdByUserID: existing?.createdByUserID,
+                    createdByDisplayName: existing?.createdByDisplayName,
+                    name: response.name,
+                    inviteCode: existing?.inviteCode,
+                    createdAt: existing?.createdAt,
+                    joinedAt: joinedAt,
+                    updatedAt: joinedAt,
+                    memberCount: max(existing?.memberCount ?? 0, 1),
+                    sharedAlbumCount: existing?.sharedAlbumCount ?? 0,
+                    photoCount: existing?.photoCount ?? 0,
+                    myRole: response.myRole.rawValue
+                )
+            }
+            .execute(db)
+        }
+    }
+
+    func updateInviteCode(
+        _ response: InviteCodeResponse,
+        cacheOwnerID: UUID
+    ) async throws {
+        try await database.write { db in
+            try Self.requireCacheOwner(cacheOwnerID, in: db)
             try SharedGroupRecord
                 .update { $0.inviteCode = #bind(response.inviteCode) }
                 .where { $0.id.eq(response.sharedGroupId.uuidString) }
                 .execute(db)
+        }
+    }
+
+    func updateGroup(
+        _ response: ShareGroupUpdateResponse,
+        cacheOwnerID: UUID
+    ) async throws {
+        try await database.write { db in
+            try Self.requireCacheOwner(cacheOwnerID, in: db)
+            try SharedGroupRecord
+                .update {
+                    $0.name = #bind(response.name)
+                    $0.updatedAt = #bind(Self.date(response.updatedAt))
+                }
+                .where { $0.id.eq(response.id.uuidString) }
+                .execute(db)
+        }
+    }
+
+    func updateSharedAlbum(
+        _ response: SharedAlbumRenameResponse,
+        cacheOwnerID: UUID
+    ) async throws {
+        try await database.write { db in
+            try Self.requireCacheOwner(cacheOwnerID, in: db)
+            try SharedAlbumRecord
+                .update {
+                    $0.name = #bind(response.name)
+                    $0.updatedAt = #bind(Self.date(response.updatedAt))
+                }
+                .where { $0.id.eq(response.id.uuidString) }
+                .execute(db)
+        }
+    }
+
+    func deleteSharedAlbums(ids: [UUID], cacheOwnerID: UUID) async throws {
+        let uniqueIDs = Set(ids.map(\.uuidString))
+        guard !uniqueIDs.isEmpty else { return }
+
+        try await database.write { db in
+            try Self.requireCacheOwner(cacheOwnerID, in: db)
+            for id in uniqueIDs {
+                try SharedAlbumRecord
+                    .where { $0.id.eq(id) }
+                    .delete()
+                    .execute(db)
+            }
         }
     }
 
@@ -197,12 +331,22 @@ nonisolated struct SharedGroupStore {
         }
     }
 
-    func deleteGroup(id: UUID) async throws {
+    func deleteGroup(id: UUID, cacheOwnerID: UUID) async throws {
         try await database.write { db in
+            try Self.requireCacheOwner(cacheOwnerID, in: db)
             try SharedGroupRecord
                 .where { $0.id.eq(id.uuidString) }
                 .delete()
                 .execute(db)
+        }
+    }
+
+    private static func requireCacheOwner(_ cacheOwnerID: UUID, in db: Database) throws {
+        let owner = try SharedCacheOwnerRecord
+            .where { $0.id.eq(1) }
+            .fetchOne(db)
+        guard owner?.userID == cacheOwnerID.uuidString else {
+            throw SharedGroupStoreError.cacheOwnerChanged
         }
     }
 

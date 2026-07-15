@@ -13,6 +13,7 @@ struct DateFilterSheet: View {
     let onDone: () -> Void
 
     @State private var photosVM = DateFilterPhotosViewModel()
+    @State private var isLoadErrorPresented = false
 
     var body: some View {
         BottomSheet(
@@ -31,7 +32,15 @@ struct DateFilterSheet: View {
             }
             .padding(.horizontal, 16)
         }
-        .task { await photosVM.load() }
+        .task {
+            isLoadErrorPresented = !(await photosVM.load())
+        }
+        .alert("사진을 불러오지 못했어요.", isPresented: $isLoadErrorPresented) {
+            Button("다시 시도") {
+                Task { isLoadErrorPresented = !(await photosVM.load()) }
+            }
+            Button("확인", role: .cancel) {}
+        }
     }
 
     private func headerButton(title: String, action: @escaping () -> Void) -> some View {

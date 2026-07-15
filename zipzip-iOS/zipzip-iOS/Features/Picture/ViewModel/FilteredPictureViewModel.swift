@@ -32,6 +32,7 @@ final class FilteredPictureViewModel {
     var pickerDate: Date?
     var showEtcSheet = false
     var pickerEtc = ""
+    var isErrorAlertPresented = false
 
     init(appliedFilters: [AppliedFilter]) {
         self.appliedFilters = appliedFilters
@@ -42,6 +43,7 @@ final class FilteredPictureViewModel {
             options = try await optionsProvider.load()
         } catch {
             Self.logger.error("failed to load filter options: \(error)")
+            isErrorAlertPresented = true
         }
     }
 

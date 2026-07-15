@@ -30,6 +30,7 @@ struct zipzip_iOSApp: App {
                 .environment(router)
                 .environment(container)
                 .environment(container.authenticationState)
+                .environment(container.userProfileState)
             } else {
                 Color.clear
             }

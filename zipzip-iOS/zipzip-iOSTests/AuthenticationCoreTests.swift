@@ -1,3 +1,4 @@
+import Alamofire
 import XCTest
 @testable import zipzip_iOS
 
@@ -54,6 +55,30 @@ final class AuthenticationCoreTests: XCTestCase {
         XCTAssertFalse(redacted.contains("refresh-secret"))
         XCTAssertTrue(redacted.contains("집집 사용자"))
     }
+
+    func testStoredAppleSessionWithoutDevelopmentKeyStillDecodes() throws {
+        let encoded = try JSONEncoder().encode(sessionCredential())
+        var object = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: encoded) as? [String: Any]
+        )
+        object.removeValue(forKey: "developmentUserKey")
+
+        let legacyData = try JSONSerialization.data(withJSONObject: object)
+        let decoded = try JSONDecoder().decode(StoredSessionCredential.self, from: legacyData)
+
+        XCTAssertNil(decoded.developmentUserKey)
+        XCTAssertEqual(decoded.appleUserIdentifier, "apple-user")
+    }
+
+    #if DEBUG
+        func testDevelopmentAuthFlagDefaultsToDisabled() {
+            XCTAssertFalse(DevelopmentAuthConfiguration.isEnabled(nil))
+            XCTAssertFalse(DevelopmentAuthConfiguration.isEnabled(""))
+            XCTAssertFalse(DevelopmentAuthConfiguration.isEnabled("$(DEV_AUTH_ENABLED)"))
+            XCTAssertFalse(DevelopmentAuthConfiguration.isEnabled("NO"))
+            XCTAssertTrue(DevelopmentAuthConfiguration.isEnabled("YES"))
+        }
+    #endif
 
     @MainActor
     func testConcurrentRefreshUsesOneRequestAndPersistsRotation() async throws {
@@ -134,6 +159,33 @@ final class AuthenticationCoreTests: XCTestCase {
         XCTAssertEqual(api.refreshCount, 1)
         let blockedCode = await store.credential?.refreshBlockedCode
         XCTAssertEqual(blockedCode, "IDEMPOTENCY_KEY_REUSED")
+    }
+
+    @MainActor
+    func testAuthenticatedRetryPreservesServerErrorCode() async throws {
+        let store = TestCredentialStore(initial: sessionCredential())
+        let authAPI = TestAuthAPI(delay: .zero)
+        let controller = SessionCredentialController(store: store, authAPI: authAPI)
+        _ = try await controller.restore()
+        let recordingProvider = UnauthorizedThenConflictNetworkProvider()
+        var didLoseAuthentication = false
+        let provider = AuthenticatedNetworkProvider(
+            provider: recordingProvider,
+            credentialController: controller,
+            onAuthenticationLost: { didLoseAuthentication = true }
+        )
+
+        do {
+            let _: APIVoidEnvelope = try await provider.request(ProtectedTestEndpoint())
+            XCTFail("인증 갱신 뒤 서버 충돌 응답을 그대로 전달해야 합니다.")
+        } catch let error as NetworkError {
+            XCTAssertEqual(error.statusCode, 409)
+            XCTAssertEqual(error.serverCode, "IDEMPOTENCY_KEY_REUSED")
+        }
+
+        XCTAssertEqual(recordingProvider.requestCount, 2)
+        XCTAssertEqual(authAPI.refreshCount, 1)
+        XCTAssertFalse(didLoseAuthentication)
     }
 
     @MainActor
@@ -234,6 +286,13 @@ final class AuthenticationCoreTests: XCTestCase {
                 displayName: "집집 사용자"
             )
         )
+        _ = try await api.issueDevelopmentTokens(
+            DevelopmentTokenRequest(
+                testUserKey: "ios-tester-1",
+                displayName: "iOS 테스트 사용자"
+            )
+        )
+        try await api.deleteDevelopmentUser(testUserKey: "ios-tester-1")
         _ = try await api.refresh(refreshToken: "refresh-token", idempotencyKey: idempotencyKey)
         try await api.logout(credential: credential)
         try await api.withdraw(accessToken: "access-token", tokenType: "Bearer")
@@ -241,11 +300,16 @@ final class AuthenticationCoreTests: XCTestCase {
         XCTAssertEqual(APIConfig.baseURL, "https://dev-api.zipzip.site")
         XCTAssertEqual(provider.requests.map { $0.url?.path }, [
             "/api/v1/auth/apple",
+            "/api/v1/dev/auth/tokens",
+            "/api/v1/dev/auth/users/ios-tester-1",
             "/api/v1/auth/refresh",
             "/api/v1/auth/logout",
             "/api/v1/users/me"
         ])
-        XCTAssertEqual(provider.requests.map(\.httpMethod), ["POST", "POST", "POST", "DELETE"])
+        XCTAssertEqual(
+            provider.requests.map(\.httpMethod),
+            ["POST", "POST", "DELETE", "POST", "POST", "DELETE"]
+        )
 
         let loginBody = try requestBody(provider.requests[0])
         XCTAssertEqual(loginBody["identityToken"] as? String, "identity-token")
@@ -253,18 +317,59 @@ final class AuthenticationCoreTests: XCTestCase {
         XCTAssertEqual(loginBody["nonce"] as? String, "nonce")
         XCTAssertEqual(loginBody["displayName"] as? String, "집집 사용자")
 
+        let developmentLoginBody = try requestBody(provider.requests[1])
+        XCTAssertEqual(developmentLoginBody["testUserKey"] as? String, "ios-tester-1")
+        XCTAssertEqual(developmentLoginBody["displayName"] as? String, "iOS 테스트 사용자")
+        XCTAssertNil(provider.requests[2].httpBody)
+
         XCTAssertEqual(
-            provider.requests[1].value(forHTTPHeaderField: "Idempotency-Key"),
+            provider.requests[3].value(forHTTPHeaderField: "Idempotency-Key"),
             idempotencyKey.uuidString
         )
-        XCTAssertEqual(try requestBody(provider.requests[1])["refreshToken"] as? String, "refresh-token")
+        XCTAssertEqual(try requestBody(provider.requests[3])["refreshToken"] as? String, "refresh-token")
         XCTAssertEqual(
-            provider.requests[2].value(forHTTPHeaderField: "Authorization"),
+            provider.requests[4].value(forHTTPHeaderField: "Authorization"),
             "Bearer access-token"
         )
-        XCTAssertEqual(try requestBody(provider.requests[2])["refreshToken"] as? String, "refresh-token")
-        XCTAssertNil(provider.requests[3].httpBody)
+        XCTAssertEqual(try requestBody(provider.requests[4])["refreshToken"] as? String, "refresh-token")
+        XCTAssertNil(provider.requests[5].httpBody)
     }
+
+    #if DEBUG
+        @MainActor
+        func testDevelopmentLoginPersistsSessionAndWithdrawDeletesDevelopmentUser() async throws {
+            let store = TestCredentialStore(initial: nil)
+            let api = TestAuthAPI()
+            let controller = SessionCredentialController(store: store, authAPI: api)
+            let state = AuthenticationState(
+                authAPI: api,
+                credentialController: controller,
+                defaults: try XCTUnwrap(UserDefaults(suiteName: UUID().uuidString))
+            )
+            let configuration = DevelopmentAuthConfiguration(
+                testUserKey: "ios-tester-1",
+                displayName: "iOS 테스트 사용자"
+            )
+
+            state.requestLogin(.share)
+            await state.loginForDevelopment(configuration: configuration)
+
+            XCTAssertTrue(state.isLoggedIn)
+            XCTAssertEqual(state.currentUser?.displayName, "iOS 테스트 사용자")
+            let stored = await store.credential
+            XCTAssertEqual(stored?.developmentUserKey, "ios-tester-1")
+            XCTAssertEqual(stored?.appleUserIdentifier, "")
+
+            let didWithdraw = await state.withdraw()
+
+            XCTAssertTrue(didWithdraw)
+            XCTAssertEqual(api.deletedDevelopmentUserKeys, ["ios-tester-1"])
+            XCTAssertEqual(api.withdrawCount, 0)
+            XCTAssertFalse(state.isLoggedIn)
+            let credentialAfterWithdraw = await store.credential
+            XCTAssertNil(credentialAfterWithdraw)
+        }
+    #endif
 
     private func sessionCredential() -> StoredSessionCredential {
         StoredSessionCredential(
@@ -331,6 +436,8 @@ private actor TestCredentialStore: CredentialStore {
 @MainActor
 private final class TestAuthAPI: AuthAPI {
     private(set) var refreshCount = 0
+    private(set) var deletedDevelopmentUserKeys: [String] = []
+    private(set) var withdrawCount = 0
     private let delay: Duration
     private let error: NetworkError?
 
@@ -341,6 +448,22 @@ private final class TestAuthAPI: AuthAPI {
 
     func loginWithApple(_ request: AppleLoginRequest) async throws -> LoginResponse {
         throw AuthSessionError.missingCredential
+    }
+
+    func issueDevelopmentTokens(_ request: DevelopmentTokenRequest) async throws -> LoginResponse {
+        LoginResponse(
+            accessToken: "development-access",
+            refreshToken: "development-refresh",
+            tokenType: "Bearer",
+            expiresIn: 3600,
+            isNewUser: true,
+            isRestoredUser: false,
+            user: AuthUser(id: UUID(), displayName: request.displayName)
+        )
+    }
+
+    func deleteDevelopmentUser(testUserKey: String) async throws {
+        deletedDevelopmentUserKeys.append(testUserKey)
     }
 
     func refresh(refreshToken: String, idempotencyKey: UUID) async throws -> TokenRefreshResponse {
@@ -358,7 +481,9 @@ private final class TestAuthAPI: AuthAPI {
     }
 
     func logout(credential: AuthCredential) async throws {}
-    func withdraw(accessToken: String, tokenType: String) async throws {}
+    func withdraw(accessToken: String, tokenType: String) async throws {
+        withdrawCount += 1
+    }
 }
 
 @MainActor
@@ -371,7 +496,7 @@ private final class RecordingNetworkProvider: NetworkProvider {
 
         let json: String
         switch request.url?.path {
-        case "/api/v1/auth/apple":
+        case "/api/v1/auth/apple", "/api/v1/dev/auth/tokens":
             json = """
             {
               "data": {
@@ -405,4 +530,35 @@ private final class RecordingNetworkProvider: NetworkProvider {
 
         return try JSONDecoder().decode(T.self, from: Data(json.utf8))
     }
+}
+
+@MainActor
+private final class UnauthorizedThenConflictNetworkProvider: NetworkProvider {
+    private(set) var requestCount = 0
+
+    func request<T: Decodable>(_ endpoint: APIEndpoint) async throws -> T {
+        requestCount += 1
+        if requestCount == 1 {
+            throw NetworkError.server(
+                statusCode: 401,
+                code: "UNAUTHORIZED",
+                message: "expired",
+                body: nil
+            )
+        }
+        throw NetworkError.server(
+            statusCode: 409,
+            code: "IDEMPOTENCY_KEY_REUSED",
+            message: "conflict",
+            body: nil
+        )
+    }
+}
+
+private struct ProtectedTestEndpoint: APIEndpoint {
+    let path = "/api/v1/protected-test"
+    let method: HTTPMethod = .get
+    let headers: HTTPHeaders? = nil
+    let parameters: Parameters? = nil
+    let encoding: ParameterEncoding = URLEncoding.default
 }

@@ -13,6 +13,8 @@ struct ShareGroupManagementSheet: View {
     @Binding var groupName: String
     let inviteCode: String
     let isInviteCodeAvailable: Bool
+    let isUpdating: Bool
+    let isLeaving: Bool
     let onClose: () -> Void
     let onComplete: () -> Void
     let onLeave: () -> Void
@@ -25,8 +27,9 @@ struct ShareGroupManagementSheet: View {
             rightItem: {
                 Button("완료", action: onComplete)
                     .font(.b1_sb)
-                    .foregroundStyle(.white00)
+                    .foregroundStyle(isCompleteDisabled ? .grey700 : .white00)
                     .frame(width: 72, height: 48)
+                    .disabled(isCompleteDisabled)
             }
         ) {
             ScrollViewReader { proxy in
@@ -55,6 +58,7 @@ struct ShareGroupManagementSheet: View {
 
             VStack(alignment: .leading, spacing: 24) {
                 ShareGroupNameField(text: $groupName)
+                    .disabled(group.currentUserRole != .admin || isUpdating || isLeaving)
                 groupMetadata
             }
         }
@@ -123,13 +127,14 @@ struct ShareGroupManagementSheet: View {
 
     private var leaveSection: some View {
         VStack(spacing: 24) {
-            ShareGroupLeaveButton(isDisabled: isLeaveConfirmationPresented) {
+            ShareGroupLeaveButton(isDisabled: isLeaveConfirmationPresented || isUpdating || isLeaving) {
                 isLeaveConfirmationPresented = true
             }
 
             if isLeaveConfirmationPresented {
                 ShareGroupLeaveConfirmation(
                     role: group.currentUserRole,
+                    isBusy: isLeaving,
                     onStay: { isLeaveConfirmationPresented = false },
                     onLeave: onLeave
                 )
@@ -159,6 +164,10 @@ struct ShareGroupManagementSheet: View {
 
     private var leaveConfirmationID: String {
         "share-group-leave-confirmation"
+    }
+
+    private var isCompleteDisabled: Bool {
+        isUpdating || isLeaving
     }
 }
 
@@ -215,6 +224,7 @@ private struct ShareGroupLeaveButton: View {
 
 private struct ShareGroupLeaveConfirmation: View {
     let role: ShareGroupRole
+    let isBusy: Bool
     let onStay: () -> Void
     let onLeave: () -> Void
 
@@ -236,6 +246,7 @@ private struct ShareGroupLeaveConfirmation: View {
                 CommonButton(title: "머무르기", property1: .secondary, action: onStay)
                 CommonButton(title: "나가기", property1: .cta, action: onLeave)
             }
+            .disabled(isBusy)
         }
         .frame(maxWidth: .infinity)
     }
@@ -273,6 +284,8 @@ private struct ShareGroupLeaveConfirmation: View {
         groupName: $groupName,
         inviteCode: "# 3d2dsd322d32d23",
         isInviteCodeAvailable: true,
+        isUpdating: false,
+        isLeaving: false,
         onClose: {},
         onComplete: {},
         onLeave: {}

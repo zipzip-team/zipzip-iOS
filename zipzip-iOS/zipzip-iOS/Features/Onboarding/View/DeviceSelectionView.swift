@@ -16,6 +16,8 @@ struct DeviceSelectionView: View {
     }
 
     var body: some View {
+        @Bindable var viewModel = viewModel
+
         OnboardingContainerView {
             VStack(spacing: 64) {
                 VStack(spacing: 4) {
@@ -46,13 +48,24 @@ struct DeviceSelectionView: View {
                 }
                 .frame(maxHeight: .infinity)
 
-                CommonButton(title: "확인", property1: .default) {
+                CommonButton(
+                    title: "확인",
+                    property1: viewModel.isSavingSelection ? .disabled : .default
+                ) {
                     Task {
-                        await viewModel.saveSelection()
-                        router.push(.onboardingComplete)
+                        if await viewModel.saveSelection() {
+                            router.push(.onboardingComplete)
+                        }
                     }
                 }
             }
+        }
+        .alert("기기 선택을 저장하지 못했어요.", isPresented: $viewModel.isErrorAlertPresented) {
+            Button("확인", role: .cancel) {
+                viewModel.dismissSaveError()
+            }
+        } message: {
+            Text("잠시 후 다시 시도해주세요.")
         }
     }
 }

@@ -14,13 +14,14 @@ final class AlbumPhotoPickerViewModel {
 
     private(set) var sections: [PhotoSection]
     private(set) var selectedPhotoIDs: [UUID]
+    private(set) var isCompleting = false
 
-    private let onComplete: ([String]) -> Void
+    private let onComplete: ([String]) async -> Bool
 
     init(
         sections: [PhotoSection] = [],
         selectedPhotoIDs: [UUID] = [],
-        onComplete: @escaping ([String]) -> Void
+        onComplete: @escaping ([String]) async -> Bool
     ) {
         self.sections = sections
         self.selectedPhotoIDs = selectedPhotoIDs
@@ -37,7 +38,7 @@ final class AlbumPhotoPickerViewModel {
     }
 
     var isCompletionDisabled: Bool {
-        selectedPhotoIDs.isEmpty
+        selectedPhotoIDs.isEmpty || isCompleting
     }
 
     private var selectedPhotoLocalIdentifiers: [String] {
@@ -52,11 +53,13 @@ final class AlbumPhotoPickerViewModel {
         }
     }
 
-    func completeSelection() {
+    func completeSelection() async -> Bool {
         guard !isCompletionDisabled else {
-            return
+            return false
         }
 
-        onComplete(selectedPhotoLocalIdentifiers)
+        isCompleting = true
+        defer { isCompleting = false }
+        return await onComplete(selectedPhotoLocalIdentifiers)
     }
 }

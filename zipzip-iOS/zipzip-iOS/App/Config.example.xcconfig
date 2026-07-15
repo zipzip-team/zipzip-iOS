@@ -1,2 +1,13 @@
-// Copy this file to Config.xcconfig and replace the value with the API host.
+// Copy this file to Config.xcconfig and replace the values for your environment.
+// Enter the API host without a URL scheme.
 BASE_URL = api.example.com
+
+// Set to YES only when the Debug login screen should expose development login.
+// NO, or an omitted value, keeps the standard Apple login flow.
+DEV_AUTH_ENABLED = NO
+
+// Required only when DEV_AUTH_ENABLED is YES.
+// Use a developer-specific key to avoid sharing a test account with another developer.
+// Issued access and refresh tokens are stored in Keychain, not in this file.
+DEV_AUTH_TEST_USER_KEY = ios-tester-1
+DEV_AUTH_DISPLAY_NAME = iOS 테스트 사용자

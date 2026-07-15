@@ -33,6 +33,7 @@ nonisolated struct StoredSessionCredential: Codable, Equatable {
     let credential: AuthCredential
     let user: AuthUser
     let appleUserIdentifier: String
+    let developmentUserKey: String?
     let refreshTokenVersion: Int
     let pendingRefreshIdempotencyKey: UUID?
     let refreshBlockedCode: String?
@@ -41,6 +42,7 @@ nonisolated struct StoredSessionCredential: Codable, Equatable {
         credential: AuthCredential,
         user: AuthUser,
         appleUserIdentifier: String,
+        developmentUserKey: String? = nil,
         refreshTokenVersion: Int = 0,
         pendingRefreshIdempotencyKey: UUID? = nil,
         refreshBlockedCode: String? = nil
@@ -49,6 +51,7 @@ nonisolated struct StoredSessionCredential: Codable, Equatable {
         self.credential = credential
         self.user = user
         self.appleUserIdentifier = appleUserIdentifier
+        self.developmentUserKey = developmentUserKey
         self.refreshTokenVersion = refreshTokenVersion
         self.pendingRefreshIdempotencyKey = pendingRefreshIdempotencyKey
         self.refreshBlockedCode = refreshBlockedCode
@@ -60,6 +63,11 @@ nonisolated struct AppleLoginRequest {
     let authorizationCode: String
     let nonce: String
     let displayName: String?
+}
+
+nonisolated struct DevelopmentTokenRequest {
+    let testUserKey: String
+    let displayName: String
 }
 
 nonisolated struct LoginResponse: Decodable {

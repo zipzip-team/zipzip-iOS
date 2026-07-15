@@ -40,6 +40,12 @@ struct FilterView: View {
             }
         }
         .task { await viewModel.loadOptions() }
+        .alert("필터 정보를 불러오지 못했어요.", isPresented: $viewModel.isErrorAlertPresented) {
+            Button("다시 시도") {
+                Task { await viewModel.loadOptions() }
+            }
+            Button("확인", role: .cancel) {}
+        }
         .bottomSheet(isPresented: $showDateSheet, detents: [.height(dateSheetHeight)]) { dismiss in
             DateFilterSheet(date: $pickerDate, onReset: {
                 pickerDate = nil

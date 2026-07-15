@@ -20,6 +20,8 @@ final class AlbumViewModel {
     }
 
     var isShareAlbumSheetPresented = false
+    var isErrorAlertPresented = false
+    private(set) var errorAlertMessage = ""
     var createAlbumName = ""
     private(set) var isCreatingAlbum = false
 
@@ -29,7 +31,7 @@ final class AlbumViewModel {
     @ObservationIgnored private let photoSectionsProvider: PhotoSectionsProvider
     @ObservationIgnored private let photoDeletion: PhotoDeletionService
     @ObservationIgnored private let loadsAlbumsFromDatabase: Bool
-    @ObservationIgnored private var favoriteWriteTasks: [String: Task<Void, Never>] = [:]
+    @ObservationIgnored private var errorRetryAction: (() async -> Void)?
 
     init(
         albums: [AlbumViewItem]? = nil,
@@ -51,10 +53,15 @@ final class AlbumViewModel {
     func loadAlbums() async {
         guard loadsAlbumsFromDatabase else { return }
 
-        guard let storedAlbums = try? await albumStore.fetchAlbums() else { return }
-        albums = storedAlbums
-            .map(AlbumViewItem.init)
-            .filter { !$0.isFavorite || $0.hasPhotos }
+        do {
+            albums = try await albumStore.fetchAlbums()
+                .map(AlbumViewItem.init)
+                .filter { !$0.isFavorite || $0.hasPhotos }
+        } catch {
+            presentError("사진집을 불러오지 못했어요.") { [weak self] in
+                await self?.loadAlbums()
+            }
+        }
     }
 
     func enterSelectionMode() {
@@ -91,7 +98,15 @@ final class AlbumViewModel {
         isCreatingAlbum = true
         defer { isCreatingAlbum = false }
 
-        guard let storedAlbum = try? await albumStore.createAlbum(name: trimmedName) else { return nil }
+        let storedAlbum: StoredAlbum
+        do {
+            storedAlbum = try await albumStore.createAlbum(name: trimmedName)
+        } catch {
+            presentError("사진집을 만들지 못했어요.") { [weak self] in
+                _ = await self?.createAlbum()
+            }
+            return nil
+        }
         let album = AlbumViewItem(storedAlbum: storedAlbum)
 
         let insertIndex = albums.first?.isFavorite == true ? 1 : 0
@@ -186,6 +201,9 @@ final class AlbumViewModel {
         let albumIDs = selectedAlbumIDs
         Task {
             guard await deleteAlbums(ids: albumIDs) else {
+                presentError("사진집을 삭제하지 못했어요.") { [weak self] in
+                    self?.confirmSelectedAlbumDeletion()
+                }
                 return
             }
 
@@ -201,42 +219,37 @@ final class AlbumViewModel {
         AlbumDetailViewModel(
             actions: AlbumDetailActions(
                 onRename: { [weak self] name in
-                    Task {
-                        await self?.renameAlbum(albumID, to: name)
-                    }
+                    guard let self else { return false }
+                    return await self.renameAlbum(albumID, to: name)
                 },
                 onDelete: { [weak self] in
-                    Task {
-                        guard await self?.deleteAlbums(
-                            ids: [albumID],
-                            beforeLocalStateUpdate: router.pop
-                        ) == true else {
-                            return
-                        }
-                    }
+                    guard let self else { return false }
+                    return await self.deleteAlbums(
+                        ids: [albumID],
+                        beforeLocalStateUpdate: router.pop
+                    )
                 },
                 onAddPhotos: { [weak self] localIdentifiers in
-                    Task {
-                        await self?.addPhotos(
-                            localIdentifiers: localIdentifiers,
-                            to: [.album(albumID)]
-                        )
-                    }
+                    guard let self else { return false }
+                    return await self.addPhotos(
+                        localIdentifiers: localIdentifiers,
+                        to: [.album(albumID)]
+                    )
                 },
                 onDeletePhotos: { [weak self] photoIDs, action in
-                    Task { await self?.deletePhotos(photoIDs, from: albumID, action: action) }
+                    guard let self else { return false }
+                    return await self.deletePhotos(photoIDs, from: albumID, action: action)
                 },
                 onMovePhotos: { [weak self] photoIDs, destination in
-                    Task {
-                        guard let self,
-                              await self.movePhotos(photoIDs, from: albumID, to: destination),
-                              let destinationAlbumID = destination.firstPersonalAlbumID
-                        else {
-                            return
-                        }
-
+                    guard let self,
+                          await self.movePhotos(photoIDs, from: albumID, to: destination)
+                    else {
+                        return false
+                    }
+                    if let destinationAlbumID = destination.firstPersonalAlbumID {
                         router.push(.albumDetail(destinationAlbumID))
                     }
+                    return true
                 }
             ),
             onEditPhotoInfo: { [weak self] photoIDs, onSuccessfulDismiss in
@@ -306,28 +319,50 @@ final class AlbumViewModel {
         (try? await albumStore.isPhotoFavorite(localIdentifier: localIdentifier)) ?? false
     }
 
-    /// 같은 사진에 대한 즐겨찾기 쓰기를 제출 순서대로 직렬화한다.
-    /// 연타 시 마지막 탭 의도가 DB 최종 상태와 일치하도록 보장한다.
-    func setPhotoFavorite(localIdentifier: String, isFavorite: Bool) {
-        let previous = favoriteWriteTasks[localIdentifier]
-        favoriteWriteTasks[localIdentifier] = Task { [weak self] in
-            await previous?.value
-            guard let self else { return }
-
-            try? await albumStore.setPhotoFavorite(
+    func setPhotoFavorite(localIdentifier: String, isFavorite: Bool) async -> Bool {
+        do {
+            try await albumStore.setPhotoFavorite(
                 localIdentifier: localIdentifier,
                 isFavorite: isFavorite
             )
             await loadAlbums()
+            return true
+        } catch {
+            return false
         }
     }
 
     func photoSections(for albumID: AlbumViewItem.ID) async -> [PhotoSection] {
-        (try? await photoSectionsProvider.loadAlbumSections(albumID: albumID)) ?? []
+        do {
+            return try await photoSectionsProvider.loadAlbumSections(albumID: albumID)
+        } catch {
+            presentError("사진을 불러오지 못했어요.") { [weak self] in
+                _ = await self?.photoSections(for: albumID)
+            }
+            return []
+        }
+    }
+
+    var canRetryError: Bool {
+        errorRetryAction != nil
+    }
+
+    func dismissErrorAlert() {
+        isErrorAlertPresented = false
+        errorAlertMessage = ""
+        errorRetryAction = nil
+    }
+
+    func retryErrorAction() async {
+        let retry = errorRetryAction
+        dismissErrorAlert()
+        await retry?()
     }
 
     /// 사진 목록 화면에서 선택한 사진을 개인 사진집에 영구적으로 추가한다.
     func addPhotos(localIdentifiers: [String], to destinations: [ShareDestination]) async -> Bool {
+        // TODO: 정교은 담당 업로드·attach API가 합쳐지면 `.sharedAlbum` 대상은
+        // upload-urls → object storage PUT → photos/complete 또는 기존 photo attach로 처리합니다.
         let albumIDs = destinations.compactMap { destination -> Album.ID? in
             guard case let .album(albumID) = destination else {
                 return nil
@@ -354,6 +389,8 @@ final class AlbumViewModel {
         from sourceAlbumID: AlbumViewItem.ID,
         to destinations: [ShareDestination]
     ) async -> Bool {
+        // TODO: 정교은 담당 attach/detach API가 합쳐지면 `.sharedAlbum` 대상으로 attach 성공 후
+        // 개인 사진집에서 제거할지 여부를 제품 정책에 맞춰 처리하고 양쪽 목록을 갱신합니다.
         let destinationAlbumIDs = destinations.compactMap { destination -> Album.ID? in
             guard case let .album(albumID) = destination else {
                 return nil
@@ -379,19 +416,20 @@ final class AlbumViewModel {
         return true
     }
 
-    private func renameAlbum(_ albumID: AlbumViewItem.ID, to name: String) async {
+    private func renameAlbum(_ albumID: AlbumViewItem.ID, to name: String) async -> Bool {
         if loadsAlbumsFromDatabase {
             do {
                 try await albumStore.renameAlbum(id: albumID, name: name)
             } catch {
-                return
+                return false
             }
         }
 
         guard let index = albums.firstIndex(where: { $0.id == albumID }) else {
-            return
+            return false
         }
         albums[index].name = name
+        return true
     }
 
     private func deleteAlbums(
@@ -434,6 +472,15 @@ final class AlbumViewModel {
             from: albumID,
             to: destinations
         )
+    }
+
+    private func presentError(
+        _ message: String,
+        retry: @escaping () async -> Void
+    ) {
+        errorAlertMessage = message
+        errorRetryAction = retry
+        isErrorAlertPresented = true
     }
 }
 

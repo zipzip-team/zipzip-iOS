@@ -35,6 +35,7 @@ struct RootView: View {
     var body: some View {
         @Bindable var router = router
         @Bindable var authenticationState = authenticationState
+        @Bindable var shareViewModel = shareViewModel
         NavigationStack(path: $router.path) {
             Group {
                 if authenticationState.isRestoring, hasCompletedOnboarding {
@@ -190,17 +191,44 @@ struct RootView: View {
         .fullScreenCover(item: $authenticationState.loginIntent) { _ in
             ShareLoginView()
         }
+        .alert("요청을 완료하지 못했어요", isPresented: $shareViewModel.isErrorAlertPresented) {
+            if shareViewModel.canRetryError {
+                Button("다시 시도") {
+                    Task { await shareViewModel.retryErrorAction() }
+                }
+            }
+            Button("확인", role: .cancel, action: shareViewModel.dismissErrorAlert)
+        } message: {
+            Text(shareViewModel.errorAlertMessage)
+        }
+        .alert("요청을 완료하지 못했어요", isPresented: $albumViewModel.isErrorAlertPresented) {
+            if albumViewModel.canRetryError {
+                Button("다시 시도") {
+                    Task { await albumViewModel.retryErrorAction() }
+                }
+            }
+            Button("확인", role: .cancel, action: albumViewModel.dismissErrorAlert)
+        } message: {
+            Text(albumViewModel.errorAlertMessage)
+        }
         .task {
             await authenticationState.restore(
                 minimumDuration: hasCompletedOnboarding ? .seconds(2) : .zero
             )
             await authenticationState.checkAppleCredentialState()
         }
-        .task(id: authenticationState.isLoggedIn) {
-            if authenticationState.isLoggedIn {
-                await shareViewModel.loadGroups()
+        .task(id: authenticationState.currentUser?.id) {
+            if let userID = authenticationState.currentUser?.id {
+                await shareViewModel.loadGroups(for: userID)
             } else {
                 shareViewModel.resetRemoteData()
+            }
+        }
+        .task(id: authenticationState.currentUser?.id) {
+            if let user = authenticationState.currentUser {
+                await container.userProfileState.load(for: user)
+            } else {
+                container.userProfileState.reset()
             }
         }
         .onChange(of: scenePhase) { _, phase in
@@ -225,7 +253,11 @@ struct RootView: View {
                         title: "집으로",
                         isDisabled: pictureViewModel.selectedPhotoIDs.isEmpty
                     ) { showShareSheet = true },
-                    .init(icon: .metadata, title: "정보 수정") {
+                    .init(
+                        icon: .metadata,
+                        title: "정보 수정",
+                        isDisabled: pictureViewModel.selectedPhotoIDs.isEmpty
+                    ) {
                         if let metadata = pictureViewModel.firstSelectedMetadata {
                             router.push(.photoInfoEdit(PhotoInfoEditDestination(
                                 metadata: metadata,
@@ -234,7 +266,11 @@ struct RootView: View {
                             )))
                         }
                     },
-                    .init(icon: .delete, title: "삭제") { pictureViewModel.requestDelete() }
+                    .init(
+                        icon: .delete,
+                        title: "삭제",
+                        isDisabled: pictureViewModel.selectedPhotoIDs.isEmpty
+                    ) { pictureViewModel.requestDelete() }
                 ])
                 .padding(.bottom, 26.5)
                 .ignoresSafeArea(.container, edges: .bottom)
@@ -305,8 +341,8 @@ struct RootView: View {
         }
     }
 
-    private func togglePhotoFavorite(localIdentifier: String, isFavorite: Bool) {
-        albumViewModel.setPhotoFavorite(
+    private func togglePhotoFavorite(localIdentifier: String, isFavorite: Bool) async -> Bool {
+        await albumViewModel.setPhotoFavorite(
             localIdentifier: localIdentifier,
             isFavorite: isFavorite
         )

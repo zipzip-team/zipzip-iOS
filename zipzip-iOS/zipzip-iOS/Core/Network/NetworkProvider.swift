@@ -36,11 +36,24 @@ final class DefaultNetworkProvider: NetworkProvider {
         case let .success(value):
             return value
         case let .failure(error):
+            if isCancellation(error) {
+                throw CancellationError()
+            }
             throw mapError(error, statusCode: response.response?.statusCode, data: response.data)
         }
     }
 
-    private func mapError(_ afError: AFError, statusCode: Int?, data: Data?) -> NetworkError {
+    func isCancellation(_ afError: AFError) -> Bool {
+        if afError.isExplicitlyCancelledError {
+            return true
+        }
+        if case let .sessionTaskFailed(error as URLError) = afError {
+            return error.code == .cancelled
+        }
+        return false
+    }
+
+    func mapError(_ afError: AFError, statusCode: Int?, data: Data?) -> NetworkError {
         if case let .sessionTaskFailed(error as URLError) = afError {
             let transientCodes: Set<URLError.Code> = [
                 .cannotConnectToHost,
@@ -55,7 +68,14 @@ final class DefaultNetworkProvider: NetworkProvider {
             }
         }
 
-        guard let statusCode = statusCode ?? afError.responseCode else {
+        let statusCode = statusCode ?? afError.responseCode
+        if let statusCode,
+           200 ..< 300 ~= statusCode,
+           case .responseSerializationFailed = afError {
+            return .decodingError
+        }
+
+        guard let statusCode else {
             if case .responseSerializationFailed = afError {
                 return .decodingError
             }

@@ -13,6 +13,8 @@ final class DIContainer {
     let authenticationState: AuthenticationState
     let networkProvider: NetworkProvider
     let shareGroupRepository: ShareGroupRepository
+    let sharedPhotoRepository: SharedPhotoRepository
+    let userProfileState: UserProfileState
     let registeredDeviceStore: RegisteredDeviceStore
 
     init(
@@ -42,6 +44,14 @@ final class DIContainer {
         self.networkProvider = authenticatedNetworkProvider
         self.shareGroupRepository = DefaultShareGroupRepository(
             api: DefaultShareGroupAPI(networkProvider: authenticatedNetworkProvider)
+        )
+        self.sharedPhotoRepository = DefaultSharedPhotoRepository(
+            api: DefaultSharedPhotoAPI(networkProvider: authenticatedNetworkProvider)
+        )
+        self.userProfileState = UserProfileState(
+            repository: DefaultUserProfileRepository(
+                api: DefaultUserProfileAPI(networkProvider: authenticatedNetworkProvider)
+            )
         )
         self.registeredDeviceStore = registeredDeviceStore ?? DefaultRegisteredDeviceStore()
     }

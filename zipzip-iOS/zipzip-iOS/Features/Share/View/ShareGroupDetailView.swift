@@ -85,7 +85,7 @@ struct ShareGroupDetailView: View {
                             router.push(.shareImport(groupID))
                         },
                         .init(id: "open-comments", icon: .chatStroke, accessibilityLabel: "댓글") {
-                            viewModel.isCommentsPresented = true
+                            viewModel.presentComments(groupID: groupID)
                         }
                     ])
                 }
@@ -124,7 +124,8 @@ struct ShareGroupDetailView: View {
         .task(id: groupID) {
             async let groupRequest: Void = viewModel.loadGroup(id: groupID)
             async let albumRequest: Void = viewModel.loadSharedAlbums(groupID: groupID)
-            _ = await(groupRequest, albumRequest)
+            async let memberRequest: Void = viewModel.loadMembers(groupID: groupID)
+            _ = await(groupRequest, albumRequest, memberRequest)
         }
     }
 
@@ -150,13 +151,15 @@ struct ShareGroupDetailView: View {
             .init(
                 icon: .moveToAlbum,
                 title: "사진집으로",
+                // TODO: 정교은 담당 attach/detach API가 합쳐지면 선택한 공유집의 사진을
+                // 대상 사진집에 attach하고, 이동인 경우 기존 공유집에서 detach합니다.
                 isDisabled: true,
                 action: { isMoveSheetPresented = true }
             ),
             .init(
                 icon: .delete,
                 title: "삭제",
-                isDisabled: true,
+                isDisabled: selectedAlbumIDs.isEmpty || viewModel.isDeletingSharedAlbums,
                 action: { isDeleteAlertPresented = true }
             )
         ]
@@ -207,7 +210,11 @@ struct ShareGroupDetailView: View {
 
     private func deleteSelectedAlbums() {
         isDeleteAlertPresented = false
-        exitSelectionMode()
+        let albumIDs = Set(selectedAlbumIDs)
+        Task {
+            guard await viewModel.deleteSharedAlbums(albumIDs, from: groupID) else { return }
+            exitSelectionMode()
+        }
     }
 }
 
@@ -370,7 +377,12 @@ struct ShareImportView: View {
         }
     }
 
-    private func completeImport() {}
+    private func completeImport() {
+        // TODO: 정교은 담당 공유집 생성·사진 업로드 API가 합쳐지면 아래 순서로 연결합니다.
+        // 사진집 선택: POST /shared-groups/{id}/shared-albums로 공유집을 만든 뒤 사진을 업로드합니다.
+        // 사진 선택: upload-urls 요청 → object storage PUT → photos/complete 호출 후 목록을 갱신합니다.
+        // 이미 서버 photo id가 있는 사진은 새로 업로드하지 않고 photos/attach를 사용합니다.
+    }
 }
 
 private struct ShareImportHeader: View {

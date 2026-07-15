@@ -26,7 +26,8 @@ final class DateFilterPhotosViewModel {
     @ObservationIgnored private var photosByDay: [Date: [Photo]] = [:]
     @ObservationIgnored private var loadingThumbnailIdentifiers: Set<String> = []
 
-    func load() async {
+    @discardableResult
+    func load() async -> Bool {
         do {
             let library = try await photoSections.loadLibrary()
             let registeredIDs = try await photoSections.loadRegisteredDeviceIDs()
@@ -47,8 +48,10 @@ final class DateFilterPhotosViewModel {
                 entries.sorted { $0.takenAt > $1.takenAt }.map(\.photo)
             }
             availableDays = Set(grouped.keys.map { calendar.dateComponents(Self.dayComponents, from: $0) })
+            return true
         } catch {
             Self.logger.error("failed to load date filter photos: \(error)")
+            return false
         }
     }
 

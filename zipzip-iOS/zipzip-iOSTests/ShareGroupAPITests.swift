@@ -78,12 +78,204 @@ final class ShareGroupAPITests: XCTestCase {
         XCTAssertEqual(response.id, expectedID)
         XCTAssertEqual(response.name, "우리 가족")
         XCTAssertEqual(response.inviteCode, "ZZ7K9P2Q")
+        XCTAssertEqual(response.myRole, .host)
+        XCTAssertEqual(response.createdBy.displayName, "집집이")
+        XCTAssertEqual(response.createdAt, "2026-07-03T10:15:30Z")
 
         let request = try XCTUnwrap(provider.request)
         XCTAssertEqual(request.url?.path, "/api/v1/shared-groups")
         XCTAssertEqual(request.httpMethod, "POST")
         XCTAssertEqual(request.value(forHTTPHeaderField: "Idempotency-Key"), idempotencyKey.uuidString)
         XCTAssertEqual(try requestBody(request)["name"] as? String, "우리 가족")
+    }
+
+    @MainActor
+    func testJoinPreviewRequestMatchesDocumentedContract() async throws {
+        let provider = ShareGroupRecordingNetworkProvider(json: Self.joinPreviewJSON)
+        let api = DefaultShareGroupAPI(networkProvider: provider)
+
+        let response = try await api.previewJoin(inviteCode: "ZZ7K9P2Q")
+
+        XCTAssertEqual(response.name, "여행 친구")
+        XCTAssertFalse(response.alreadyJoined)
+        let request = try XCTUnwrap(provider.request)
+        XCTAssertEqual(request.url?.path, "/api/v1/shared-groups/join-preview")
+        XCTAssertEqual(request.httpMethod, "GET")
+        let queryItems = try XCTUnwrap(URLComponents(
+            url: try XCTUnwrap(request.url),
+            resolvingAgainstBaseURL: false
+        )?.queryItems)
+        XCTAssertEqual(queryItems.first(where: { $0.name == "inviteCode" })?.value, "ZZ7K9P2Q")
+    }
+
+    @MainActor
+    func testJoinRequestMatchesDocumentedContract() async throws {
+        let provider = ShareGroupRecordingNetworkProvider(json: Self.joinJSON)
+        let api = DefaultShareGroupAPI(networkProvider: provider)
+        let idempotencyKey = UUID()
+
+        let response = try await api.join(
+            inviteCode: "ZZ7K9P2Q",
+            idempotencyKey: idempotencyKey
+        )
+
+        XCTAssertEqual(response.name, "여행 친구")
+        let request = try XCTUnwrap(provider.request)
+        XCTAssertEqual(request.url?.path, "/api/v1/shared-groups/join")
+        XCTAssertEqual(request.httpMethod, "POST")
+        XCTAssertEqual(request.value(forHTTPHeaderField: "Idempotency-Key"), idempotencyKey.uuidString)
+        XCTAssertEqual(try requestBody(request)["inviteCode"] as? String, "ZZ7K9P2Q")
+    }
+
+    @MainActor
+    func testMemberListRequestMatchesDocumentedContract() async throws {
+        let provider = ShareGroupRecordingNetworkProvider(json: Self.memberListJSON)
+        let api = DefaultShareGroupAPI(networkProvider: provider)
+        let groupID = try XCTUnwrap(UUID(uuidString: "11111111-1111-1111-1111-111111111111"))
+
+        let response = try await api.fetchMembers(groupID: groupID, cursor: "member-cursor", size: 50)
+
+        XCTAssertEqual(response.items.first?.displayName, "집집이")
+        let request = try XCTUnwrap(provider.request)
+        XCTAssertEqual(request.url?.path, "/api/v1/shared-groups/\(groupID.uuidString)/members")
+        XCTAssertEqual(request.httpMethod, "GET")
+        let queryItems = try XCTUnwrap(URLComponents(
+            url: try XCTUnwrap(request.url),
+            resolvingAgainstBaseURL: false
+        )?.queryItems)
+        XCTAssertEqual(queryItems.first(where: { $0.name == "cursor" })?.value, "member-cursor")
+        XCTAssertEqual(queryItems.first(where: { $0.name == "size" })?.value, "50")
+    }
+
+    @MainActor
+    func testUpdateGroupRequestMatchesDocumentedContract() async throws {
+        let provider = ShareGroupRecordingNetworkProvider(json: Self.updateGroupJSON)
+        let api = DefaultShareGroupAPI(networkProvider: provider)
+        let groupID = try XCTUnwrap(UUID(uuidString: "11111111-1111-1111-1111-111111111111"))
+
+        let response = try await api.updateGroupName(groupID: groupID, name: "여름 여행")
+
+        XCTAssertEqual(response.name, "여름 여행")
+        let request = try XCTUnwrap(provider.request)
+        XCTAssertEqual(request.url?.path, "/api/v1/shared-groups/\(groupID.uuidString)")
+        XCTAssertEqual(request.httpMethod, "PATCH")
+        XCTAssertEqual(try requestBody(request)["name"] as? String, "여름 여행")
+    }
+
+    @MainActor
+    func testDeleteGroupRequestMatchesDocumentedContract() async throws {
+        let provider = ShareGroupRecordingNetworkProvider(json: Self.voidJSON)
+        let api = DefaultShareGroupAPI(networkProvider: provider)
+        let groupID = try XCTUnwrap(UUID(uuidString: "11111111-1111-1111-1111-111111111111"))
+
+        try await api.deleteGroup(groupID: groupID)
+
+        XCTAssertEqual(provider.request?.url?.path, "/api/v1/shared-groups/\(groupID.uuidString)")
+        XCTAssertEqual(provider.request?.httpMethod, "DELETE")
+    }
+
+    @MainActor
+    func testLeaveGroupRequestMatchesDocumentedContract() async throws {
+        let provider = ShareGroupRecordingNetworkProvider(json: Self.voidJSON)
+        let api = DefaultShareGroupAPI(networkProvider: provider)
+        let groupID = try XCTUnwrap(UUID(uuidString: "11111111-1111-1111-1111-111111111111"))
+
+        try await api.leaveGroup(groupID: groupID)
+
+        XCTAssertEqual(provider.request?.url?.path, "/api/v1/shared-groups/\(groupID.uuidString)/members/me")
+        XCTAssertEqual(provider.request?.httpMethod, "DELETE")
+    }
+
+    @MainActor
+    func testChatTimelineRequestMatchesDocumentedContract() async throws {
+        let provider = ShareGroupRecordingNetworkProvider(json: Self.chatTimelineJSON)
+        let api = DefaultShareGroupAPI(networkProvider: provider)
+        let groupID = try XCTUnwrap(UUID(uuidString: "11111111-1111-1111-1111-111111111111"))
+
+        let response = try await api.fetchChatTimeline(groupID: groupID, cursor: "chat-cursor", size: 30)
+
+        XCTAssertEqual(response.items.first?.type, .photoComment)
+        let request = try XCTUnwrap(provider.request)
+        XCTAssertEqual(request.url?.path, "/api/v1/shared-groups/\(groupID.uuidString)/chat-messages")
+        XCTAssertEqual(request.httpMethod, "GET")
+        let queryItems = try XCTUnwrap(URLComponents(
+            url: try XCTUnwrap(request.url),
+            resolvingAgainstBaseURL: false
+        )?.queryItems)
+        XCTAssertEqual(queryItems.first(where: { $0.name == "cursor" })?.value, "chat-cursor")
+        XCTAssertEqual(queryItems.first(where: { $0.name == "size" })?.value, "30")
+    }
+
+    @MainActor
+    func testCreateChatMessageRequestMatchesDocumentedContract() async throws {
+        let provider = ShareGroupRecordingNetworkProvider(json: Self.chatMessageJSON)
+        let api = DefaultShareGroupAPI(networkProvider: provider)
+        let groupID = try XCTUnwrap(UUID(uuidString: "11111111-1111-1111-1111-111111111111"))
+        let idempotencyKey = UUID()
+
+        let response = try await api.createChatMessage(
+            groupID: groupID,
+            content: "사진 더 올려줘",
+            idempotencyKey: idempotencyKey
+        )
+
+        XCTAssertEqual(response.content, "사진 더 올려줘")
+        let request = try XCTUnwrap(provider.request)
+        XCTAssertEqual(request.url?.path, "/api/v1/shared-groups/\(groupID.uuidString)/chat-messages")
+        XCTAssertEqual(request.httpMethod, "POST")
+        XCTAssertEqual(request.value(forHTTPHeaderField: "Idempotency-Key"), idempotencyKey.uuidString)
+        XCTAssertEqual(try requestBody(request)["content"] as? String, "사진 더 올려줘")
+    }
+
+    @MainActor
+    func testRenameSharedAlbumRequestMatchesDocumentedContract() async throws {
+        let provider = ShareGroupRecordingNetworkProvider(json: Self.renameSharedAlbumJSON)
+        let api = DefaultShareGroupAPI(networkProvider: provider)
+        let albumID = try XCTUnwrap(UUID(uuidString: "33333333-3333-3333-3333-333333333333"))
+
+        let response = try await api.renameSharedAlbum(id: albumID, name: "제주 여름")
+
+        XCTAssertEqual(response.name, "제주 여름")
+        let request = try XCTUnwrap(provider.request)
+        XCTAssertEqual(request.url?.path, "/api/v1/shared-albums/\(albumID.uuidString)")
+        XCTAssertEqual(request.httpMethod, "PATCH")
+        XCTAssertEqual(try requestBody(request)["name"] as? String, "제주 여름")
+    }
+
+    @MainActor
+    func testDeleteSharedAlbumRequestMatchesDocumentedContract() async throws {
+        let provider = ShareGroupRecordingNetworkProvider(json: Self.voidJSON)
+        let api = DefaultShareGroupAPI(networkProvider: provider)
+        let albumID = try XCTUnwrap(UUID(uuidString: "33333333-3333-3333-3333-333333333333"))
+
+        try await api.deleteSharedAlbum(id: albumID)
+
+        XCTAssertEqual(provider.request?.url?.path, "/api/v1/shared-albums/\(albumID.uuidString)")
+        XCTAssertEqual(provider.request?.httpMethod, "DELETE")
+    }
+
+    @MainActor
+    func testBulkDeleteSharedAlbumsRequestMatchesDocumentedContract() async throws {
+        let provider = ShareGroupRecordingNetworkProvider(json: Self.bulkDeleteSharedAlbumsJSON)
+        let api = DefaultShareGroupAPI(networkProvider: provider)
+        let firstID = try XCTUnwrap(UUID(uuidString: "33333333-3333-3333-3333-333333333333"))
+        let secondID = try XCTUnwrap(UUID(uuidString: "44444444-4444-4444-4444-444444444444"))
+        let idempotencyKey = UUID()
+
+        let response = try await api.deleteSharedAlbums(
+            ids: [firstID, secondID],
+            idempotencyKey: idempotencyKey
+        )
+
+        XCTAssertEqual(response.deletedAlbumCount, 2)
+        let request = try XCTUnwrap(provider.request)
+        XCTAssertEqual(request.url?.path, "/api/v1/shared-albums/bulk-delete")
+        XCTAssertEqual(request.httpMethod, "POST")
+        XCTAssertEqual(request.value(forHTTPHeaderField: "Idempotency-Key"), idempotencyKey.uuidString)
+        XCTAssertEqual(
+            try requestBody(request)["sharedAlbumIds"] as? [String],
+            [firstID.uuidString, secondID.uuidString]
+        )
     }
 
     private func requestBody(_ request: URLRequest) throws -> [String: Any] {
@@ -164,7 +356,134 @@ final class ShareGroupAPITests: XCTestCase {
       "data": {
         "id": "11111111-1111-1111-1111-111111111111",
         "name": "우리 가족",
-        "inviteCode": "ZZ7K9P2Q"
+        "inviteCode": "ZZ7K9P2Q",
+        "myRole": "HOST",
+        "createdBy": {
+          "userId": "22222222-2222-2222-2222-222222222222",
+          "displayName": "집집이"
+        },
+        "createdAt": "2026-07-03T10:15:30Z"
+      }
+    }
+    """
+
+    private static let joinPreviewJSON = """
+    {
+      "data": {
+        "sharedGroupId": "44444444-4444-4444-4444-444444444444",
+        "name": "여행 친구",
+        "representativeImageUrl": null,
+        "representativeImageUrlExpiresAt": null,
+        "createdBy": {
+          "userId": null,
+          "displayName": "집집이"
+        },
+        "memberCount": 4,
+        "members": [],
+        "alreadyJoined": false
+      }
+    }
+    """
+
+    private static let joinJSON = """
+    {
+      "data": {
+        "sharedGroupId": "44444444-4444-4444-4444-444444444444",
+        "name": "여행 친구",
+        "myRole": "MEMBER",
+        "joinedAt": "2026-07-15T10:15:30Z"
+      }
+    }
+    """
+
+    private static let memberListJSON = """
+    {
+      "data": {
+        "items": [{
+          "userId": "22222222-2222-2222-2222-222222222222",
+          "displayName": "집집이",
+          "role": "HOST",
+          "isMe": true,
+          "joinedAt": "2026-07-03T10:15:30Z"
+        }],
+        "nextCursor": null,
+        "hasNext": false
+      }
+    }
+    """
+
+    private static let updateGroupJSON = """
+    {
+      "data": {
+        "id": "11111111-1111-1111-1111-111111111111",
+        "name": "여름 여행",
+        "updatedAt": "2026-07-15T10:15:30Z"
+      }
+    }
+    """
+
+    private static let voidJSON = """
+    {
+      "status": 200,
+      "code": "SUCCESS",
+      "message": "success",
+      "data": null
+    }
+    """
+
+    private static let chatTimelineJSON = """
+    {
+      "data": {
+        "items": [{
+          "type": "PHOTO_COMMENT",
+          "id": "55555555-5555-5555-5555-555555555555",
+          "photoId": "66666666-6666-6666-6666-666666666666",
+          "content": "사진 너무 좋다",
+          "author": {
+            "userId": null,
+            "displayName": "집집이"
+          },
+          "isAuthor": false,
+          "createdAt": "2026-07-15T10:15:30Z",
+          "updatedAt": "2026-07-15T10:15:30Z"
+        }],
+        "nextCursor": null,
+        "hasNext": false
+      }
+    }
+    """
+
+    private static let chatMessageJSON = """
+    {
+      "data": {
+        "id": "55555555-5555-5555-5555-555555555555",
+        "content": "사진 더 올려줘",
+        "author": {
+          "userId": null,
+          "displayName": "집집이"
+        },
+        "isAuthor": true,
+        "createdAt": "2026-07-15T10:15:30Z",
+        "updatedAt": "2026-07-15T10:15:30Z"
+      }
+    }
+    """
+
+    private static let renameSharedAlbumJSON = """
+    {
+      "data": {
+        "id": "33333333-3333-3333-3333-333333333333",
+        "name": "제주 여름",
+        "updatedAt": "2026-07-15T10:15:30Z"
+      }
+    }
+    """
+
+    private static let bulkDeleteSharedAlbumsJSON = """
+    {
+      "data": {
+        "deletedAlbumCount": 2,
+        "deletedPhotoCount": 3
       }
     }
     """

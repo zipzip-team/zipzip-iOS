@@ -52,6 +52,18 @@ struct RegisteredDeviceManagementView: View {
         .task {
             await viewModel.load()
         }
+        .alert("요청을 완료하지 못했어요.", isPresented: $viewModel.isErrorAlertPresented) {
+            Button("취소", role: .cancel) {
+                viewModel.dismissErrorAlert()
+            }
+            if viewModel.canRetryError {
+                Button("다시 시도") {
+                    Task { await viewModel.retryErrorAction() }
+                }
+            }
+        } message: {
+            Text(viewModel.errorAlertMessage)
+        }
     }
 
     @ViewBuilder

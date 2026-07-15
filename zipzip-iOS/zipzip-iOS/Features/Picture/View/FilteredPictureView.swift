@@ -54,6 +54,12 @@ struct FilteredPictureView: View {
         .task(id: viewModel.appliedFilters) {
             await pictureViewModel.applyFilters(viewModel.appliedFilters)
         }
+        .alert("필터 정보를 불러오지 못했어요.", isPresented: $viewModel.isErrorAlertPresented) {
+            Button("다시 시도") {
+                Task { await viewModel.loadOptions() }
+            }
+            Button("확인", role: .cancel) {}
+        }
         .bottomSheet(isPresented: $viewModel.showDeviceSheet, detents: [.content]) { dismiss in
             DeviceFilterSheet(
                 devices: viewModel.options.devices,
@@ -126,8 +132,16 @@ struct FilteredPictureView: View {
             secondaryTitle: "취소",
             primaryTitle: "삭제",
             onSecondaryTap: { pictureViewModel.showDeleteAlert = false },
-            onPrimaryTap: { pictureViewModel.showDeleteAlert = false } // TODO: 삭제 실행 연결
+            onPrimaryTap: {
+                pictureViewModel.showDeleteAlert = false
+                Task { await pictureViewModel.deleteSelectedPhotos() }
+            }
         )
+        .alert("요청을 완료하지 못했어요.", isPresented: $pictureViewModel.isErrorAlertPresented) {
+            Button("확인", role: .cancel, action: pictureViewModel.dismissErrorAlert)
+        } message: {
+            Text(pictureViewModel.errorAlertMessage)
+        }
         .overlay(alignment: .topLeading) {
             FloatingHeaderBar {
                 topBar
@@ -169,9 +183,12 @@ struct FilteredPictureView: View {
     }
 
     private var actionBar: some View {
-        ActionBar(items: [
-            .init(icon: .moveToAlbum, title: "집으로") { showShareSheet = true },
-            .init(icon: .metadata, title: "정보 수정") {
+        let hasSelection = !pictureViewModel.selectedPhotoIDs.isEmpty
+        return ActionBar(items: [
+            .init(icon: .moveToAlbum, title: "집으로", isDisabled: !hasSelection) {
+                showShareSheet = true
+            },
+            .init(icon: .metadata, title: "정보 수정", isDisabled: !hasSelection) {
                 if let metadata = pictureViewModel.firstSelectedMetadata {
                     router.push(.photoInfoEdit(PhotoInfoEditDestination(
                         metadata: metadata,
@@ -180,7 +197,9 @@ struct FilteredPictureView: View {
                     )))
                 }
             },
-            .init(icon: .delete, title: "삭제") { pictureViewModel.requestDelete() }
+            .init(icon: .delete, title: "삭제", isDisabled: !hasSelection) {
+                pictureViewModel.requestDelete()
+            }
         ])
         .padding(.bottom, 8)
     }
