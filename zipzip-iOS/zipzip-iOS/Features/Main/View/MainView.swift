@@ -101,7 +101,15 @@ struct MainView: View {
                         title: "장소를 모르는 사진",
                         backgroundColor: .orange200,
                         buttonBackgroundColor: .orange100,
-                        image: .homeCard01
+                        image: .homeCard01,
+                        action: {
+                            router.push(.filterResult([
+                                AppliedFilter(
+                                    kind: .etc,
+                                    value: PhotoFilterOptions.EtcItem.noLocation
+                                )
+                            ]))
+                        }
                     )
 
                     HomePhotoCard(
@@ -109,7 +117,15 @@ struct MainView: View {
                         title: "최근 저장된 사진",
                         backgroundColor: .skyblue500,
                         buttonBackgroundColor: .skyblue100,
-                        image: .homeCard02
+                        image: .homeCard02,
+                        action: {
+                            router.push(.filterResult([
+                                AppliedFilter(
+                                    kind: .etc,
+                                    value: PhotoFilterOptions.EtcItem.recentlyAdded
+                                )
+                            ]))
+                        }
                     )
 
                     HomePhotoCard(
@@ -117,7 +133,10 @@ struct MainView: View {
                         title: "등록된 기기 확인",
                         backgroundColor: .yellow400,
                         buttonBackgroundColor: .white00,
-                        image: .homeCard03
+                        image: .homeCard03,
+                        action: {
+                            router.push(.registeredDeviceManagement)
+                        }
                     )
                 }
             }

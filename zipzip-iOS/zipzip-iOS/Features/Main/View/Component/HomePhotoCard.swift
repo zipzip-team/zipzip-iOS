@@ -13,36 +13,41 @@ struct HomePhotoCard: View {
     let backgroundColor: Color
     let buttonBackgroundColor: Color
     let image: ImageResource
+    let action: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
+        Button(action: action) {
             VStack(alignment: .leading, spacing: 0) {
-                Text(eyebrow)
-                    .font(.b3_md)
-                    .foregroundStyle(.grey800)
+                VStack(alignment: .leading, spacing: 0) {
+                    Text(eyebrow)
+                        .font(.b3_md)
+                        .foregroundStyle(.grey800)
 
-                Text(title)
-                    .font(.b1_sb)
-                    .foregroundStyle(.grey1000)
+                    Text(title)
+                        .font(.b1_sb)
+                        .foregroundStyle(.grey1000)
+                }
+                .padding(.top, 20)
+                .padding(.horizontal, 16)
+
+                Spacer(minLength: 12)
+
+                ZStack(alignment: .bottomTrailing) {
+                    Image(image)
+                        .frame(width: 120, height: 120)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+
+                    HomePhotoCardButton(backgroundColor: buttonBackgroundColor)
+                        .padding(.trailing, 8)
+                        .padding(.bottom, 8)
+                }
             }
-            .padding(.top, 20)
-            .padding(.horizontal, 16)
-
-            Spacer(minLength: 12)
-
-            ZStack(alignment: .bottomTrailing) {
-                Image(image)
-                    .frame(width: 120, height: 120)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-
-                HomePhotoCardButton(backgroundColor: buttonBackgroundColor) {}
-                    .padding(.trailing, 8)
-                    .padding(.bottom, 8)
-            }
+            .frame(width: 160, height: 200)
+            .background(backgroundColor, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
         }
-        .frame(width: 160, height: 200)
-        .background(backgroundColor, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .buttonStyle(.plain)
     }
 }
 
@@ -52,7 +57,8 @@ struct HomePhotoCard: View {
         title: "장소를 모르는 사진",
         backgroundColor: .orange400,
         buttonBackgroundColor: .white00,
-        image: .homeCard01
+        image: .homeCard01,
+        action: {}
     )
     .padding()
     .background(.orange30)
