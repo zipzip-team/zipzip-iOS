@@ -196,6 +196,10 @@ private struct ShareGroupListView: View {
     let viewModel: ShareViewModel
     let onOpenGroup: (ShareAlbum.ID) -> Void
 
+    private var showsEmptyState: Bool {
+        viewModel.groups.isEmpty && viewModel.hasLoadedGroups && !viewModel.isAddMode
+    }
+
     var body: some View {
         ZStack {
             Color.orange30
@@ -207,13 +211,7 @@ private struct ShareGroupListView: View {
                         ScrollableHeaderTitle("공유")
                     }
 
-                    if viewModel.groups.isEmpty, viewModel.hasLoadedGroups, !viewModel.isAddMode {
-                        ShareCollectionEmptyView(onCreate: viewModel.presentCreateSheet)
-                            .frame(maxWidth: .infinity)
-                            .containerRelativeFrame(.vertical) { length, _ in
-                                max(length - FloatingHeaderLayout.scrollableTitleLayoutHeight, 0)
-                            }
-                    } else {
+                    if !showsEmptyState {
                         LazyVStack(spacing: 12) {
                             ForEach(viewModel.groups) { group in
                                 Button {
@@ -248,6 +246,10 @@ private struct ShareGroupListView: View {
             .ignoresSafeArea(edges: .top)
             .refreshable {
                 await viewModel.loadGroups(refresh: true)
+            }
+
+            if showsEmptyState {
+                ShareCollectionEmptyView(onCreate: viewModel.presentCreateSheet)
             }
         }
         .overlay(alignment: .topLeading) {
@@ -287,25 +289,22 @@ private struct ShareRootLoginView: View {
 
     var body: some View {
         ShareRootStateContainer(title: "공유") {
-            VStack(spacing: 32) {
-                VStack(spacing: 8) {
-                    Image(.shareLoginRequiredArtwork)
-                        .resizable()
-                        .scaledToFit()
-                        .frame(width: 92, height: 80)
-                        .accessibilityHidden(true)
-                    Image(.shareLoginRequiredText)
-                        .resizable()
-                        .scaledToFit()
-                        .frame(width: 146, height: 53)
-                        .accessibilityLabel("공유는 로그인이 필요해요")
-                }
-
+            CenteredStateContent {
+                Image(.shareLoginRequiredArtwork)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 92, height: 80)
+                    .accessibilityHidden(true)
+            } message: {
+                Image(.shareLoginRequiredText)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 146, height: 53)
+                    .accessibilityLabel("공유는 로그인이 필요해요")
+            } action: {
                 CommonButton(title: "로그인", property1: .cta, action: onLogin)
                     .frame(width: 171)
             }
-            .padding(.top, 252)
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         }
     }
 }
@@ -314,25 +313,22 @@ private struct ShareCollectionEmptyView: View {
     let onCreate: () -> Void
 
     var body: some View {
-        VStack(spacing: 32) {
-            VStack(spacing: 8) {
-                Image(.shareCollectionEmptyArtwork)
-                    .resizable()
-                    .scaledToFit()
-                    .frame(width: 79, height: 105)
-                    .accessibilityHidden(true)
-                Image(.shareCollectionEmptyText)
-                    .resizable()
-                    .scaledToFit()
-                    .frame(width: 141, height: 54)
-                    .accessibilityLabel("공유 공간에서 추억을 기록하세요")
-            }
-
+        CenteredStateContent {
+            Image(.shareCollectionEmptyArtwork)
+                .resizable()
+                .scaledToFit()
+                .frame(width: 79, height: 105)
+                .accessibilityHidden(true)
+        } message: {
+            Image(.shareCollectionEmptyText)
+                .resizable()
+                .scaledToFit()
+                .frame(width: 141, height: 54)
+                .accessibilityLabel("공유 공간에서 추억을 기록하세요")
+        } action: {
             CommonButton(title: "그룹 만들기", action: onCreate)
                 .frame(width: 171)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .padding(.bottom, 16)
     }
 }
 

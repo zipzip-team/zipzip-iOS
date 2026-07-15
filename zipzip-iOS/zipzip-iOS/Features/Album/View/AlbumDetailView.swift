@@ -21,6 +21,7 @@ struct AlbumDetailView<Content: View>: View {
 
     let album: AlbumDetailItem
     private let contentTopSpacing: CGFloat
+    private let centersDetailContent: Bool
     private let detailContent: (AlbumDetailViewModel) -> Content
     private let moveAlbums: [Album]
     private let shareAlbums: [ShareAlbum]
@@ -30,6 +31,7 @@ struct AlbumDetailView<Content: View>: View {
         album: AlbumDetailItem,
         viewModel: AlbumDetailViewModel,
         contentTopSpacing: CGFloat = 30,
+        centersDetailContent: Bool = false,
         moveAlbums: [Album] = [],
         shareAlbums: [ShareAlbum] = [],
         onOpenShareAlbum: @escaping (ShareAlbum.ID) async -> Void = { _ in },
@@ -38,6 +40,7 @@ struct AlbumDetailView<Content: View>: View {
         self.album = album
         _viewModel = State(initialValue: viewModel)
         self.contentTopSpacing = contentTopSpacing
+        self.centersDetailContent = centersDetailContent
         self.detailContent = content
         self.moveAlbums = moveAlbums
         self.shareAlbums = shareAlbums
@@ -51,6 +54,10 @@ struct AlbumDetailView<Content: View>: View {
 
             scrollContent
                 .ignoresSafeArea(edges: .top)
+
+            if centersDetailContent {
+                detailContent(viewModel)
+            }
         }
         .overlay(alignment: .topLeading) {
             FloatingHeader(.leading) {
@@ -140,7 +147,9 @@ struct AlbumDetailView<Content: View>: View {
             VStack(spacing: contentTopSpacing) {
                 titleSection
 
-                detailContent(viewModel)
+                if !centersDetailContent {
+                    detailContent(viewModel)
+                }
             }
             .padding(.top, 166)
             .padding(.bottom, viewModel.isSelectionMode ? 140 : 40)
@@ -214,7 +223,7 @@ struct AlbumDetailEmptyView: View {
         AlbumDetailView(
             album: album,
             viewModel: viewModel,
-            contentTopSpacing: 125,
+            centersDetailContent: true,
             moveAlbums: moveAlbums,
             shareAlbums: shareAlbums,
             onOpenShareAlbum: onOpenShareAlbum
@@ -316,21 +325,19 @@ private struct AlbumDetailEmptyContent: View {
     let onLoadPhotos: () -> Void
 
     var body: some View {
-        VStack(spacing: 32) {
-            VStack(spacing: 8) {
-                Image(.albumDetailEmptyArtwork)
-                    .resizable()
-                    .scaledToFit()
-                    .frame(width: 80, height: 80)
-                    .accessibilityHidden(true)
-
-                Image(.albumEmptyDescription)
-                    .resizable()
-                    .scaledToFit()
-                    .frame(width: 246, height: 20)
-                    .accessibilityLabel("사진집에 사진을 넣어볼까요?")
-            }
-
+        CenteredStateContent {
+            Image(.albumDetailEmptyArtwork)
+                .resizable()
+                .scaledToFit()
+                .frame(width: 80, height: 80)
+                .accessibilityHidden(true)
+        } message: {
+            Image(.albumEmptyDescription)
+                .resizable()
+                .scaledToFit()
+                .frame(width: 246, height: 20)
+                .accessibilityLabel("사진집에 사진을 넣어볼까요?")
+        } action: {
             CommonButton(
                 title: "사진 불러오기",
                 property1: .default,

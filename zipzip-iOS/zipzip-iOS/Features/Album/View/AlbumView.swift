@@ -66,7 +66,6 @@ struct AlbumView: View {
 
             if viewModel.albums.isEmpty {
                 AlbumCollectionEmptyView(onStartTap: viewModel.presentCreateAlbumSheet)
-                    .padding(.bottom, 80)
             }
         }
         .overlay(alignment: .topLeading) {
@@ -221,25 +220,22 @@ private struct AlbumCollectionEmptyView: View {
     let onStartTap: () -> Void
 
     var body: some View {
-        VStack(spacing: 32) {
-            VStack(spacing: 10) {
-                Image(.albumCollectionEmptyArtwork)
-                    .resizable()
-                    .scaledToFit()
-                    .frame(width: 96, height: 86)
-                    .accessibilityHidden(true)
-
-                Image(.albumCollectionEmptyDescription)
-                    .resizable()
-                    .scaledToFit()
-                    .frame(width: 257, height: 20)
-                    .accessibilityLabel("집을 만들어 사진을 보관해보세요!")
-            }
-
+        CenteredStateContent(messageSpacing: 10) {
+            Image(.albumCollectionEmptyArtwork)
+                .resizable()
+                .scaledToFit()
+                .frame(width: 96, height: 86)
+                .accessibilityHidden(true)
+        } message: {
+            Image(.albumCollectionEmptyDescription)
+                .resizable()
+                .scaledToFit()
+                .frame(width: 257, height: 20)
+                .accessibilityLabel("집을 만들어 사진을 보관해보세요!")
+        } action: {
             CommonButton(title: "시작하기", action: onStartTap)
                 .frame(width: 171)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
 
