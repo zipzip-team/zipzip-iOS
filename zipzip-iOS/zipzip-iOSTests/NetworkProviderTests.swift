@@ -4,6 +4,15 @@ import XCTest
 
 final class NetworkProviderTests: XCTestCase {
     @MainActor
+    func testExplicitCancellationIsPreserved() {
+        let provider = DefaultNetworkProvider(eventMonitors: [])
+
+        XCTAssertTrue(provider.isCancellation(.explicitlyCancelled))
+        XCTAssertTrue(provider.isCancellation(.sessionTaskFailed(error: URLError(.cancelled))))
+        XCTAssertFalse(provider.isCancellation(.sessionTaskFailed(error: URLError(.timedOut))))
+    }
+
+    @MainActor
     func testSuccessfulStatusWithMalformedBodyMapsToDecodingError() {
         let provider = DefaultNetworkProvider(eventMonitors: [])
         let decodingError = DecodingError.dataCorrupted(

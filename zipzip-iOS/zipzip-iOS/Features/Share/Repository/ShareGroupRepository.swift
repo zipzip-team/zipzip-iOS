@@ -68,6 +68,7 @@ enum ShareGroupRepositoryError: Error, Equatable {
     case memberRequired
     case sharedAlbumNotFound
     case invalidSharedAlbumSelection
+    case invalidPagination
 }
 
 @MainActor
@@ -140,7 +141,10 @@ final class DefaultShareGroupRepository: ShareGroupRepository {
     }
 
     func groups() async throws -> [ShareAlbum] {
-        try await store.fetchGroups().map(Self.makeGroup)
+        let context = try requiredCacheContext()
+        let groups = try await store.fetchGroups().map(Self.makeGroup)
+        try validate(context)
+        return groups
     }
 
     func syncGroups(cursor: String?, size: Int) async throws -> ShareGroupRepositoryPage {
@@ -224,6 +228,7 @@ final class DefaultShareGroupRepository: ShareGroupRepository {
     func inviteCode(groupID: ShareAlbum.ID) async throws -> String? {
         let context = try requiredCacheContext()
         if let storedInviteCode = try await store.fetchInviteCode(groupID: groupID) {
+            try validate(context)
             return storedInviteCode
         }
 
@@ -231,7 +236,9 @@ final class DefaultShareGroupRepository: ShareGroupRepository {
             let response = try await api.fetchInviteCode(groupID: groupID)
             try validate(context)
             try await store.updateInviteCode(response, cacheOwnerID: context.ownerID)
-            return try await store.fetchInviteCode(groupID: groupID)
+            let inviteCode = try await store.fetchInviteCode(groupID: groupID)
+            try validate(context)
+            return inviteCode
         } catch let error as NetworkError where error.serverCode == "SHARED_GROUP_NOT_FOUND" {
             throw ShareGroupRepositoryError.groupNotFound
         }
@@ -474,7 +481,11 @@ final class DefaultShareGroupRepository: ShareGroupRepository {
 
         var existingIDs: Set<SharedAlbum.ID> = []
         var cursor: String?
+        var requestedCursors: Set<String> = []
         repeat {
+            if let cursor, !requestedCursors.insert(cursor).inserted {
+                throw ShareGroupRepositoryError.invalidPagination
+            }
             let page: SharedAlbumListPageResponse
             do {
                 page = try await api.fetchSharedAlbums(
@@ -487,6 +498,9 @@ final class DefaultShareGroupRepository: ShareGroupRepository {
                 try validate(context)
                 try await store.deleteGroup(id: groupID, cacheOwnerID: context.ownerID)
                 throw ShareGroupRepositoryError.groupNotFound
+            }
+            if page.hasNext, page.nextCursor == nil {
+                throw ShareGroupRepositoryError.invalidPagination
             }
             try await store.upsertSharedAlbums(
                 page.items,

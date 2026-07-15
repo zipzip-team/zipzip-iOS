@@ -36,8 +36,21 @@ final class DefaultNetworkProvider: NetworkProvider {
         case let .success(value):
             return value
         case let .failure(error):
+            if isCancellation(error) {
+                throw CancellationError()
+            }
             throw mapError(error, statusCode: response.response?.statusCode, data: response.data)
         }
+    }
+
+    func isCancellation(_ afError: AFError) -> Bool {
+        if afError.isExplicitlyCancelledError {
+            return true
+        }
+        if case let .sessionTaskFailed(error as URLError) = afError {
+            return error.code == .cancelled
+        }
+        return false
     }
 
     func mapError(_ afError: AFError, statusCode: Int?, data: Data?) -> NetworkError {

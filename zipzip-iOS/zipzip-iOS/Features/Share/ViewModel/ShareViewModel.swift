@@ -76,6 +76,7 @@ final class ShareViewModel {
     private var pendingJoinAlreadyJoined = false
     private var nextGroupCursor: String?
     private var groupsHaveNextPage = false
+    private var requestedGroupCursors: Set<String> = []
     private var loadedGroupDetailIDs: Set<ShareAlbum.ID> = []
     private var loadingGroupDetailIDs: Set<ShareAlbum.ID> = []
     private var loadedSharedAlbumGroupIDs: Set<ShareAlbum.ID> = []
@@ -83,6 +84,7 @@ final class ShareViewModel {
     private var loadingMoreSharedAlbumGroupIDs: Set<ShareAlbum.ID> = []
     private var sharedAlbumNextCursors: [ShareAlbum.ID: String] = [:]
     private var sharedAlbumHasNextPage: [ShareAlbum.ID: Bool] = [:]
+    private var requestedSharedAlbumCursors: [ShareAlbum.ID: Set<String>] = [:]
     private var inviteCodes: [ShareAlbum.ID: String] = [:]
     private var loadingInviteCodeGroupIDs: Set<ShareAlbum.ID> = []
     private var loadingMemberGroupIDs: Set<ShareAlbum.ID> = []
@@ -254,16 +256,17 @@ final class ShareViewModel {
         }
 
         do {
+            requestedGroupCursors = []
             let page = try await repository.syncGroups(cursor: nil, size: 20)
             guard remoteDataSessionID == sessionID else { return }
             visibleGroupIDs = page.itemIDs
             try await reloadGroups()
             guard remoteDataSessionID == sessionID else { return }
-            nextGroupCursor = page.nextCursor
-            groupsHaveNextPage = page.hasNext
+            updateGroupPageState(page)
             hasLoadedGroups = true
         } catch {
             guard remoteDataSessionID == sessionID else { return }
+            guard !(error is CancellationError) else { return }
             hasLoadedGroups = true
             presentError(
                 error,
@@ -286,6 +289,11 @@ final class ShareViewModel {
         }
 
         let sessionID = remoteDataSessionID
+        guard requestedGroupCursors.insert(nextGroupCursor).inserted else {
+            self.nextGroupCursor = nil
+            groupsHaveNextPage = false
+            return
+        }
         isLoadingMoreGroups = true
         defer {
             if remoteDataSessionID == sessionID {
@@ -303,10 +311,10 @@ final class ShareViewModel {
             visibleGroupIDs = groupIDs
             try await reloadGroups()
             guard remoteDataSessionID == sessionID else { return }
-            self.nextGroupCursor = page.nextCursor
-            groupsHaveNextPage = page.hasNext
+            updateGroupPageState(page)
         } catch {
             guard remoteDataSessionID == sessionID else { return }
+            requestedGroupCursors.remove(nextGroupCursor)
             presentError(error, fallback: "다음 공유 그룹을 불러오지 못했어요.")
         }
     }
@@ -363,6 +371,7 @@ final class ShareViewModel {
         }
 
         do {
+            requestedSharedAlbumCursors[groupID] = []
             let page = try await repository.syncSharedAlbums(
                 groupID: groupID,
                 cursor: nil,
@@ -397,6 +406,11 @@ final class ShareViewModel {
         }
 
         let sessionID = remoteDataSessionID
+        guard requestedSharedAlbumCursors[groupID, default: []].insert(cursor).inserted else {
+            sharedAlbumNextCursors.removeValue(forKey: groupID)
+            sharedAlbumHasNextPage[groupID] = false
+            return
+        }
         loadingMoreSharedAlbumGroupIDs.insert(groupID)
         defer {
             if remoteDataSessionID == sessionID {
@@ -421,6 +435,7 @@ final class ShareViewModel {
             updateSharedAlbumPageState(page, groupID: groupID)
         } catch {
             guard remoteDataSessionID == sessionID else { return }
+            requestedSharedAlbumCursors[groupID]?.remove(cursor)
             presentError(error, fallback: "다음 공유집을 불러오지 못했어요.")
         }
     }
@@ -654,6 +669,7 @@ final class ShareViewModel {
             chatMessageIdempotencyKey = nil
         } catch ShareGroupRepositoryError.groupNotFound {
             guard self.chatSessionID == chatSessionID else { return }
+            isSendingChatMessage = false
             await removeMissingGroup(id: activeChatGroupID)
             dismissComments()
         } catch let error as NetworkError {
@@ -696,6 +712,7 @@ final class ShareViewModel {
         isLoadingMoreGroups = false
         nextGroupCursor = nil
         groupsHaveNextPage = false
+        requestedGroupCursors = []
         loadedGroupDetailIDs = []
         loadingGroupDetailIDs = []
         loadedSharedAlbumGroupIDs = []
@@ -703,6 +720,7 @@ final class ShareViewModel {
         loadingMoreSharedAlbumGroupIDs = []
         sharedAlbumNextCursors = [:]
         sharedAlbumHasNextPage = [:]
+        requestedSharedAlbumCursors = [:]
         inviteCodes = [:]
         loadingInviteCodeGroupIDs = []
         membersByGroupID = [:]
@@ -1165,6 +1183,7 @@ final class ShareViewModel {
             guard remoteDataSessionID == sessionID else { return }
             try await reloadGroups()
             guard remoteDataSessionID == sessionID else { return }
+            isUpdatingGroup = false
             dismissShareManagement()
         } catch let error as ShareGroupRepositoryError {
             guard remoteDataSessionID == sessionID else { return }
@@ -1207,10 +1226,12 @@ final class ShareViewModel {
             } catch {
                 presentError(error, fallback: "그룹 정리는 완료됐지만 목록을 갱신하지 못했어요.")
             }
+            isLeavingGroup = false
             dismissShareManagement()
             return true
         } catch ShareGroupRepositoryError.groupNotFound {
             guard remoteDataSessionID == sessionID else { return false }
+            isLeavingGroup = false
             await removeMissingGroup(id: group.id)
             dismissShareManagement()
             return true
@@ -1296,12 +1317,29 @@ final class ShareViewModel {
         _ page: ShareGroupRepositoryPage,
         groupID: ShareAlbum.ID
     ) {
-        if let nextCursor = page.nextCursor {
-            sharedAlbumNextCursors[groupID] = nextCursor
-        } else {
+        guard page.hasNext,
+              let nextCursor = page.nextCursor,
+              !requestedSharedAlbumCursors[groupID, default: []].contains(nextCursor)
+        else {
             sharedAlbumNextCursors.removeValue(forKey: groupID)
+            sharedAlbumHasNextPage[groupID] = false
+            return
         }
-        sharedAlbumHasNextPage[groupID] = page.hasNext
+        sharedAlbumNextCursors[groupID] = nextCursor
+        sharedAlbumHasNextPage[groupID] = true
+    }
+
+    private func updateGroupPageState(_ page: ShareGroupRepositoryPage) {
+        guard page.hasNext,
+              let nextCursor = page.nextCursor,
+              !requestedGroupCursors.contains(nextCursor)
+        else {
+            nextGroupCursor = nil
+            groupsHaveNextPage = false
+            return
+        }
+        nextGroupCursor = nextCursor
+        groupsHaveNextPage = true
     }
 
     private func refreshManagedGroupIfNeeded(id: ShareAlbum.ID) {
@@ -1310,9 +1348,18 @@ final class ShareViewModel {
     }
 
     private func removeMissingGroup(id: ShareAlbum.ID) async {
-        try? await repository.removeCachedGroup(id: id)
+        let sessionID = remoteDataSessionID
+        do {
+            try await repository.removeCachedGroup(id: id)
+        } catch is CancellationError {
+            return
+        } catch {
+            // 원격에서 사라진 그룹은 로컬 캐시 정리에 실패해도 현재 화면에서는 제거한다.
+        }
+        guard remoteDataSessionID == sessionID else { return }
         removeGroupState(id: id)
         try? await reloadGroups()
+        guard remoteDataSessionID == sessionID else { return }
         if managedShareGroup?.id == id {
             dismissShareManagement()
         }
@@ -1325,6 +1372,7 @@ final class ShareViewModel {
         loadedSharedAlbumGroupIDs.remove(id)
         sharedAlbumNextCursors.removeValue(forKey: id)
         sharedAlbumHasNextPage.removeValue(forKey: id)
+        requestedSharedAlbumCursors.removeValue(forKey: id)
         inviteCodes.removeValue(forKey: id)
         membersByGroupID.removeValue(forKey: id)
         if activeChatGroupID == id {
@@ -1429,6 +1477,7 @@ final class ShareViewModel {
         fallback: String,
         retry: (() async -> Void)? = nil
     ) {
+        guard !(error is CancellationError) else { return }
         errorAlertMessage = userFacingMessage(for: error, fallback: fallback)
         errorRetryAction = retry
         isErrorAlertPresented = true
@@ -1451,6 +1500,8 @@ final class ShareViewModel {
                 "공유집을 찾을 수 없어요."
             case .invalidSharedAlbumSelection:
                 "삭제할 공유집을 다시 선택해 주세요."
+            case .invalidPagination:
+                "목록을 끝까지 불러오지 못했어요. 잠시 후 다시 시도해 주세요."
             }
         }
 
