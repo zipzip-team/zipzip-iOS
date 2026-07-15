@@ -74,7 +74,7 @@ struct PictureView: View {
         .bottomSheetAlert(
             isPresented: $showPictureIntroduction,
             title: "세컨폰·디카 사진만 모아봤어요.",
-            message: "날짜가 장소가 어긋난 사진을 바로잡고,\n필요한 사진을 쉽게 찾아 앨범을 정리할 수 있어요.",
+            message: "날짜와 장소가 어긋난 사진을 바로잡고,\n필요한 사진을 쉽게 찾아 앨범을 정리할 수 있어요.",
             primaryTitle: "사진 정리하기",
             onPrimaryTap: { showPictureIntroduction = false }
         )
