@@ -38,7 +38,12 @@ struct AlbumView: View {
             ScrollView(showsIndicators: false) {
                 AlbumTitleHeader(isVisible: !viewModel.isSelectionMode)
 
-                if !viewModel.albums.isEmpty {
+                if viewModel.albums.isEmpty {
+                    AlbumCollectionEmptyView(onStartTap: viewModel.presentCreateAlbumSheet)
+                        .containerRelativeFrame(.vertical) { length, _ in
+                            max(length - FloatingHeaderLayout.scrollableTitleLayoutHeight, 0)
+                        }
+                } else {
                     LazyVGrid(
                         columns: columns,
                         alignment: .center,
@@ -63,10 +68,6 @@ struct AlbumView: View {
                 }
             }
             .ignoresSafeArea(edges: .top)
-
-            if viewModel.albums.isEmpty {
-                AlbumCollectionEmptyView(onStartTap: viewModel.presentCreateAlbumSheet)
-            }
         }
         .overlay(alignment: .topLeading) {
             FloatingHeader(.trailing) {

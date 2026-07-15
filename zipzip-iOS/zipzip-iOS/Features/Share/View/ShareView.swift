@@ -211,7 +211,12 @@ private struct ShareGroupListView: View {
                         ScrollableHeaderTitle("공유")
                     }
 
-                    if !showsEmptyState {
+                    if showsEmptyState {
+                        ShareCollectionEmptyView(onCreate: viewModel.presentCreateSheet)
+                            .containerRelativeFrame(.vertical) { length, _ in
+                                max(length - FloatingHeaderLayout.scrollableTitleLayoutHeight, 0)
+                            }
+                    } else {
                         LazyVStack(spacing: 12) {
                             ForEach(viewModel.groups) { group in
                                 Button {
@@ -246,10 +251,6 @@ private struct ShareGroupListView: View {
             .ignoresSafeArea(edges: .top)
             .refreshable {
                 await viewModel.loadGroups(refresh: true)
-            }
-
-            if showsEmptyState {
-                ShareCollectionEmptyView(onCreate: viewModel.presentCreateSheet)
             }
         }
         .overlay(alignment: .topLeading) {
@@ -340,14 +341,18 @@ private struct ShareRootStateContainer<Content: View>: View {
         ZStack {
             Color.orange30
                 .ignoresSafeArea()
-            content()
-        }
-        .overlay(alignment: .topLeading) {
-            Text(title)
-                .font(.t1_sb)
-                .foregroundStyle(.grey900)
-                .padding(.top, 19)
-                .padding(.leading, 16)
+
+            ScrollView(showsIndicators: false) {
+                VStack(spacing: 0) {
+                    ScrollableHeaderTitle(title)
+
+                    content()
+                        .containerRelativeFrame(.vertical) { length, _ in
+                            max(length - FloatingHeaderLayout.scrollableTitleLayoutHeight, 0)
+                        }
+                }
+            }
+            .ignoresSafeArea(edges: .top)
         }
     }
 }

@@ -54,10 +54,6 @@ struct AlbumDetailView<Content: View>: View {
 
             scrollContent
                 .ignoresSafeArea(edges: .top)
-
-            if centersDetailContent {
-                detailContent(viewModel)
-            }
         }
         .overlay(alignment: .topLeading) {
             FloatingHeader(.leading) {
@@ -144,19 +140,32 @@ struct AlbumDetailView<Content: View>: View {
 
     private var scrollContent: some View {
         ScrollView(showsIndicators: false) {
-            VStack(spacing: contentTopSpacing) {
-                titleSection
+            if centersDetailContent {
+                ZStack(alignment: .top) {
+                    titleSection
+                        .padding(.top, 166)
 
-                if !centersDetailContent {
                     detailContent(viewModel)
                 }
-            }
-            .padding(.top, 166)
-            .padding(.bottom, viewModel.isSelectionMode ? 140 : 40)
-            .frame(maxWidth: .infinity, alignment: .top)
-            .background(alignment: .top) {
-                AlbumDetailFolderBackground()
-                    .ignoresSafeArea()
+                .containerRelativeFrame(.vertical)
+                .frame(maxWidth: .infinity)
+                .padding(.bottom, viewModel.isSelectionMode ? 140 : 40)
+                .background(alignment: .top) {
+                    AlbumDetailFolderBackground()
+                        .ignoresSafeArea()
+                }
+            } else {
+                VStack(spacing: contentTopSpacing) {
+                    titleSection
+                    detailContent(viewModel)
+                }
+                .padding(.top, 166)
+                .padding(.bottom, viewModel.isSelectionMode ? 140 : 40)
+                .frame(maxWidth: .infinity, alignment: .top)
+                .background(alignment: .top) {
+                    AlbumDetailFolderBackground()
+                        .ignoresSafeArea()
+                }
             }
         }
     }
