@@ -133,6 +133,20 @@ nonisolated struct SharedGroupStore {
         }
     }
 
+    func reconcileGroups(serverIDs: Set<UUID>, cacheOwnerID: UUID) async throws {
+        let serverIDStrings = Set(serverIDs.map(\.uuidString))
+        try await database.write { db in
+            try Self.requireCacheOwner(cacheOwnerID, in: db)
+            let cachedGroups = try SharedGroupRecord.fetchAll(db)
+            for group in cachedGroups where !serverIDStrings.contains(group.id) {
+                try SharedGroupRecord
+                    .where { $0.id.eq(group.id) }
+                    .delete()
+                    .execute(db)
+            }
+        }
+    }
+
     func upsertGroupDetail(
         _ detail: ShareGroupDetailResponse,
         cacheOwnerID: UUID

@@ -114,10 +114,18 @@ final class DefaultShareGroupRepository: ShareGroupRepository {
         let sessionID: UUID
     }
 
+    private struct GroupListReconciliation {
+        let sessionID: UUID
+        var serverIDs: Set<ShareAlbum.ID>
+        var requestedCursors: Set<String>
+        var nextCursor: String?
+    }
+
     private let api: ShareGroupAPI
     private let store: SharedGroupStore
     private var cacheOwnerID: UUID?
     private var cacheSessionID = UUID()
+    private var groupListReconciliation: GroupListReconciliation?
 
     init(api: ShareGroupAPI, store: SharedGroupStore = SharedGroupStore()) {
         self.api = api
@@ -128,6 +136,7 @@ final class DefaultShareGroupRepository: ShareGroupRepository {
         let sessionID = UUID()
         cacheSessionID = sessionID
         cacheOwnerID = nil
+        groupListReconciliation = nil
         try await store.prepareCache(for: userID)
         guard cacheSessionID == sessionID else {
             throw CancellationError()
@@ -138,6 +147,7 @@ final class DefaultShareGroupRepository: ShareGroupRepository {
     func invalidateCacheSession() {
         cacheSessionID = UUID()
         cacheOwnerID = nil
+        groupListReconciliation = nil
     }
 
     func groups() async throws -> [ShareAlbum] {
@@ -149,9 +159,34 @@ final class DefaultShareGroupRepository: ShareGroupRepository {
 
     func syncGroups(cursor: String?, size: Int) async throws -> ShareGroupRepositoryPage {
         let context = try requiredCacheContext()
+        if cursor == nil {
+            groupListReconciliation = nil
+        }
         let page = try await api.fetchGroups(cursor: cursor, size: size)
         try validate(context)
+
+        var reconciliation = groupListReconciliation(for: cursor, context: context)
+        reconciliation?.serverIDs.formUnion(page.items.map(\.id))
         try await store.upsertGroupSummaries(page.items, cacheOwnerID: context.ownerID)
+        try validate(context)
+
+        if !page.hasNext, let reconciliation {
+            try await store.reconcileGroups(
+                serverIDs: reconciliation.serverIDs,
+                cacheOwnerID: context.ownerID
+            )
+            try validate(context)
+            groupListReconciliation = nil
+        } else if page.hasNext,
+                  let nextCursor = page.nextCursor,
+                  var reconciliation,
+                  !reconciliation.requestedCursors.contains(nextCursor) {
+            reconciliation.nextCursor = nextCursor
+            groupListReconciliation = reconciliation
+        } else {
+            groupListReconciliation = nil
+        }
+
         return ShareGroupRepositoryPage(
             itemIDs: page.items.map(\.id),
             nextCursor: page.nextCursor,
@@ -539,6 +574,28 @@ final class DefaultShareGroupRepository: ShareGroupRepository {
             throw SharedGroupStoreError.cacheOwnerChanged
         }
         return CacheContext(ownerID: cacheOwnerID, sessionID: cacheSessionID)
+    }
+
+    private func groupListReconciliation(
+        for cursor: String?,
+        context: CacheContext
+    ) -> GroupListReconciliation? {
+        guard let cursor else {
+            return GroupListReconciliation(
+                sessionID: context.sessionID,
+                serverIDs: [],
+                requestedCursors: [],
+                nextCursor: nil
+            )
+        }
+        guard var reconciliation = groupListReconciliation,
+              reconciliation.sessionID == context.sessionID,
+              reconciliation.nextCursor == cursor,
+              reconciliation.requestedCursors.insert(cursor).inserted
+        else {
+            return nil
+        }
+        return reconciliation
     }
 
     private func validate(_ context: CacheContext) throws {

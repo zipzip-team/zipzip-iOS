@@ -289,6 +289,67 @@ final class ShareViewModelTests: XCTestCase {
     }
 
     @MainActor
+    func testCompletedGroupRefreshRemovesGroupsMissingFromServer() async throws {
+        let staleID = try XCTUnwrap(UUID(uuidString: "11111111-1111-1111-1111-111111111111"))
+        let currentID = try XCTUnwrap(UUID(uuidString: "22222222-2222-2222-2222-222222222222"))
+        let api = ManagementTrackingShareGroupAPI(
+            groupID: staleID,
+            role: .host,
+            groupListResponses: [
+                makeGroupListResponse(id: staleID, name: "탈퇴 전 그룹"),
+                makeGroupListResponse(id: currentID, name: "현재 그룹")
+            ]
+        )
+        let store = try makeStore()
+        let repository = try await makePreparedRepository(api: api, store: store)
+
+        _ = try await repository.syncGroups(cursor: nil, size: 20)
+        _ = try await repository.syncGroups(cursor: nil, size: 20)
+
+        let storedGroupIDs = try await repository.groups().map(\.id)
+        XCTAssertEqual(storedGroupIDs, [currentID])
+    }
+
+    @MainActor
+    func testGroupRefreshReconcilesOnlyAfterLastPageCompletes() async throws {
+        let staleID = try XCTUnwrap(UUID(uuidString: "11111111-1111-1111-1111-111111111111"))
+        let firstPageID = try XCTUnwrap(UUID(uuidString: "22222222-2222-2222-2222-222222222222"))
+        let lastPageID = try XCTUnwrap(UUID(uuidString: "33333333-3333-3333-3333-333333333333"))
+        let api = ManagementTrackingShareGroupAPI(
+            groupID: staleID,
+            role: .host,
+            groupListResponses: [
+                makeGroupListResponse(id: staleID, name: "탈퇴 전 그룹"),
+                ShareGroupListPageResponse(
+                    items: makeGroupListResponse(id: firstPageID, name: "첫 페이지").items,
+                    nextCursor: "next-page",
+                    hasNext: true
+                ),
+                makeGroupListResponse(id: lastPageID, name: "마지막 페이지")
+            ]
+        )
+        let store = try makeStore()
+        let repository = try await makePreparedRepository(api: api, store: store)
+
+        _ = try await repository.syncGroups(cursor: nil, size: 20)
+        _ = try await repository.syncGroups(cursor: nil, size: 20)
+
+        let groupIDsBeforeCompletion = try await repository.groups().map(\.id)
+        XCTAssertEqual(
+            Set(groupIDsBeforeCompletion),
+            Set([staleID, firstPageID])
+        )
+
+        _ = try await repository.syncGroups(cursor: "next-page", size: 20)
+
+        let groupIDsAfterCompletion = try await repository.groups().map(\.id)
+        XCTAssertEqual(
+            Set(groupIDsAfterCompletion),
+            Set([firstPageID, lastPageID])
+        )
+    }
+
+    @MainActor
     func testGroupPaginationStopsWhenServerRepeatsCursor() async throws {
         let groupID = try XCTUnwrap(UUID(uuidString: "11111111-1111-1111-1111-111111111111"))
         let page = ShareGroupListPageResponse(
