@@ -49,7 +49,10 @@ extension Photo {
 }
 
 struct PhotoSection: Identifiable {
-    let id = UUID()
+    var id: String {
+        title
+    }
+
     let title: String
     let photos: [Photo]
 }
