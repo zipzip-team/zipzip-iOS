@@ -11,11 +11,6 @@ enum ShareImportSelection: Hashable {
     case albums
 }
 
-struct ShareAlbumManagementTarget: Equatable {
-    let groupID: ShareAlbum.ID
-    let albumID: SharedAlbum.ID
-}
-
 @Observable
 @MainActor
 final class ShareViewModel {
@@ -28,7 +23,6 @@ final class ShareViewModel {
     var isCreateSheetPresented = false
     var isInviteSheetPresented = false
     var isCommentsPresented = false
-    var isAlbumManagementPresented = false
     var isShareManagementPresented = false
     private(set) var isCreatingGroup = false
     private(set) var isPreviewingJoin = false
@@ -55,11 +49,9 @@ final class ShareViewModel {
     var groupNameDraft = ""
     var inviteCode = ""
     var commentDraft = ""
-    var albumNameDraft = ""
     var shareGroupNameDraft = ""
 
     private(set) var pendingJoinGroup: ShareAlbum?
-    private(set) var albumManagementTarget: ShareAlbumManagementTarget?
     private(set) var managedShareGroup: ShareAlbum?
 
     private var groupCreationName: String?
@@ -120,6 +112,46 @@ final class ShareViewModel {
 
     func isInviteCodeAvailable(for groupID: ShareAlbum.ID) -> Bool {
         inviteCodes[groupID] != nil
+    }
+
+    func makeSharedAlbumDetailViewModel(
+        groupID: ShareAlbum.ID,
+        albumID: SharedAlbum.ID,
+        onDelete: @escaping () -> Void
+    ) -> AlbumDetailViewModel {
+        AlbumDetailViewModel(
+            actions: AlbumDetailActions(
+                onRename: { [weak self] name in
+                    Task {
+                        await self?.renameSharedAlbum(
+                            id: albumID,
+                            in: groupID,
+                            name: name
+                        )
+                    }
+                },
+                onDelete: { [weak self] in
+                    Task {
+                        guard await self?.deleteSharedAlbum(id: albumID, from: groupID) == true else {
+                            return
+                        }
+                        onDelete()
+                    }
+                },
+                onAddPhotos: { _ in
+                    // TODO: 정교은 담당 API가 합쳐지면 upload-urls 요청, object storage PUT,
+                    // photos/complete 호출 순서로 업로드한 뒤 공유집 사진 목록을 다시 조회합니다.
+                },
+                onDeletePhotos: { _, _ in
+                    // TODO: 정교은 담당 detach API가 합쳐지면 선택한 server photo id를
+                    // POST /api/v1/shared-albums/{sharedAlbumId}/photos/detach로 제거하고 목록을 갱신합니다.
+                },
+                onMovePhotos: { _, _ in
+                    // TODO: 정교은 담당 attach/detach API가 합쳐지면 대상 공유집에 먼저 attach하고,
+                    // 이동인 경우 원본 공유집에서 detach한 뒤 양쪽 사진 목록을 갱신합니다.
+                }
+            )
+        )
     }
 
     func loadGroups(refresh: Bool = false) async {
@@ -593,68 +625,69 @@ final class ShareViewModel {
         groups[groupIndex].albums.removeAll { albumIDs.contains($0.id) }
     }
 
-    func presentAlbumManagement(groupID: ShareAlbum.ID, albumID: SharedAlbum.ID) {
-        guard let album = album(groupID: groupID, albumID: albumID) else { return }
-        albumNameDraft = album.name
-        albumManagementTarget = .init(groupID: groupID, albumID: albumID)
-        sharedAlbumErrorCode = nil
-        isAlbumManagementPresented = true
-    }
-
-    func completeAlbumManagement() async {
-        guard let target = albumManagementTarget,
-              let album = album(groupID: target.groupID, albumID: target.albumID),
+    @discardableResult
+    func renameSharedAlbum(
+        id albumID: SharedAlbum.ID,
+        in groupID: ShareAlbum.ID,
+        name draftName: String
+    ) async -> Bool {
+        guard let album = album(groupID: groupID, albumID: albumID),
               !isUpdatingSharedAlbum
         else {
-            return
+            return false
         }
 
-        let name = albumNameDraft.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !name.isEmpty else { return }
-        guard name != album.name else {
-            dismissAlbumManagement()
-            return
-        }
+        let name = draftName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !name.isEmpty else { return false }
+        guard name != album.name else { return true }
 
         isUpdatingSharedAlbum = true
         sharedAlbumErrorCode = nil
         defer { isUpdatingSharedAlbum = false }
 
         do {
-            try await repository.renameSharedAlbum(id: target.albumID, name: name)
+            try await repository.renameSharedAlbum(id: albumID, name: name)
             try await reloadGroups()
-            dismissAlbumManagement()
+            return true
         } catch ShareGroupRepositoryError.sharedAlbumNotFound {
-            removeSharedAlbumState(id: target.albumID, groupID: target.groupID)
+            removeSharedAlbumState(id: albumID, groupID: groupID)
             try? await reloadGroups()
-            dismissAlbumManagement()
+            return false
         } catch let error as ShareGroupRepositoryError {
             sharedAlbumErrorCode = String(describing: error)
+            return false
         } catch let error as NetworkError {
             sharedAlbumErrorCode = error.serverCode ?? "NETWORK_ERROR"
+            return false
         } catch {
             sharedAlbumErrorCode = "UNKNOWN_ERROR"
+            return false
         }
     }
 
     @discardableResult
-    func deleteManagedAlbum() async -> Bool {
-        guard let target = albumManagementTarget, !isDeletingSharedAlbums else { return false }
+    func deleteSharedAlbum(
+        id albumID: SharedAlbum.ID,
+        from groupID: ShareAlbum.ID
+    ) async -> Bool {
+        guard album(groupID: groupID, albumID: albumID) != nil,
+              !isDeletingSharedAlbums
+        else {
+            return false
+        }
 
         isDeletingSharedAlbums = true
         sharedAlbumErrorCode = nil
         defer { isDeletingSharedAlbums = false }
 
         do {
-            try await repository.deleteSharedAlbum(id: target.albumID)
-            removeSharedAlbumState(id: target.albumID, groupID: target.groupID)
-            await refreshGroupAfterAlbumMutation(groupID: target.groupID)
-            dismissAlbumManagement()
+            try await repository.deleteSharedAlbum(id: albumID)
+            removeSharedAlbumState(id: albumID, groupID: groupID)
+            await refreshGroupAfterAlbumMutation(groupID: groupID)
             return true
         } catch ShareGroupRepositoryError.sharedAlbumNotFound {
-            removeSharedAlbumState(id: target.albumID, groupID: target.groupID)
+            removeSharedAlbumState(id: albumID, groupID: groupID)
             try? await reloadGroups()
-            dismissAlbumManagement()
             return true
         } catch let error as ShareGroupRepositoryError {
             sharedAlbumErrorCode = String(describing: error)
@@ -710,12 +743,6 @@ final class ShareViewModel {
             sharedAlbumErrorCode = "UNKNOWN_ERROR"
             return false
         }
-    }
-
-    func dismissAlbumManagement() {
-        isAlbumManagementPresented = false
-        albumManagementTarget = nil
-        sharedAlbumErrorCode = nil
     }
 
     func presentShareManagement(groupID: ShareAlbum.ID) {
@@ -810,7 +837,7 @@ final class ShareViewModel {
         pendingJoinGroup = nil
         managedShareGroup = nil
         resetJoinState()
-        dismissAlbumManagement()
+        sharedAlbumErrorCode = nil
     }
 
     private func reloadGroups() async throws {

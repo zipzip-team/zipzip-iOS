@@ -478,17 +478,18 @@ final class ShareViewModelTests: XCTestCase {
         )
         await viewModel.loadGroups()
         await viewModel.loadSharedAlbums(groupID: groupID)
-        viewModel.presentAlbumManagement(groupID: groupID, albumID: albumID)
-        viewModel.albumNameDraft = "  제주 여름  "
+        let didRename = await viewModel.renameSharedAlbum(
+            id: albumID,
+            in: groupID,
+            name: "  제주 여름  "
+        )
 
-        await viewModel.completeAlbumManagement()
-
+        XCTAssertTrue(didRename)
         XCTAssertEqual(api.renamedAlbumIDs, [albumID])
         XCTAssertEqual(api.renamedAlbumNames, ["제주 여름"])
         XCTAssertEqual(viewModel.album(groupID: groupID, albumID: albumID)?.name, "제주 여름")
 
-        viewModel.presentAlbumManagement(groupID: groupID, albumID: albumID)
-        let didDelete = await viewModel.deleteManagedAlbum()
+        let didDelete = await viewModel.deleteSharedAlbum(id: albumID, from: groupID)
 
         XCTAssertTrue(didDelete)
         XCTAssertEqual(api.deletedAlbumIDs, [albumID])

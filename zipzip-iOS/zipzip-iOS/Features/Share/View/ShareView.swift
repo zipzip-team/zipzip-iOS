@@ -109,28 +109,6 @@ struct ShareView: View {
                 }
             }
             .bottomSheet(
-                isPresented: $viewModel.isAlbumManagementPresented,
-                detents: [.height(549)],
-                initialDetent: .height(549),
-                showsDragIndicator: .visible,
-                expandsToLargestDetentOnScroll: false
-            ) { _ in
-                ShareAlbumManagementSheet(
-                    albumName: $viewModel.albumNameDraft,
-                    onClose: viewModel.dismissAlbumManagement,
-                    onDelete: {
-                        Task {
-                            await viewModel.deleteManagedAlbum()
-                        }
-                    },
-                    onComplete: {
-                        Task {
-                            await viewModel.completeAlbumManagement()
-                        }
-                    }
-                )
-            }
-            .bottomSheet(
                 isPresented: $viewModel.isShareManagementPresented,
                 detents: [.full],
                 initialDetent: .full,
@@ -203,9 +181,15 @@ struct ShareAlbumDetailDestinationView: View {
                     createdAt: album.createdAt,
                     photoCount: album.count
                 ),
-                viewModel: AlbumDetailViewModel(),
+                viewModel: viewModel.makeSharedAlbumDetailViewModel(
+                    groupID: groupID,
+                    albumID: albumID,
+                    onDelete: router.pop
+                ),
                 moveAlbums: []
             ) { _ in
+                // TODO: 정교은 담당 GET 공유집 상세·사진 목록 API가 합쳐지면 응답을
+                // PhotoGallery에 전달하고 cursor 기반 다음 페이지 로딩을 연결합니다.
                 EmptyView()
             }
         } else {
@@ -579,57 +563,6 @@ private struct ShareCommentBubble: View {
                 Spacer(minLength: 44)
             }
         }
-    }
-}
-
-private struct ShareAlbumManagementSheet: View {
-    @Binding var albumName: String
-    let onClose: () -> Void
-    let onDelete: () -> Void
-    let onComplete: () -> Void
-
-    @State private var isDeleteAlertPresented = false
-
-    var body: some View {
-        BottomSheet(
-            leftItem: { BottomSheetCloseButton(action: onClose) },
-            rightItem: {
-                Button("삭제") {
-                    isDeleteAlertPresented = true
-                }
-                .font(.b1_sb)
-                .foregroundStyle(.white00)
-                .frame(width: 72, height: 48)
-            }
-        ) {
-            VStack(spacing: 34) {
-                AlbumFolder { EmptyView() }
-
-                VStack(alignment: .leading, spacing: 12) {
-                    Text("사진집 이름")
-                        .font(.t3_md)
-                        .foregroundStyle(.grey400)
-                    TextInput("이름 입력", text: $albumName)
-                    CommonButton(
-                        title: "완료",
-                        property1: albumName.isEmpty ? .disabled : .cta,
-                        action: onComplete
-                    )
-                    .padding(.top, 37)
-                }
-            }
-            .padding(.horizontal, 16)
-            .padding(.top, 12)
-        }
-        .bottomSheetAlert(
-            isPresented: $isDeleteAlertPresented,
-            title: "이 사진집을 삭제하시겠어요?",
-            message: "로컬 사진집에 저장되지 않은 사진은 완전히 삭제돼요.",
-            secondaryTitle: "취소",
-            primaryTitle: "삭제",
-            onSecondaryTap: { isDeleteAlertPresented = false },
-            onPrimaryTap: onDelete
-        )
     }
 }
 
