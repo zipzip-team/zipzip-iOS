@@ -22,5 +22,6 @@ struct PhotoRecord {
     var width: Int
     var height: Int
     @Column("device_id") var deviceID: Int?
+    @Column("device_pending") var devicePending = false
     @Column("place_id") var placeID: Int?
 }

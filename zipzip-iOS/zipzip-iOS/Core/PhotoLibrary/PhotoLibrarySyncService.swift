@@ -9,7 +9,7 @@ import Foundation
 @preconcurrency import Photos
 import SQLiteData
 
-nonisolated struct SyncProgress {
+nonisolated struct SyncProgress: Equatable {
     let processed: Int
     let total: Int
 }
@@ -261,7 +261,8 @@ nonisolated struct PhotoLibrarySyncService {
                 longitude: metadata.longitude,
                 width: metadata.width,
                 height: metadata.height,
-                deviceID: deviceID
+                deviceID: deviceID,
+                devicePending: metadata.devicePending
             )
         } onConflict: {
             $0.localIdentifier
@@ -274,6 +275,7 @@ nonisolated struct PhotoLibrarySyncService {
             updates.width = excluded.width
             updates.height = excluded.height
             updates.deviceID = excluded.deviceID
+            updates.devicePending = excluded.devicePending
         }
         .execute(db)
     }

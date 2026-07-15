@@ -15,22 +15,23 @@ nonisolated struct PlaceLabelingService {
     @Dependency(\.defaultDatabase) private var database
 
     private static let coordinateStep = 0.005
+    private static let persistBatchSize = 100
 
     @concurrent
-    func labelPendingPhotos() async throws {
-        let records = try await database.read { db in
-            try PhotoRecord.all.fetchAll(db)
+    func labelPendingPhotos(onProgress: @Sendable (SyncProgress) -> Void = { _ in }) async throws {
+        let located = try await database.read { db in
+            try PhotoRecord
+                .where { $0.placeID.is(nil) && !$0.latitude.is(nil) && !$0.longitude.is(nil) }
+                .select { ($0.id, $0.latitude, $0.longitude) }
+                .fetchAll(db)
         }
-        let located = records.compactMap { record -> LocatedPhoto? in
-            guard record.placeID == nil,
-                  let latitude = record.latitude,
-                  let longitude = record.longitude
-            else { return nil }
-            return LocatedPhoto(id: record.id, latitude: latitude, longitude: longitude)
+        .compactMap { row -> LocatedPhoto? in
+            guard let latitude = row.1, let longitude = row.2 else { return nil }
+            return LocatedPhoto(id: row.0, latitude: latitude, longitude: longitude)
         }
         guard !located.isEmpty else { return }
 
-        let geocoder = LocalReverseGeocoder()
+        let geocoder = LocalReverseGeocoder.shared
         guard !geocoder.isEmpty else {
             logger.error("place labeling skipped: geocoding data unavailable")
             return
@@ -45,37 +46,49 @@ nonisolated struct PlaceLabelingService {
 
         let totalPhotos = located.count
         logger.info("place labeling started: \(totalPhotos) photos, \(clusters.count) clusters")
+        onProgress(SyncProgress(processed: 0, total: totalPhotos))
 
-        var processedPhotos = 0
+        var labeled: [(label: String, key: ClusterKey, photoIDs: [Int])] = []
         for (key, photos) in clusters {
             try Task.checkCancellation()
-            if let label = geocoder.label(latitude: key.latitude, longitude: key.longitude) {
-                do {
-                    try await persist(label: label, key: key, photoIDs: photos.map(\.id))
-                } catch is CancellationError {
-                    throw CancellationError()
-                } catch {
-                    logger.error("place labeling skipped a cluster: \(error)")
-                }
+            guard let sample = photos.first else { continue }
+            if let label = geocoder.label(latitude: sample.latitude, longitude: sample.longitude) {
+                labeled.append((label, key, photos.map(\.id)))
             }
-            processedPhotos += photos.count
+        }
+
+        var processedPhotos = 0
+        for start in stride(from: 0, to: labeled.count, by: Self.persistBatchSize) {
+            try Task.checkCancellation()
+            let batch = Array(labeled[start ..< min(start + Self.persistBatchSize, labeled.count)])
+            do {
+                try await persist(batch)
+                processedPhotos += batch.reduce(0) { $0 + $1.photoIDs.count }
+            } catch is CancellationError {
+                throw CancellationError()
+            } catch {
+                logger.error("place labeling skipped a batch: \(error)")
+            }
+            onProgress(SyncProgress(processed: processedPhotos, total: totalPhotos))
             logger.info("place labeling progress: \(processedPhotos)/\(totalPhotos)")
         }
         logger.info("place labeling finished: \(processedPhotos)/\(totalPhotos)")
     }
 
-    private func persist(label: String, key: ClusterKey, photoIDs: [Int]) async throws {
+    private func persist(_ batch: [(label: String, key: ClusterKey, photoIDs: [Int])]) async throws {
         try await database.write { db in
-            let placeID = try Self.findOrCreatePlace(
-                name: label,
-                latitude: key.latitude,
-                longitude: key.longitude,
-                db: db
-            )
-            try PhotoRecord
-                .update { $0.placeID = #bind(placeID) }
-                .where { $0.id.in(photoIDs) }
-                .execute(db)
+            for entry in batch {
+                let placeID = try Self.findOrCreatePlace(
+                    name: entry.label,
+                    latitude: entry.key.latitude,
+                    longitude: entry.key.longitude,
+                    db: db
+                )
+                try PhotoRecord
+                    .update { $0.placeID = #bind(placeID) }
+                    .where { $0.id.in(entry.photoIDs) }
+                    .execute(db)
+            }
         }
     }
 

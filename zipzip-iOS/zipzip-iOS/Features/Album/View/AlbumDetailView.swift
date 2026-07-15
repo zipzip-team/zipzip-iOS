@@ -6,7 +6,6 @@
 //
 
 import SwiftUI
-import UIKit
 
 struct AlbumDetailItem: Hashable, Identifiable {
     let id: Int
@@ -367,11 +366,6 @@ struct AlbumDetailGalleryPlaceholderView: View {
     private let onSelectPhoto: (UUID) -> Void
     private let onOpenPhoto: ((Photo) -> Void)?
 
-    @State private var thumbnailImages: [String: UIImage] = [:]
-    @State private var loadingIdentifiers: Set<String> = []
-
-    private static let thumbnailSize = CGSize(width: 300, height: 300)
-
     init(
         sections: [PhotoSection] = PhotoSection.sample,
         photoCount: Int,
@@ -394,8 +388,6 @@ struct AlbumDetailGalleryPlaceholderView: View {
 
             PhotoGallery(
                 sections: sections,
-                thumbnailImages: thumbnailImages,
-                loadThumbnail: loadThumbnail,
                 isSelectionMode: showsSelectionControls,
                 selectedPhotoIDs: selectedPhotoIDs,
                 onTapPhoto: onSelectPhoto,
@@ -404,28 +396,6 @@ struct AlbumDetailGalleryPlaceholderView: View {
             .padding(.horizontal, 16)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-    }
-
-    private func loadThumbnail(_ localIdentifier: String) async {
-        guard !localIdentifier.isEmpty,
-              thumbnailImages[localIdentifier] == nil,
-              !loadingIdentifiers.contains(localIdentifier)
-        else {
-            return
-        }
-
-        loadingIdentifiers.insert(localIdentifier)
-        defer { loadingIdentifiers.remove(localIdentifier) }
-
-        let image = await PhotoThumbnailLoader.shared.thumbnail(
-            for: localIdentifier,
-            targetSize: Self.thumbnailSize
-        )
-        guard !Task.isCancelled, let image else {
-            return
-        }
-
-        thumbnailImages[localIdentifier] = image
     }
 
     private var totalCount: some View {

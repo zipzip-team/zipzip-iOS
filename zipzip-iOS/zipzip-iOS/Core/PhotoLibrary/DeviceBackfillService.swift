@@ -20,24 +20,28 @@ nonisolated struct DeviceBackfillService {
     private static let maxConsecutiveEmptyBatches = 3
 
     @concurrent
-    func backfillPendingDevices() async throws {
+    func backfillPendingDevices(onProgress: @Sendable (SyncProgress) -> Void = { _ in }) async throws {
         let status = PHPhotoLibrary.authorizationStatus(for: .readWrite)
         guard status == .authorized || status == .limited else { return }
 
         let pending = try await database.read { db in
             try PhotoRecord
-                .where { $0.deviceID.is(nil) }
+                .where { $0.devicePending.eq(true) }
                 .select { ($0.id, $0.localIdentifier) }
                 .fetchAll(db)
         }
         guard !pending.isEmpty else { return }
+
+        let total = pending.count
+        onProgress(SyncProgress(processed: 0, total: total))
 
         var deviceCache: [DeviceKey: Int] = [:]
         var emptyBatches = 0
 
         for start in stride(from: 0, to: pending.count, by: Self.batchSize) {
             try Task.checkCancellation()
-            let batch = Array(pending[start ..< min(start + Self.batchSize, pending.count)])
+            let batchEnd = min(start + Self.batchSize, pending.count)
+            let batch = Array(pending[start ..< batchEnd])
             let results = await Self.resolve(batch)
 
             let neededKeys = Set(results.compactMap(Self.deviceKey)).subtracting(deviceCache.keys)
@@ -56,17 +60,24 @@ nonisolated struct DeviceBackfillService {
             let resolvedCount = try await database.write { db in
                 var count = 0
                 for (photoID, info) in results {
-                    guard case let .resolved(make, model) = info,
-                          let deviceID = cache[DeviceKey(make: make, model: model)]
-                    else { continue }
+                    // .pending(원본 다운로드 실패)은 device_pending을 유지해 다음 실행에 재시도한다.
+                    guard case let .resolved(make, model) = info else { continue }
+                    let deviceID: Int? = (make != nil || model != nil)
+                        ? cache[DeviceKey(make: make, model: model)]
+                        : nil
                     try PhotoRecord
-                        .update { $0.deviceID = #bind(deviceID) }
+                        .update {
+                            $0.deviceID = #bind(deviceID)
+                            $0.devicePending = false
+                        }
                         .where { $0.id.eq(photoID) }
                         .execute(db)
                     count += 1
                 }
                 return count
             }
+
+            onProgress(SyncProgress(processed: batchEnd, total: total))
 
             if resolvedCount == 0 {
                 emptyBatches += 1

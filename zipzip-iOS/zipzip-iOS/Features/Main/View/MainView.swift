@@ -5,10 +5,14 @@
 //  Created by 성환 on 7/5/26.
 //
 
+import SQLiteData
 import SwiftUI
 
 struct MainView: View {
     @Environment(Router.self) private var router
+    @Environment(PhotoSyncCoordinator.self) private var photoSync
+
+    @Fetch(RegisteredPhotoCountRequest()) private var registeredPhotoCount = 0
 
     private let organizedPhotoCount: Int
 
@@ -145,15 +149,32 @@ struct MainView: View {
     }
 
     private var floatingHeader: some View {
-        FloatingHeader(.leading) {
-            Image(
-                .badgeLogo
-            )
-            .frame(width: 44, height: 44)
+        FloatingHeaderBar {
+            HStack(spacing: 0) {
+                Image(.badgeLogo)
+                    .frame(width: 44, height: 44)
+
+                Spacer()
+
+                if photoSync.isProcessing {
+                    MoveInIndicator(
+                        remainingMinutes: photoSync.remainingMinutes,
+                        tooltipText: registeredPhotoCount > 0
+                            ? "\(registeredPhotoCount)장의 사진이 입주했어요!"
+                            : nil
+                    )
+                    .transition(.opacity)
+
+                    Spacer()
+                }
+            }
         }
+        .animation(.easeInOut(duration: 0.2), value: photoSync.isProcessing)
     }
 }
 
 #Preview {
     MainView(organizedPhotoCount: 7018)
+        .environment(Router())
+        .environment(PhotoSyncCoordinator())
 }
