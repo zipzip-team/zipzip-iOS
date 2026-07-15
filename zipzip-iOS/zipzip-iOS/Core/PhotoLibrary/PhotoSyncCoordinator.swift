@@ -30,6 +30,11 @@ enum SyncPhase: Equatable {
 @MainActor
 @Observable
 final class PhotoSyncCoordinator {
+    typealias SyncOperation = @MainActor () -> AsyncThrowingStream<SyncProgress, Error>
+    typealias PostProcessingOperation = @MainActor (
+        @escaping @Sendable (SyncProgress) -> Void
+    ) async -> Void
+
     @ObservationIgnored
     @Dependency(\.photoLibrarySync) private var photoLibrarySync
 
@@ -51,10 +56,25 @@ final class PhotoSyncCoordinator {
     @ObservationIgnored
     private var pipelineGeneration = 0
 
+    @ObservationIgnored
+    private let syncOperation: SyncOperation?
+
+    @ObservationIgnored
+    private let postProcessingOperation: PostProcessingOperation?
+
     var progress: SyncProgress?
     var isFinished = false
+    var isErrorAlertPresented = false
     private(set) var phase: SyncPhase = .idle
     private(set) var estimatedSecondsRemaining: Double?
+
+    init(
+        syncOperation: SyncOperation? = nil,
+        postProcessingOperation: PostProcessingOperation? = nil
+    ) {
+        self.syncOperation = syncOperation
+        self.postProcessingOperation = postProcessingOperation
+    }
 
     var isProcessing: Bool {
         phase != .idle && phase != .finished
@@ -66,6 +86,7 @@ final class PhotoSyncCoordinator {
     }
 
     func startIfNeeded() {
+        guard !isErrorAlertPresented else { return }
         runSync()
     }
 
@@ -73,10 +94,21 @@ final class PhotoSyncCoordinator {
         runSync()
     }
 
+    func dismissSyncError() {
+        isErrorAlertPresented = false
+    }
+
+    func retrySync() {
+        isErrorAlertPresented = false
+        runSync()
+    }
+
     private func runSync() {
         guard task == nil else { return }
         pipelineGeneration += 1
         let generation = pipelineGeneration
+        isFinished = false
+        isErrorAlertPresented = false
         phase = .idle
         estimatedSecondsRemaining = nil
         task = Task {
@@ -84,13 +116,21 @@ final class PhotoSyncCoordinator {
 
             // 1단계: sync — 기기 저장 사진의 기기 정보까지 해석 완료
             do {
-                for try await progress in photoLibrarySync.syncIfNeeded() {
+                let stream = syncOperation?() ?? photoLibrarySync.syncIfNeeded()
+                for try await progress in stream {
                     self.progress = progress
                     advance(to: .reading, generation: generation)
                     reportProgress(processed: progress.processed, total: progress.total, generation: generation)
                 }
+                try Task.checkCancellation()
+            } catch is CancellationError {
+                resetAfterInterruptedSync(generation: generation)
+                return
             } catch {
                 logger.error("photo library sync failed: \(error)")
+                resetAfterInterruptedSync(generation: generation)
+                isErrorAlertPresented = true
+                return
             }
 
             // sync 완료 시점에 확인 버튼 활성화
@@ -98,6 +138,20 @@ final class PhotoSyncCoordinator {
 
             // 2단계: 장소 라벨링 + iCloud 기기 백필을 백그라운드 병렬 수행
             advance(to: .organizing, generation: generation)
+            if let postProcessingOperation {
+                await postProcessingOperation { progress in
+                    Task { @MainActor in
+                        self.reportProgress(
+                            processed: progress.processed,
+                            total: progress.total,
+                            generation: generation
+                        )
+                    }
+                }
+                advance(to: .finished, generation: generation)
+                return
+            }
+
             let labeling = placeLabeling
             let backfill = deviceBackfill
             await withTaskGroup(of: Void.self) { group in
@@ -139,6 +193,14 @@ final class PhotoSyncCoordinator {
             estimatedSecondsRemaining = nil
         }
         phase = newPhase
+    }
+
+    private func resetAfterInterruptedSync(generation: Int) {
+        guard generation == pipelineGeneration else { return }
+        phase = .idle
+        etaStartedAt = nil
+        etaStartProcessed = 0
+        estimatedSecondsRemaining = nil
     }
 
     private func reportProgress(processed: Int, total: Int, generation: Int) {
