@@ -17,6 +17,7 @@ struct PhotoCalendarView: View {
 
     @State private var visibleMonth: Date
     @State private var slideEdge: Edge = .trailing
+    @State private var isMonthYearPickerShown = false
 
     private let weekdaySymbols = ["일", "월", "화", "수", "목", "금", "토"]
     private let cellSize: CGFloat = 40
@@ -55,16 +56,23 @@ struct PhotoCalendarView: View {
         VStack(spacing: 12) {
             header
             weekdayHeader
+                .opacity(isMonthYearPickerShown ? 0 : 1)
             // 트랜지션이 걸린 calendarGrid를 안정적인 컨테이너로 감싸고,
             // 클립을 이 컨테이너(가로/세로 경계)에 적용해 슬라이드가 프레임 안에서만 보이게 한다.
             ZStack {
                 calendarGrid
+                    .contentShape(Rectangle())
+                    .gesture(swipeGesture)
+                    .opacity(isMonthYearPickerShown ? 0 : 1)
+                    .allowsHitTesting(!isMonthYearPickerShown)
+
+                monthYearPicker
+                    .opacity(isMonthYearPickerShown ? 1 : 0)
+                    .allowsHitTesting(isMonthYearPickerShown)
             }
             .frame(maxWidth: .infinity)
             .frame(height: gridHeight)
             .clipped()
-            .contentShape(Rectangle())
-            .gesture(swipeGesture)
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 16)
@@ -72,24 +80,87 @@ struct PhotoCalendarView: View {
 
     private var header: some View {
         HStack(spacing: 0) {
-            HStack(spacing: 6) {
-                Text(Self.monthTitleFormatter.string(from: visibleMonth))
-                    .font(Typography.b1_sb.font)
-                    .foregroundStyle(.white00)
-                Image(.chevronRight)
-                    .renderingMode(.template)
-                    .resizable()
-                    .scaledToFit()
-                    .frame(width: 16, height: 16)
-                    .foregroundStyle(.grey600)
+            Button {
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    isMonthYearPickerShown.toggle()
+                }
+            } label: {
+                HStack(spacing: 6) {
+                    Text(Self.monthTitleFormatter.string(from: visibleMonth))
+                        .font(Typography.b1_sb.font)
+                        .foregroundStyle(isMonthYearPickerShown ? Color.blue : .white00)
+                    Image(.chevronRight)
+                        .renderingMode(.template)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 16, height: 16)
+                        .foregroundStyle(.blue)
+                        .rotationEffect(.degrees(isMonthYearPickerShown ? 90 : 0))
+                }
+                .contentShape(Rectangle())
             }
+            .buttonStyle(.plain)
 
             Spacer(minLength: 0)
 
-            HStack(spacing: 24) {
-                navButton(.chevronLeft) { moveMonth(by: -1) }
-                navButton(.chevronRight) { moveMonth(by: 1) }
+            if !isMonthYearPickerShown {
+                HStack(spacing: 24) {
+                    navButton(.chevronLeft) { moveMonth(by: -1) }
+                    navButton(.chevronRight) { moveMonth(by: 1) }
+                }
+                .transition(.opacity)
             }
+        }
+    }
+
+    private var monthYearPicker: some View {
+        HStack(spacing: 0) {
+            Picker("연도", selection: yearSelection) {
+                ForEach(yearRange, id: \.self) { year in
+                    Text(verbatim: "\(year)년").tag(year)
+                }
+            }
+            .pickerStyle(.wheel)
+
+            Picker("월", selection: monthSelection) {
+                ForEach(1 ... 12, id: \.self) { month in
+                    Text(verbatim: "\(month)월").tag(month)
+                }
+            }
+            .pickerStyle(.wheel)
+        }
+        .labelsHidden()
+        .colorScheme(.dark)
+    }
+
+    private var yearRange: [Int] {
+        let current = calendar.component(.year, from: Date())
+        return Array((current - 80) ... (current + 10))
+    }
+
+    private var yearSelection: Binding<Int> {
+        Binding {
+            calendar.component(.year, from: visibleMonth)
+        } set: { newYear in
+            setVisibleMonth(year: newYear, month: calendar.component(.month, from: visibleMonth))
+        }
+    }
+
+    private var monthSelection: Binding<Int> {
+        Binding {
+            calendar.component(.month, from: visibleMonth)
+        } set: { newMonth in
+            setVisibleMonth(year: calendar.component(.year, from: visibleMonth), month: newMonth)
+        }
+    }
+
+    private func setVisibleMonth(year: Int, month: Int) {
+        var comps = DateComponents()
+        comps.year = year
+        comps.month = month
+        comps.day = 1
+        if let date = calendar.date(from: comps) {
+            visibleMonth = date
         }
     }
 
