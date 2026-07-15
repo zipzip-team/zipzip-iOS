@@ -6,27 +6,27 @@
 //
 
 import OSLog
+import SQLiteData
 
 @Observable
 final class DeviceSelectionViewModel {
+    @ObservationIgnored
+    @Fetch private var fetchedDevices: [DetectedDevice]
+
     @ObservationIgnored
     private let store: RegisteredDeviceStore
 
     private static let logger = Logger(subsystem: "com.zipzip.zipzip-iOS", category: "DeviceSelection")
 
-    private(set) var devices: [DetectedDevice] = []
+    var devices: [DetectedDevice] {
+        fetchedDevices
+    }
+
     var selectedDeviceIDs = Set<DetectedDevice.ID>()
 
     init(store: RegisteredDeviceStore) {
         self.store = store
-    }
-
-    func load() async {
-        do {
-            devices = try await store.loadAllDevices()
-        } catch {
-            Self.logger.error("failed to load detected devices: \(error)")
-        }
+        _fetchedDevices = Fetch(wrappedValue: [], DetectedDevicesRequest())
     }
 
     func toggleSelection(for device: DetectedDevice) {

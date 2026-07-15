@@ -17,7 +17,7 @@ nonisolated struct PlaceLabelingService {
     private static let coordinateStep = 0.005
 
     @concurrent
-    func labelPendingPhotos() async throws {
+    func labelPendingPhotos(onProgress: @Sendable (SyncProgress) -> Void = { _ in }) async throws {
         let records = try await database.read { db in
             try PhotoRecord.all.fetchAll(db)
         }
@@ -45,6 +45,7 @@ nonisolated struct PlaceLabelingService {
 
         let totalPhotos = located.count
         logger.info("place labeling started: \(totalPhotos) photos, \(clusters.count) clusters")
+        onProgress(SyncProgress(processed: 0, total: totalPhotos))
 
         var processedPhotos = 0
         for (key, photos) in clusters {
@@ -59,6 +60,7 @@ nonisolated struct PlaceLabelingService {
                 }
             }
             processedPhotos += photos.count
+            onProgress(SyncProgress(processed: processedPhotos, total: totalPhotos))
             logger.info("place labeling progress: \(processedPhotos)/\(totalPhotos)")
         }
         logger.info("place labeling finished: \(processedPhotos)/\(totalPhotos)")
