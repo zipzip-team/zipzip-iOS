@@ -93,9 +93,10 @@ struct ShareView: View {
             ShareCommentsSheet(
                 messages: viewModel.chatItems,
                 comment: $viewModel.commentDraft,
-                isLoading: viewModel.isLoadingChat,
+                isLoading: viewModel.isLoadingChat || viewModel.isLoadingOlderChat,
                 isSending: viewModel.isSendingChatMessage,
                 onClose: viewModel.dismissComments,
+                onLoadOlder: { Task { await viewModel.loadOlderChat() } },
                 onSend: { Task { await viewModel.sendChatMessage() } }
             )
             .task(id: viewModel.activeChatGroupID) {
@@ -531,6 +532,7 @@ private struct ShareCommentsSheet: View {
     let isLoading: Bool
     let isSending: Bool
     let onClose: () -> Void
+    let onLoadOlder: () -> Void
     let onSend: () -> Void
 
     var body: some View {
@@ -552,6 +554,13 @@ private struct ShareCommentsSheet: View {
                     }
                     .padding(.horizontal, 16)
                     .padding(.top, 12)
+                }
+                .defaultScrollAnchor(.bottom)
+                .onScrollGeometryChange(for: Bool.self) { geometry in
+                    geometry.contentOffset.y <= geometry.contentInsets.top + 8
+                } action: { wasAtTop, isAtTop in
+                    guard isAtTop, !wasAtTop else { return }
+                    onLoadOlder()
                 }
 
                 HStack(spacing: 12) {

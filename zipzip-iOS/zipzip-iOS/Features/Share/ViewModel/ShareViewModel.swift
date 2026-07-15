@@ -41,6 +41,7 @@ final class ShareViewModel {
     private(set) var activeChatGroupID: ShareAlbum.ID?
     private(set) var chatItems: [ShareGroupChatItem] = []
     private(set) var isLoadingChat = false
+    private(set) var isLoadingOlderChat = false
     private(set) var isSendingChatMessage = false
     private(set) var chatErrorCode: String?
     private(set) var isUpdatingSharedAlbum = false
@@ -90,6 +91,9 @@ final class ShareViewModel {
     private var chatMessageContent: String?
     private var chatMessageIdempotencyKey: UUID?
     private var chatSessionID: UUID?
+    private var chatNextCursor: String?
+    private var chatHasNextPage = false
+    private var requestedChatCursors: Set<String> = []
     private var bulkDeleteAlbumIDs: Set<SharedAlbum.ID>?
     private var bulkDeleteIdempotencyKey: UUID?
     private var cacheOwnerID: UUID?
@@ -405,12 +409,16 @@ final class ShareViewModel {
         do {
             var members: [ShareGroupMember] = []
             var cursor: String?
+            var requestedCursors: Set<String> = []
             repeat {
+                if let cursor, !requestedCursors.insert(cursor).inserted {
+                    break
+                }
                 let page = try await repository.members(groupID: groupID, cursor: cursor, size: 100)
                 for member in page.items where !members.contains(where: { $0.id == member.id }) {
                     members.append(member)
                 }
-                cursor = page.hasNext ? page.nextCursor : nil
+                cursor = page.hasNext && page.nextCursor != cursor ? page.nextCursor : nil
             } while cursor != nil
             membersByGroupID[groupID] = members
         } catch ShareGroupRepositoryError.groupNotFound {
@@ -428,7 +436,11 @@ final class ShareViewModel {
         chatErrorCode = nil
         chatMessageContent = nil
         chatMessageIdempotencyKey = nil
+        chatNextCursor = nil
+        chatHasNextPage = false
+        requestedChatCursors = []
         isLoadingChat = false
+        isLoadingOlderChat = false
         isSendingChatMessage = false
         presentSheet(.comments)
     }
@@ -446,7 +458,11 @@ final class ShareViewModel {
         chatMessageContent = nil
         chatMessageIdempotencyKey = nil
         chatSessionID = nil
+        chatNextCursor = nil
+        chatHasNextPage = false
+        requestedChatCursors = []
         isLoadingChat = false
+        isLoadingOlderChat = false
         isSendingChatMessage = false
     }
 
@@ -463,23 +479,17 @@ final class ShareViewModel {
         }
 
         do {
-            var items: [ShareGroupChatItem] = []
-            var cursor: String?
-            repeat {
-                let page = try await repository.chatTimeline(
-                    groupID: activeChatGroupID,
-                    cursor: cursor,
-                    size: 100
-                )
-                for item in page.items where !items.contains(where: { $0.id == item.id }) {
-                    items.append(item)
-                }
-                cursor = page.hasNext ? page.nextCursor : nil
-            } while cursor != nil
+            let page = try await repository.chatTimeline(
+                groupID: activeChatGroupID,
+                cursor: nil,
+                size: 100
+            )
             guard self.chatSessionID == chatSessionID else {
                 return
             }
-            chatItems = Array(items.reversed())
+            chatItems = deduplicatedChatItems(page.items.reversed())
+            requestedChatCursors = []
+            updateChatPageState(page)
         } catch ShareGroupRepositoryError.groupNotFound {
             guard self.chatSessionID == chatSessionID else { return }
             await removeMissingGroup(id: activeChatGroupID)
@@ -492,6 +502,52 @@ final class ShareViewModel {
             guard self.chatSessionID == chatSessionID else { return }
             chatErrorCode = "UNKNOWN_ERROR"
             presentError(error, fallback: "대화를 불러오지 못했어요.")
+        }
+    }
+
+    func loadOlderChat() async {
+        guard let activeChatGroupID,
+              let chatSessionID,
+              let cursor = chatNextCursor,
+              chatHasNextPage,
+              !isLoadingChat,
+              !isLoadingOlderChat,
+              requestedChatCursors.insert(cursor).inserted
+        else {
+            return
+        }
+
+        isLoadingOlderChat = true
+        chatErrorCode = nil
+        defer {
+            if self.chatSessionID == chatSessionID {
+                isLoadingOlderChat = false
+            }
+        }
+
+        do {
+            let page = try await repository.chatTimeline(
+                groupID: activeChatGroupID,
+                cursor: cursor,
+                size: 100
+            )
+            guard self.chatSessionID == chatSessionID else { return }
+            chatItems = deduplicatedChatItems(Array(page.items.reversed()) + chatItems)
+            updateChatPageState(page)
+        } catch ShareGroupRepositoryError.groupNotFound {
+            guard self.chatSessionID == chatSessionID else { return }
+            await removeMissingGroup(id: activeChatGroupID)
+            dismissComments()
+        } catch let error as NetworkError {
+            guard self.chatSessionID == chatSessionID else { return }
+            requestedChatCursors.remove(cursor)
+            chatErrorCode = error.serverCode ?? "NETWORK_ERROR"
+            presentError(error, fallback: "이전 대화를 불러오지 못했어요.")
+        } catch {
+            guard self.chatSessionID == chatSessionID else { return }
+            requestedChatCursors.remove(cursor)
+            chatErrorCode = "UNKNOWN_ERROR"
+            presentError(error, fallback: "이전 대화를 불러오지 못했어요.")
         }
     }
 
@@ -524,16 +580,16 @@ final class ShareViewModel {
         }
 
         do {
-            try await repository.createChatMessage(
+            let sentItem = try await repository.createChatMessage(
                 groupID: activeChatGroupID,
                 content: content,
                 idempotencyKey: idempotencyKey
             )
             guard self.chatSessionID == chatSessionID else { return }
+            chatItems = deduplicatedChatItems(chatItems + [sentItem])
             commentDraft = ""
             chatMessageContent = nil
             chatMessageIdempotencyKey = nil
-            await loadChatTimeline(refresh: true)
         } catch ShareGroupRepositoryError.groupNotFound {
             guard self.chatSessionID == chatSessionID else { return }
             await removeMissingGroup(id: activeChatGroupID)
@@ -547,6 +603,25 @@ final class ShareViewModel {
             chatErrorCode = "UNKNOWN_ERROR"
             presentError(error, fallback: "메시지를 보내지 못했어요.")
         }
+    }
+
+    private func updateChatPageState(_ page: ShareGroupChatPage) {
+        guard page.hasNext,
+              let nextCursor = page.nextCursor,
+              !requestedChatCursors.contains(nextCursor)
+        else {
+            chatNextCursor = nil
+            chatHasNextPage = false
+            return
+        }
+        chatNextCursor = nextCursor
+        chatHasNextPage = true
+    }
+
+    private func deduplicatedChatItems<S: Sequence>(_ items: S) -> [ShareGroupChatItem]
+        where S.Element == ShareGroupChatItem {
+        var seenIDs: Set<ShareGroupChatItem.ID> = []
+        return items.filter { seenIDs.insert($0.id).inserted }
     }
 
     func resetRemoteData() {

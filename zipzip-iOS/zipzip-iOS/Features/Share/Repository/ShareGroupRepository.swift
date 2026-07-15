@@ -94,7 +94,7 @@ protocol ShareGroupRepository {
         groupID: ShareAlbum.ID,
         content: String,
         idempotencyKey: UUID
-    ) async throws
+    ) async throws -> ShareGroupChatItem
     func renameSharedAlbum(id: SharedAlbum.ID, groupID: ShareAlbum.ID, name: String) async throws
     func deleteSharedAlbum(id: SharedAlbum.ID, groupID: ShareAlbum.ID) async throws
     func deleteSharedAlbums(
@@ -309,13 +309,14 @@ final class DefaultShareGroupRepository: ShareGroupRepository {
         groupID: ShareAlbum.ID,
         content: String,
         idempotencyKey: UUID
-    ) async throws {
+    ) async throws -> ShareGroupChatItem {
         do {
-            _ = try await api.createChatMessage(
+            let response = try await api.createChatMessage(
                 groupID: groupID,
                 content: content,
                 idempotencyKey: idempotencyKey
             )
+            return Self.makeChatItem(response)
         } catch let error as NetworkError where error.serverCode == "SHARED_GROUP_NOT_FOUND" {
             throw ShareGroupRepositoryError.groupNotFound
         }
@@ -476,6 +477,19 @@ final class DefaultShareGroupRepository: ShareGroupRepository {
             id: response.id,
             type: response.type,
             photoID: response.photoId,
+            content: response.content,
+            author: makeUser(id: response.author.userId, displayName: response.author.displayName),
+            isAuthor: response.isAuthor,
+            createdAt: date(response.createdAt) ?? .distantPast,
+            updatedAt: date(response.updatedAt) ?? .distantPast
+        )
+    }
+
+    private static func makeChatItem(_ response: ChatMessageResponse) -> ShareGroupChatItem {
+        ShareGroupChatItem(
+            id: response.id,
+            type: .chatMessage,
+            photoID: nil,
             content: response.content,
             author: makeUser(id: response.author.userId, displayName: response.author.displayName),
             isAuthor: response.isAuthor,

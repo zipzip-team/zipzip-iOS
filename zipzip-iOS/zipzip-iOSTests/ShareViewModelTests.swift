@@ -638,9 +638,10 @@ final class ShareViewModelTests: XCTestCase {
     }
 
     @MainActor
-    func testLoadsChatTimelineInChronologicalOrder() async throws {
+    func testLoadsChatTimelineOnePageAtATimeInChronologicalOrder() async throws {
         let groupID = try XCTUnwrap(UUID(uuidString: "11111111-1111-1111-1111-111111111111"))
         let newerID = try XCTUnwrap(UUID(uuidString: "77777777-7777-7777-7777-777777777777"))
+        let middleID = try XCTUnwrap(UUID(uuidString: "55555555-5555-5555-5555-555555555555"))
         let olderID = try XCTUnwrap(UUID(uuidString: "66666666-6666-6666-6666-666666666666"))
         let api = ManagementTrackingShareGroupAPI(
             groupID: groupID,
@@ -652,7 +653,18 @@ final class ShareViewModelTests: XCTestCase {
                     hasNext: true
                 ),
                 ChatTimelinePageResponse(
-                    items: [makeChatItem(id: olderID, content: "이전")],
+                    items: [
+                        makeChatItem(id: newerID, content: "최신"),
+                        makeChatItem(id: middleID, content: "중간")
+                    ],
+                    nextCursor: "oldest-chat",
+                    hasNext: true
+                ),
+                ChatTimelinePageResponse(
+                    items: [
+                        makeChatItem(id: middleID, content: "중간"),
+                        makeChatItem(id: olderID, content: "이전")
+                    ],
                     nextCursor: nil,
                     hasNext: false
                 )
@@ -666,14 +678,25 @@ final class ShareViewModelTests: XCTestCase {
 
         await viewModel.loadChatTimeline()
 
-        XCTAssertEqual(viewModel.chatItems.map(\.id), [olderID, newerID])
-        XCTAssertEqual(api.chatCursors.count, 2)
+        XCTAssertEqual(viewModel.chatItems.map(\.id), [newerID])
+        XCTAssertEqual(api.chatCursors.count, 1)
         XCTAssertNil(api.chatCursors[0])
+
+        await viewModel.loadOlderChat()
+
+        XCTAssertEqual(viewModel.chatItems.map(\.id), [middleID, newerID])
+        XCTAssertEqual(api.chatCursors.count, 2)
         XCTAssertEqual(api.chatCursors[1], "older-chat")
+
+        await viewModel.loadOlderChat()
+
+        XCTAssertEqual(viewModel.chatItems.map(\.id), [olderID, middleID, newerID])
+        XCTAssertEqual(api.chatCursors.count, 3)
+        XCTAssertEqual(api.chatCursors[2], "oldest-chat")
     }
 
     @MainActor
-    func testSendsChatMessageThenRefreshesTimeline() async throws {
+    func testSendsChatMessageAndMergesResponseWithoutReloadingTimeline() async throws {
         let groupID = try XCTUnwrap(UUID(uuidString: "11111111-1111-1111-1111-111111111111"))
         let firstID = try XCTUnwrap(UUID(uuidString: "66666666-6666-6666-6666-666666666666"))
         let sentID = try XCTUnwrap(UUID(uuidString: "77777777-7777-7777-7777-777777777777"))
@@ -685,16 +708,9 @@ final class ShareViewModelTests: XCTestCase {
                     items: [makeChatItem(id: firstID, content: "기존")],
                     nextCursor: nil,
                     hasNext: false
-                ),
-                ChatTimelinePageResponse(
-                    items: [
-                        makeChatItem(id: sentID, content: "사진 더 올려줘", isAuthor: true),
-                        makeChatItem(id: firstID, content: "기존")
-                    ],
-                    nextCursor: nil,
-                    hasNext: false
                 )
-            ]
+            ],
+            createdChatMessageResponse: makeChatMessage(id: sentID, content: "사진 더 올려줘")
         )
         let viewModel = ShareViewModel(
             repository: makeRepository(api: api, store: try makeStore())
@@ -708,9 +724,71 @@ final class ShareViewModelTests: XCTestCase {
 
         XCTAssertEqual(api.sentChatContents, ["사진 더 올려줘"])
         XCTAssertEqual(api.chatIdempotencyKeys.count, 1)
-        XCTAssertEqual(api.chatCursors.count, 2)
+        XCTAssertEqual(api.chatCursors.count, 1)
         XCTAssertEqual(viewModel.chatItems.map(\.id), [firstID, sentID])
         XCTAssertTrue(viewModel.commentDraft.isEmpty)
+    }
+
+    @MainActor
+    func testChatPaginationStopsWhenServerRepeatsCursor() async throws {
+        let groupID = try XCTUnwrap(UUID(uuidString: "11111111-1111-1111-1111-111111111111"))
+        let newerID = try XCTUnwrap(UUID(uuidString: "77777777-7777-7777-7777-777777777777"))
+        let olderID = try XCTUnwrap(UUID(uuidString: "66666666-6666-6666-6666-666666666666"))
+        let api = ManagementTrackingShareGroupAPI(
+            groupID: groupID,
+            role: .member,
+            chatPages: [
+                ChatTimelinePageResponse(
+                    items: [makeChatItem(id: newerID, content: "최신")],
+                    nextCursor: "same-cursor",
+                    hasNext: true
+                ),
+                ChatTimelinePageResponse(
+                    items: [makeChatItem(id: olderID, content: "이전")],
+                    nextCursor: "same-cursor",
+                    hasNext: true
+                )
+            ]
+        )
+        let viewModel = ShareViewModel(repository: makeRepository(api: api, store: try makeStore()))
+        await viewModel.loadGroups(for: testCacheOwnerID)
+        viewModel.presentComments(groupID: groupID)
+        await viewModel.loadChatTimeline()
+
+        await viewModel.loadOlderChat()
+        await viewModel.loadOlderChat()
+
+        XCTAssertEqual(api.chatCursors.count, 2)
+        XCTAssertEqual(viewModel.chatItems.map(\.id), [olderID, newerID])
+    }
+
+    @MainActor
+    func testChatSendRetryKeepsDraftAndReusesIdempotencyKey() async throws {
+        let groupID = try XCTUnwrap(UUID(uuidString: "11111111-1111-1111-1111-111111111111"))
+        let sentID = try XCTUnwrap(UUID(uuidString: "77777777-7777-7777-7777-777777777777"))
+        let api = ManagementTrackingShareGroupAPI(
+            groupID: groupID,
+            role: .member,
+            chatMessageErrors: [.noResponse, nil],
+            createdChatMessageResponse: makeChatMessage(id: sentID, content: "다시 보내기")
+        )
+        let viewModel = ShareViewModel(repository: makeRepository(api: api, store: try makeStore()))
+        await viewModel.loadGroups(for: testCacheOwnerID)
+        viewModel.presentComments(groupID: groupID)
+        viewModel.commentDraft = "다시 보내기"
+
+        await viewModel.sendChatMessage()
+
+        XCTAssertEqual(viewModel.commentDraft, "다시 보내기")
+        XCTAssertTrue(viewModel.chatItems.isEmpty)
+        viewModel.dismissErrorAlert()
+
+        await viewModel.sendChatMessage()
+
+        XCTAssertEqual(api.chatIdempotencyKeys.count, 2)
+        XCTAssertEqual(api.chatIdempotencyKeys[0], api.chatIdempotencyKeys[1])
+        XCTAssertTrue(viewModel.commentDraft.isEmpty)
+        XCTAssertEqual(viewModel.chatItems.map(\.id), [sentID])
     }
 
     @MainActor
@@ -1007,6 +1085,17 @@ final class ShareViewModelTests: XCTestCase {
         )
     }
 
+    private func makeChatMessage(id: UUID, content: String) -> ChatMessageResponse {
+        ChatMessageResponse(
+            id: id,
+            content: content,
+            author: ChatAuthorResponse(userId: nil, displayName: "집집이"),
+            isAuthor: true,
+            createdAt: "2026-07-15T10:15:30Z",
+            updatedAt: "2026-07-15T10:15:30Z"
+        )
+    }
+
     private func makeSharedAlbum(id: UUID, name: String) -> SharedAlbumResponse {
         SharedAlbumResponse(
             id: id,
@@ -1298,6 +1387,8 @@ private final class ManagementTrackingShareGroupAPI: ShareGroupAPI {
     var sharedAlbums: [SharedAlbumResponse]
     var groupDetailError: NetworkError?
     var groupListErrors: [NetworkError?]
+    var chatMessageErrors: [NetworkError?]
+    var createdChatMessageResponse: ChatMessageResponse?
     var renameSharedAlbumErrors: [NetworkError?]
     var deleteGroupErrors: [NetworkError?]
     var leaveGroupErrors: [NetworkError?]
@@ -1324,6 +1415,8 @@ private final class ManagementTrackingShareGroupAPI: ShareGroupAPI {
         sharedAlbums: [SharedAlbumResponse] = [],
         groupListErrors: [NetworkError?] = [],
         groupDetailError: NetworkError? = nil,
+        chatMessageErrors: [NetworkError?] = [],
+        createdChatMessageResponse: ChatMessageResponse? = nil,
         renameSharedAlbumErrors: [NetworkError?] = [],
         deleteGroupErrors: [NetworkError?] = [],
         leaveGroupErrors: [NetworkError?] = [],
@@ -1337,6 +1430,8 @@ private final class ManagementTrackingShareGroupAPI: ShareGroupAPI {
         self.sharedAlbums = sharedAlbums
         self.groupListErrors = groupListErrors
         self.groupDetailError = groupDetailError
+        self.chatMessageErrors = chatMessageErrors
+        self.createdChatMessageResponse = createdChatMessageResponse
         self.renameSharedAlbumErrors = renameSharedAlbumErrors
         self.deleteGroupErrors = deleteGroupErrors
         self.leaveGroupErrors = leaveGroupErrors
@@ -1457,6 +1552,12 @@ private final class ManagementTrackingShareGroupAPI: ShareGroupAPI {
     ) async throws -> ChatMessageResponse {
         sentChatContents.append(content)
         chatIdempotencyKeys.append(idempotencyKey)
+        if !chatMessageErrors.isEmpty, let error = chatMessageErrors.removeFirst() {
+            throw error
+        }
+        if let createdChatMessageResponse {
+            return createdChatMessageResponse
+        }
         return ChatMessageResponse(
             id: UUID(),
             content: content,
