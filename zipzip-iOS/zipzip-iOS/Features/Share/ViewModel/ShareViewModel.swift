@@ -285,20 +285,28 @@ final class ShareViewModel {
             return
         }
 
+        let sessionID = remoteDataSessionID
         isLoadingMoreGroups = true
-        defer { isLoadingMoreGroups = false }
+        defer {
+            if remoteDataSessionID == sessionID {
+                isLoadingMoreGroups = false
+            }
+        }
 
         do {
             let page = try await repository.syncGroups(cursor: nextGroupCursor, size: 20)
+            guard remoteDataSessionID == sessionID else { return }
             var groupIDs = visibleGroupIDs ?? groups.map(\.id)
             for id in page.itemIDs where !groupIDs.contains(id) {
                 groupIDs.append(id)
             }
             visibleGroupIDs = groupIDs
             try await reloadGroups()
+            guard remoteDataSessionID == sessionID else { return }
             self.nextGroupCursor = page.nextCursor
             groupsHaveNextPage = page.hasNext
         } catch {
+            guard remoteDataSessionID == sessionID else { return }
             presentError(error, fallback: "다음 공유 그룹을 불러오지 못했어요.")
         }
     }
@@ -307,21 +315,30 @@ final class ShareViewModel {
         guard !loadingGroupDetailIDs.contains(id) else { return }
         guard refresh || !loadedGroupDetailIDs.contains(id) else { return }
 
+        let sessionID = remoteDataSessionID
         loadingGroupDetailIDs.insert(id)
-        defer { loadingGroupDetailIDs.remove(id) }
+        defer {
+            if remoteDataSessionID == sessionID {
+                loadingGroupDetailIDs.remove(id)
+            }
+        }
 
         do {
             try await repository.syncGroup(id: id)
+            guard remoteDataSessionID == sessionID else { return }
             if var groupIDs = visibleGroupIDs, !groupIDs.contains(id) {
                 groupIDs.append(id)
                 visibleGroupIDs = groupIDs
             }
             try await reloadGroups()
+            guard remoteDataSessionID == sessionID else { return }
             loadedGroupDetailIDs.insert(id)
             refreshManagedGroupIfNeeded(id: id)
         } catch ShareGroupRepositoryError.groupNotFound {
+            guard remoteDataSessionID == sessionID else { return }
             await removeMissingGroup(id: id)
         } catch {
+            guard remoteDataSessionID == sessionID else { return }
             presentError(error, fallback: "공유 그룹 정보를 불러오지 못했어요.")
         }
     }
@@ -337,8 +354,13 @@ final class ShareViewModel {
         }
         guard refresh || !loadedSharedAlbumGroupIDs.contains(groupID) else { return }
 
+        let sessionID = remoteDataSessionID
         loadingSharedAlbumGroupIDs.insert(groupID)
-        defer { loadingSharedAlbumGroupIDs.remove(groupID) }
+        defer {
+            if remoteDataSessionID == sessionID {
+                loadingSharedAlbumGroupIDs.remove(groupID)
+            }
+        }
 
         do {
             let page = try await repository.syncSharedAlbums(
@@ -346,13 +368,17 @@ final class ShareViewModel {
                 cursor: nil,
                 size: 20
             )
+            guard remoteDataSessionID == sessionID else { return }
             visibleSharedAlbumIDs[groupID] = page.itemIDs
             try await reloadGroups()
+            guard remoteDataSessionID == sessionID else { return }
             updateSharedAlbumPageState(page, groupID: groupID)
             loadedSharedAlbumGroupIDs.insert(groupID)
         } catch ShareGroupRepositoryError.groupNotFound {
+            guard remoteDataSessionID == sessionID else { return }
             await removeMissingGroup(id: groupID)
         } catch {
+            guard remoteDataSessionID == sessionID else { return }
             presentError(error, fallback: "공유집 목록을 불러오지 못했어요.")
         }
     }
@@ -370,8 +396,13 @@ final class ShareViewModel {
             return
         }
 
+        let sessionID = remoteDataSessionID
         loadingMoreSharedAlbumGroupIDs.insert(groupID)
-        defer { loadingMoreSharedAlbumGroupIDs.remove(groupID) }
+        defer {
+            if remoteDataSessionID == sessionID {
+                loadingMoreSharedAlbumGroupIDs.remove(groupID)
+            }
+        }
 
         do {
             let page = try await repository.syncSharedAlbums(
@@ -379,14 +410,17 @@ final class ShareViewModel {
                 cursor: cursor,
                 size: 20
             )
+            guard remoteDataSessionID == sessionID else { return }
             var albumIDs = visibleSharedAlbumIDs[groupID] ?? group(withID: groupID)?.albums.map(\.id) ?? []
             for id in page.itemIDs where !albumIDs.contains(id) {
                 albumIDs.append(id)
             }
             visibleSharedAlbumIDs[groupID] = albumIDs
             try await reloadGroups()
+            guard remoteDataSessionID == sessionID else { return }
             updateSharedAlbumPageState(page, groupID: groupID)
         } catch {
+            guard remoteDataSessionID == sessionID else { return }
             presentError(error, fallback: "다음 공유집을 불러오지 못했어요.")
         }
     }
@@ -398,14 +432,23 @@ final class ShareViewModel {
             return
         }
 
+        let sessionID = remoteDataSessionID
         loadingInviteCodeGroupIDs.insert(groupID)
-        defer { loadingInviteCodeGroupIDs.remove(groupID) }
+        defer {
+            if remoteDataSessionID == sessionID {
+                loadingInviteCodeGroupIDs.remove(groupID)
+            }
+        }
 
         do {
-            inviteCodes[groupID] = try await repository.inviteCode(groupID: groupID)
+            let inviteCode = try await repository.inviteCode(groupID: groupID)
+            guard remoteDataSessionID == sessionID else { return }
+            inviteCodes[groupID] = inviteCode
         } catch ShareGroupRepositoryError.groupNotFound {
+            guard remoteDataSessionID == sessionID else { return }
             await removeMissingGroup(id: groupID)
         } catch {
+            guard remoteDataSessionID == sessionID else { return }
             presentError(error, fallback: "초대 코드를 불러오지 못했어요.")
         }
     }
@@ -414,8 +457,13 @@ final class ShareViewModel {
         guard !loadingMemberGroupIDs.contains(groupID) else { return }
         guard refresh || membersByGroupID[groupID] == nil else { return }
 
+        let sessionID = remoteDataSessionID
         loadingMemberGroupIDs.insert(groupID)
-        defer { loadingMemberGroupIDs.remove(groupID) }
+        defer {
+            if remoteDataSessionID == sessionID {
+                loadingMemberGroupIDs.remove(groupID)
+            }
+        }
 
         do {
             var members: [ShareGroupMember] = []
@@ -426,6 +474,7 @@ final class ShareViewModel {
                     break
                 }
                 let page = try await repository.members(groupID: groupID, cursor: cursor, size: 100)
+                guard remoteDataSessionID == sessionID else { return }
                 for member in page.items where !members.contains(where: { $0.id == member.id }) {
                     members.append(member)
                 }
@@ -433,8 +482,10 @@ final class ShareViewModel {
             } while cursor != nil
             membersByGroupID[groupID] = members
         } catch ShareGroupRepositoryError.groupNotFound {
+            guard remoteDataSessionID == sessionID else { return }
             await removeMissingGroup(id: groupID)
         } catch {
+            guard remoteDataSessionID == sessionID else { return }
             presentError(error, fallback: "참여자 정보를 불러오지 못했어요.")
         }
     }
@@ -636,6 +687,7 @@ final class ShareViewModel {
     }
 
     func resetRemoteData() {
+        repository.invalidateCacheSession()
         remoteDataSessionID = UUID()
         groups = []
         cacheOwnerID = nil
@@ -713,12 +765,18 @@ final class ShareViewModel {
         let trimmedCode = joinCode.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedCode.isEmpty, !isPreviewingJoin else { return }
 
+        let sessionID = remoteDataSessionID
         isPreviewingJoin = true
         joinErrorCode = nil
-        defer { isPreviewingJoin = false }
+        defer {
+            if remoteDataSessionID == sessionID {
+                isPreviewingJoin = false
+            }
+        }
 
         do {
             let preview = try await repository.previewJoin(inviteCode: trimmedCode)
+            guard remoteDataSessionID == sessionID else { return }
             joinCode = trimmedCode
             joinRequestInviteCode = trimmedCode
             joinIdempotencyKey = preview.alreadyJoined ? nil : UUID()
@@ -726,12 +784,15 @@ final class ShareViewModel {
             pendingJoinAlreadyJoined = preview.alreadyJoined
             transitionSheet(to: .joinConfirmation)
         } catch let error as ShareGroupRepositoryError {
+            guard remoteDataSessionID == sessionID else { return }
             joinErrorCode = String(describing: error)
             presentError(error, fallback: "공유 그룹 입장 정보를 확인하지 못했어요.")
         } catch let error as NetworkError {
+            guard remoteDataSessionID == sessionID else { return }
             joinErrorCode = error.serverCode ?? "NETWORK_ERROR"
             presentError(error, fallback: "공유 그룹 입장 정보를 확인하지 못했어요.")
         } catch {
+            guard remoteDataSessionID == sessionID else { return }
             joinErrorCode = "UNKNOWN_ERROR"
             presentError(error, fallback: "공유 그룹 입장 정보를 확인하지 못했어요.")
         }
@@ -750,11 +811,16 @@ final class ShareViewModel {
             return nil
         }
 
+        let sessionID = remoteDataSessionID
         let idempotencyKey = joinIdempotencyKey ?? UUID()
         joinIdempotencyKey = idempotencyKey
         isJoiningGroup = true
         joinErrorCode = nil
-        defer { isJoiningGroup = false }
+        defer {
+            if remoteDataSessionID == sessionID {
+                isJoiningGroup = false
+            }
+        }
 
         do {
             let groupID: ShareAlbum.ID
@@ -767,34 +833,42 @@ final class ShareViewModel {
                     inviteCode: joinRequestInviteCode,
                     idempotencyKey: idempotencyKey
                 )
+                guard remoteDataSessionID == sessionID else { return nil }
                 joinedGroupIDAwaitingSync = groupID
             }
             try await prepareJoinedGroup(id: groupID)
+            guard remoteDataSessionID == sessionID else { return nil }
             joinedGroupIDAwaitingSync = nil
             completedJoinNavigationGroupID = groupID
             finishJoin()
             return groupID
         } catch ShareGroupRepositoryError.alreadyJoined {
+            guard remoteDataSessionID == sessionID else { return nil }
             do {
                 joinedGroupIDAwaitingSync = pendingJoinPreview.group.id
                 try await prepareJoinedGroup(id: pendingJoinPreview.group.id)
+                guard remoteDataSessionID == sessionID else { return nil }
                 joinedGroupIDAwaitingSync = nil
                 completedJoinNavigationGroupID = pendingJoinPreview.group.id
                 finishJoin()
                 return pendingJoinPreview.group.id
             } catch {
+                guard remoteDataSessionID == sessionID else { return nil }
                 presentJoinError(error)
                 return nil
             }
         } catch let error as ShareGroupRepositoryError {
+            guard remoteDataSessionID == sessionID else { return nil }
             joinErrorCode = String(describing: error)
             presentJoinError(error)
             return nil
         } catch let error as NetworkError {
+            guard remoteDataSessionID == sessionID else { return nil }
             joinErrorCode = error.serverCode ?? "NETWORK_ERROR"
             presentJoinError(error)
             return nil
         } catch {
+            guard remoteDataSessionID == sessionID else { return nil }
             joinErrorCode = "UNKNOWN_ERROR"
             presentJoinError(error)
             return nil
@@ -825,20 +899,27 @@ final class ShareViewModel {
             groupCreationIdempotencyKey = idempotencyKey
         }
 
+        let sessionID = remoteDataSessionID
         isCreatingGroup = true
-        defer { isCreatingGroup = false }
+        defer {
+            if remoteDataSessionID == sessionID {
+                isCreatingGroup = false
+            }
+        }
 
         do {
             let createdGroup = try await repository.createGroup(
                 name: trimmedName,
                 idempotencyKey: idempotencyKey
             )
+            guard remoteDataSessionID == sessionID else { return }
             if var groupIDs = visibleGroupIDs {
                 groupIDs.removeAll { $0 == createdGroup.id }
                 groupIDs.insert(createdGroup.id, at: 0)
                 visibleGroupIDs = groupIDs
             }
             try await reloadGroups()
+            guard remoteDataSessionID == sessionID else { return }
             hasLoadedGroups = true
             inviteCode = createdGroup.inviteCode
             inviteCodes[createdGroup.id] = inviteCode
@@ -846,6 +927,7 @@ final class ShareViewModel {
             groupCreationIdempotencyKey = nil
             transitionSheet(to: .invitation)
         } catch {
+            guard remoteDataSessionID == sessionID else { return }
             presentError(error, fallback: "공유 그룹을 만들지 못했어요.")
         }
     }
@@ -883,30 +965,42 @@ final class ShareViewModel {
         guard !name.isEmpty else { return false }
         guard name != album.name else { return true }
 
+        let sessionID = remoteDataSessionID
         isUpdatingSharedAlbum = true
         sharedAlbumErrorCode = nil
-        defer { isUpdatingSharedAlbum = false }
+        defer {
+            if remoteDataSessionID == sessionID {
+                isUpdatingSharedAlbum = false
+            }
+        }
 
         do {
             try await repository.renameSharedAlbum(id: albumID, groupID: groupID, name: name)
+            guard remoteDataSessionID == sessionID else { return false }
             try await reloadGroups()
+            guard remoteDataSessionID == sessionID else { return false }
             return true
         } catch ShareGroupRepositoryError.groupNotFound {
+            guard remoteDataSessionID == sessionID else { return false }
             await removeMissingGroup(id: groupID)
             return false
         } catch ShareGroupRepositoryError.sharedAlbumNotFound {
+            guard remoteDataSessionID == sessionID else { return false }
             removeSharedAlbumState(id: albumID, groupID: groupID)
             try? await reloadGroups()
             return false
         } catch let error as ShareGroupRepositoryError {
+            guard remoteDataSessionID == sessionID else { return false }
             sharedAlbumErrorCode = String(describing: error)
             presentError(error, fallback: "공유집 이름을 변경하지 못했어요.")
             return false
         } catch let error as NetworkError {
+            guard remoteDataSessionID == sessionID else { return false }
             sharedAlbumErrorCode = error.serverCode ?? "NETWORK_ERROR"
             presentError(error, fallback: "공유집 이름을 변경하지 못했어요.")
             return false
         } catch {
+            guard remoteDataSessionID == sessionID else { return false }
             sharedAlbumErrorCode = "UNKNOWN_ERROR"
             presentError(error, fallback: "공유집 이름을 변경하지 못했어요.")
             return false
@@ -924,27 +1018,37 @@ final class ShareViewModel {
             return false
         }
 
+        let sessionID = remoteDataSessionID
         isDeletingSharedAlbums = true
         sharedAlbumErrorCode = nil
-        defer { isDeletingSharedAlbums = false }
+        defer {
+            if remoteDataSessionID == sessionID {
+                isDeletingSharedAlbums = false
+            }
+        }
 
         do {
             try await repository.deleteSharedAlbum(id: albumID, groupID: groupID)
+            guard remoteDataSessionID == sessionID else { return false }
             removeSharedAlbumState(id: albumID, groupID: groupID)
             await refreshGroupAfterAlbumMutation(groupID: groupID)
             return true
         } catch ShareGroupRepositoryError.groupNotFound {
+            guard remoteDataSessionID == sessionID else { return false }
             await removeMissingGroup(id: groupID)
             return true
         } catch let error as ShareGroupRepositoryError {
+            guard remoteDataSessionID == sessionID else { return false }
             sharedAlbumErrorCode = String(describing: error)
             presentError(error, fallback: "공유집을 삭제하지 못했어요.")
             return false
         } catch let error as NetworkError {
+            guard remoteDataSessionID == sessionID else { return false }
             sharedAlbumErrorCode = error.serverCode ?? "NETWORK_ERROR"
             presentError(error, fallback: "공유집을 삭제하지 못했어요.")
             return false
         } catch {
+            guard remoteDataSessionID == sessionID else { return false }
             sharedAlbumErrorCode = "UNKNOWN_ERROR"
             presentError(error, fallback: "공유집을 삭제하지 못했어요.")
             return false
@@ -967,9 +1071,14 @@ final class ShareViewModel {
             bulkDeleteIdempotencyKey = idempotencyKey
         }
 
+        let sessionID = remoteDataSessionID
         isDeletingSharedAlbums = true
         sharedAlbumErrorCode = nil
-        defer { isDeletingSharedAlbums = false }
+        defer {
+            if remoteDataSessionID == sessionID {
+                isDeletingSharedAlbums = false
+            }
+        }
 
         do {
             _ = try await repository.deleteSharedAlbums(
@@ -977,6 +1086,7 @@ final class ShareViewModel {
                 groupID: groupID,
                 idempotencyKey: idempotencyKey
             )
+            guard remoteDataSessionID == sessionID else { return false }
             for albumID in albumIDs {
                 removeSharedAlbumState(id: albumID, groupID: groupID)
             }
@@ -985,11 +1095,13 @@ final class ShareViewModel {
             await refreshGroupAfterAlbumMutation(groupID: groupID)
             return true
         } catch ShareGroupRepositoryError.groupNotFound {
+            guard remoteDataSessionID == sessionID else { return false }
             bulkDeleteAlbumIDs = nil
             bulkDeleteIdempotencyKey = nil
             await removeMissingGroup(id: groupID)
             return true
         } catch ShareGroupRepositoryError.sharedAlbumNotFound {
+            guard remoteDataSessionID == sessionID else { return false }
             try? await reloadGroups()
             sharedAlbumErrorCode = String(describing: ShareGroupRepositoryError.sharedAlbumNotFound)
             presentError(
@@ -998,14 +1110,17 @@ final class ShareViewModel {
             )
             return false
         } catch let error as ShareGroupRepositoryError {
+            guard remoteDataSessionID == sessionID else { return false }
             sharedAlbumErrorCode = String(describing: error)
             presentError(error, fallback: "선택한 공유집을 삭제하지 못했어요.")
             return false
         } catch let error as NetworkError {
+            guard remoteDataSessionID == sessionID else { return false }
             sharedAlbumErrorCode = error.serverCode ?? "NETWORK_ERROR"
             presentError(error, fallback: "선택한 공유집을 삭제하지 못했어요.")
             return false
         } catch {
+            guard remoteDataSessionID == sessionID else { return false }
             sharedAlbumErrorCode = "UNKNOWN_ERROR"
             presentError(error, fallback: "선택한 공유집을 삭제하지 못했어요.")
             return false
@@ -1037,20 +1152,30 @@ final class ShareViewModel {
             return
         }
 
+        let sessionID = remoteDataSessionID
         groupManagementErrorCode = nil
         isUpdatingGroup = true
-        defer { isUpdatingGroup = false }
+        defer {
+            if remoteDataSessionID == sessionID {
+                isUpdatingGroup = false
+            }
+        }
         do {
             try await repository.updateGroupName(id: group.id, name: trimmedName)
+            guard remoteDataSessionID == sessionID else { return }
             try await reloadGroups()
+            guard remoteDataSessionID == sessionID else { return }
             dismissShareManagement()
         } catch let error as ShareGroupRepositoryError {
+            guard remoteDataSessionID == sessionID else { return }
             groupManagementErrorCode = String(describing: error)
             presentError(error, fallback: "공유 그룹 이름을 변경하지 못했어요.")
         } catch let error as NetworkError {
+            guard remoteDataSessionID == sessionID else { return }
             groupManagementErrorCode = error.serverCode ?? "NETWORK_ERROR"
             presentError(error, fallback: "공유 그룹 이름을 변경하지 못했어요.")
         } catch {
+            guard remoteDataSessionID == sessionID else { return }
             groupManagementErrorCode = "UNKNOWN_ERROR"
             presentError(error, fallback: "공유 그룹 이름을 변경하지 못했어요.")
         }
@@ -1060,9 +1185,14 @@ final class ShareViewModel {
     func leaveManagedShareGroup() async -> Bool {
         guard let group = managedShareGroup, !isLeavingGroup else { return false }
 
+        let sessionID = remoteDataSessionID
         groupManagementErrorCode = nil
         isLeavingGroup = true
-        defer { isLeavingGroup = false }
+        defer {
+            if remoteDataSessionID == sessionID {
+                isLeavingGroup = false
+            }
+        }
         do {
             switch group.currentUserRole {
             case .admin:
@@ -1070,6 +1200,7 @@ final class ShareViewModel {
             case .participant:
                 try await repository.leaveGroup(id: group.id)
             }
+            guard remoteDataSessionID == sessionID else { return false }
             removeGroupState(id: group.id)
             do {
                 try await reloadGroups()
@@ -1079,18 +1210,22 @@ final class ShareViewModel {
             dismissShareManagement()
             return true
         } catch ShareGroupRepositoryError.groupNotFound {
+            guard remoteDataSessionID == sessionID else { return false }
             await removeMissingGroup(id: group.id)
             dismissShareManagement()
             return true
         } catch let error as ShareGroupRepositoryError {
+            guard remoteDataSessionID == sessionID else { return false }
             groupManagementErrorCode = String(describing: error)
             presentError(error, fallback: "공유 그룹에서 나가지 못했어요.")
             return false
         } catch let error as NetworkError {
+            guard remoteDataSessionID == sessionID else { return false }
             groupManagementErrorCode = error.serverCode ?? "NETWORK_ERROR"
             presentError(error, fallback: "공유 그룹에서 나가지 못했어요.")
             return false
         } catch {
+            guard remoteDataSessionID == sessionID else { return false }
             groupManagementErrorCode = "UNKNOWN_ERROR"
             presentError(error, fallback: "공유 그룹에서 나가지 못했어요.")
             return false

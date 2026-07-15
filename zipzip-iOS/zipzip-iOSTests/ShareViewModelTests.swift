@@ -38,7 +38,7 @@ final class ShareViewModelTests: XCTestCase {
         let store = try makeStore()
         let viewModel = ShareViewModel(
             groups: [],
-            repository: makeRepository(
+            repository: try await makePreparedRepository(
                 api: StubShareGroupAPI(createResponse: response),
                 store: store
             )
@@ -68,7 +68,10 @@ final class ShareViewModelTests: XCTestCase {
         XCTAssertEqual(storedGroup.date.timeIntervalSince1970, 1_783_073_730, accuracy: 0.001)
 
         let restoredViewModel = ShareViewModel(
-            repository: makeRepository(api: UnavailableShareGroupAPI(), store: store)
+            repository: try await makePreparedRepository(
+                api: UnavailableShareGroupAPI(),
+                store: store
+            )
         )
         await restoredViewModel.loadInviteCode(groupID: response.id)
         XCTAssertEqual(restoredViewModel.inviteCode(for: response.id), response.inviteCode)
@@ -84,7 +87,7 @@ final class ShareViewModelTests: XCTestCase {
     func testCreateGroupFailurePresentsErrorAlertWithoutClosingSheet() async throws {
         let viewModel = ShareViewModel(
             groups: [],
-            repository: makeRepository(
+            repository: try await makePreparedRepository(
                 api: UnavailableShareGroupAPI(),
                 store: try makeStore()
             )
@@ -392,6 +395,41 @@ final class ShareViewModelTests: XCTestCase {
     }
 
     @MainActor
+    func testAccountSwitchRejectsInFlightGroupDetailCacheWrite() async throws {
+        let firstGroupID = try XCTUnwrap(UUID(uuidString: "11111111-1111-1111-1111-111111111111"))
+        let secondGroupID = try XCTUnwrap(UUID(uuidString: "22222222-2222-2222-2222-222222222222"))
+        let firstUserID = try XCTUnwrap(UUID(uuidString: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"))
+        let secondUserID = try XCTUnwrap(UUID(uuidString: "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"))
+        let api = ManagementTrackingShareGroupAPI(
+            groupID: firstGroupID,
+            role: .host,
+            groupListResponses: [
+                makeGroupListResponse(id: firstGroupID, name: "첫 번째 계정"),
+                makeGroupListResponse(id: secondGroupID, name: "두 번째 계정")
+            ],
+            groupDetailDelay: .milliseconds(100)
+        )
+        let store = try makeStore()
+        let viewModel = ShareViewModel(repository: makeRepository(api: api, store: store))
+        await viewModel.loadGroups(for: firstUserID)
+
+        let detailLoad = Task {
+            await viewModel.loadGroup(id: firstGroupID, refresh: true)
+        }
+        while api.groupDetailRequestCount < 1 {
+            await Task.yield()
+        }
+        await viewModel.loadGroups(for: secondUserID)
+        await detailLoad.value
+
+        XCTAssertEqual(viewModel.groups.map(\.id), [secondGroupID])
+        XCTAssertFalse(viewModel.isErrorAlertPresented)
+        let storedGroups = try await store.fetchGroups()
+        XCTAssertEqual(storedGroups.map(\.id), [secondGroupID])
+        XCTAssertEqual(storedGroups.map(\.name), ["두 번째 계정"])
+    }
+
+    @MainActor
     func testPreviewsAndJoinsGroupWithSameLogicalRequest() async throws {
         let groupID = try XCTUnwrap(UUID(uuidString: "44444444-4444-4444-4444-444444444444"))
         let api = JoinTrackingShareGroupAPI(
@@ -405,7 +443,7 @@ final class ShareViewModelTests: XCTestCase {
         )
         let viewModel = ShareViewModel(
             groups: [],
-            repository: makeRepository(api: api, store: try makeStore())
+            repository: try await makePreparedRepository(api: api, store: try makeStore())
         )
         viewModel.presentJoinSheet()
         viewModel.joinCode = "  ZZ7K9P2Q  "
@@ -447,7 +485,7 @@ final class ShareViewModelTests: XCTestCase {
         )
         let viewModel = ShareViewModel(
             groups: [],
-            repository: makeRepository(api: api, store: try makeStore())
+            repository: try await makePreparedRepository(api: api, store: try makeStore())
         )
         viewModel.presentJoinSheet()
         viewModel.joinCode = "ZZ7K9P2Q"
@@ -476,7 +514,7 @@ final class ShareViewModelTests: XCTestCase {
         )
         let viewModel = ShareViewModel(
             groups: [],
-            repository: makeRepository(api: api, store: try makeStore())
+            repository: try await makePreparedRepository(api: api, store: try makeStore())
         )
         viewModel.presentJoinSheet()
         viewModel.joinCode = "ZZ7K9P2Q"
@@ -506,7 +544,7 @@ final class ShareViewModelTests: XCTestCase {
         )
         let viewModel = ShareViewModel(
             groups: [],
-            repository: makeRepository(api: api, store: try makeStore())
+            repository: try await makePreparedRepository(api: api, store: try makeStore())
         )
         viewModel.presentJoinSheet()
         viewModel.joinCode = "ZZ7K9P2Q"
@@ -540,7 +578,7 @@ final class ShareViewModelTests: XCTestCase {
         )
         let viewModel = ShareViewModel(
             groups: [],
-            repository: makeRepository(api: api, store: try makeStore())
+            repository: try await makePreparedRepository(api: api, store: try makeStore())
         )
         viewModel.presentJoinSheet()
         viewModel.joinCode = "ZZ7K9P2Q"
@@ -1405,6 +1443,16 @@ final class ShareViewModelTests: XCTestCase {
     ) -> ShareGroupRepository {
         DefaultShareGroupRepository(api: api, store: store)
     }
+
+    @MainActor
+    private func makePreparedRepository(
+        api: ShareGroupAPI,
+        store: SharedGroupStore
+    ) async throws -> ShareGroupRepository {
+        let repository = makeRepository(api: api, store: store)
+        try await repository.prepareCache(for: testCacheOwnerID)
+        return repository
+    }
 }
 
 private struct StubShareGroupAPI: ShareGroupAPI {
@@ -1675,6 +1723,7 @@ private final class ManagementTrackingShareGroupAPI: ShareGroupAPI {
     var groupListErrors: [NetworkError?]
     var groupListResponses: [ShareGroupListPageResponse]
     var groupListDelays: [Duration]
+    var groupDetailDelay: Duration
     var chatMessageDelay: Duration
     var chatMessageErrors: [NetworkError?]
     var createdChatMessageResponse: ChatMessageResponse?
@@ -1685,6 +1734,7 @@ private final class ManagementTrackingShareGroupAPI: ShareGroupAPI {
     var bulkDeleteErrors: [NetworkError?]
     private(set) var memberCursors: [String?] = []
     private(set) var groupListRequestCount = 0
+    private(set) var groupDetailRequestCount = 0
     private(set) var updatedNames: [String] = []
     private(set) var deletedGroupIDs: [UUID] = []
     private(set) var leftGroupIDs: [UUID] = []
@@ -1706,6 +1756,7 @@ private final class ManagementTrackingShareGroupAPI: ShareGroupAPI {
         groupListErrors: [NetworkError?] = [],
         groupListResponses: [ShareGroupListPageResponse] = [],
         groupListDelays: [Duration] = [],
+        groupDetailDelay: Duration = .zero,
         groupDetailError: NetworkError? = nil,
         chatMessageDelay: Duration = .zero,
         chatMessageErrors: [NetworkError?] = [],
@@ -1724,6 +1775,7 @@ private final class ManagementTrackingShareGroupAPI: ShareGroupAPI {
         self.groupListErrors = groupListErrors
         self.groupListResponses = groupListResponses
         self.groupListDelays = groupListDelays
+        self.groupDetailDelay = groupDetailDelay
         self.groupDetailError = groupDetailError
         self.chatMessageDelay = chatMessageDelay
         self.chatMessageErrors = chatMessageErrors
@@ -1763,6 +1815,8 @@ private final class ManagementTrackingShareGroupAPI: ShareGroupAPI {
     }
 
     func fetchGroup(id: UUID) async throws -> ShareGroupDetailResponse {
+        groupDetailRequestCount += 1
+        try await Task.sleep(for: groupDetailDelay)
         if let groupDetailError {
             throw groupDetailError
         }
