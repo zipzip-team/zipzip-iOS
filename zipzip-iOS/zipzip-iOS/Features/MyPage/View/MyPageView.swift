@@ -37,6 +37,10 @@ struct MyPageView: View {
                 VStack(spacing: 0) {
                     menuSection
                     if authenticationState.isLoggedIn {
+                        Rectangle()
+                            .fill(.grey50)
+                            .frame(height: 10)
+
                         accountSection
                     }
                 }
@@ -154,10 +158,6 @@ struct MyPageView: View {
                 }
             }
             .padding(.horizontal, 16)
-
-            Rectangle()
-                .fill(.grey50)
-                .frame(height: 10)
         }
     }
 
