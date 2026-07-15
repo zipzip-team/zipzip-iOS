@@ -359,6 +359,39 @@ final class ShareViewModelTests: XCTestCase {
     }
 
     @MainActor
+    func testAccountSwitchSupersedesInFlightGroupLoad() async throws {
+        let firstGroupID = try XCTUnwrap(UUID(uuidString: "11111111-1111-1111-1111-111111111111"))
+        let secondGroupID = try XCTUnwrap(UUID(uuidString: "22222222-2222-2222-2222-222222222222"))
+        let firstUserID = try XCTUnwrap(UUID(uuidString: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"))
+        let secondUserID = try XCTUnwrap(UUID(uuidString: "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"))
+        let api = ManagementTrackingShareGroupAPI(
+            groupID: firstGroupID,
+            role: .host,
+            groupListResponses: [
+                makeGroupListResponse(id: firstGroupID, name: "첫 번째 계정"),
+                makeGroupListResponse(id: secondGroupID, name: "두 번째 계정")
+            ],
+            groupListDelays: [.milliseconds(100), .zero]
+        )
+        let store = try makeStore()
+        let viewModel = ShareViewModel(repository: makeRepository(api: api, store: store))
+
+        let firstLoad = Task {
+            await viewModel.loadGroups(for: firstUserID)
+        }
+        while api.groupListRequestCount < 1 {
+            await Task.yield()
+        }
+        await viewModel.loadGroups(for: secondUserID)
+        await firstLoad.value
+
+        XCTAssertEqual(api.groupListRequestCount, 2)
+        XCTAssertEqual(viewModel.groups.map(\.id), [secondGroupID])
+        let storedGroups = try await store.fetchGroups()
+        XCTAssertEqual(storedGroups.map(\.id), [secondGroupID])
+    }
+
+    @MainActor
     func testPreviewsAndJoinsGroupWithSameLogicalRequest() async throws {
         let groupID = try XCTUnwrap(UUID(uuidString: "44444444-4444-4444-4444-444444444444"))
         let api = JoinTrackingShareGroupAPI(
@@ -498,6 +531,72 @@ final class ShareViewModelTests: XCTestCase {
     }
 
     @MainActor
+    func testAlreadyJoinedSyncFailureRetriesWithoutJoinRequest() async throws {
+        let groupID = try XCTUnwrap(UUID(uuidString: "44444444-4444-4444-4444-444444444444"))
+        let api = JoinTrackingShareGroupAPI(
+            previewResponse: makeJoinPreview(groupID: groupID, alreadyJoined: true),
+            joinResponse: nil,
+            groupDetailErrors: [.noResponse, nil]
+        )
+        let viewModel = ShareViewModel(
+            groups: [],
+            repository: makeRepository(api: api, store: try makeStore())
+        )
+        viewModel.presentJoinSheet()
+        viewModel.joinCode = "ZZ7K9P2Q"
+        await viewModel.confirmJoinCode()
+        viewModel.shareSheetDidDismiss()
+
+        let firstResult = await viewModel.completeJoin()
+
+        XCTAssertNil(firstResult)
+        XCTAssertTrue(viewModel.isJoinConfirmationPresented)
+        XCTAssertTrue(viewModel.isErrorAlertPresented)
+        XCTAssertTrue(viewModel.canRetryError)
+        XCTAssertTrue(api.joinInviteCodes.isEmpty)
+        XCTAssertEqual(api.fetchedGroupIDs, [groupID])
+
+        await viewModel.retryErrorAction()
+
+        XCTAssertTrue(api.joinInviteCodes.isEmpty)
+        XCTAssertEqual(api.fetchedGroupIDs, [groupID, groupID])
+        XCTAssertEqual(viewModel.groups.map(\.id), [groupID])
+        XCTAssertEqual(viewModel.completedJoinNavigationGroupID, groupID)
+        XCTAssertFalse(viewModel.isJoinConfirmationPresented)
+    }
+
+    @MainActor
+    func testDismissingJoinConfirmationClearsPendingJoinRequest() async throws {
+        let groupID = try XCTUnwrap(UUID(uuidString: "44444444-4444-4444-4444-444444444444"))
+        let api = JoinTrackingShareGroupAPI(
+            previewResponse: makeJoinPreview(groupID: groupID, alreadyJoined: false),
+            joinResponse: ShareGroupJoinResponse(
+                sharedGroupId: groupID,
+                name: "여행 친구",
+                myRole: .member,
+                joinedAt: "2026-07-15T10:15:30Z"
+            )
+        )
+        let viewModel = ShareViewModel(
+            groups: [],
+            repository: makeRepository(api: api, store: try makeStore())
+        )
+        viewModel.presentJoinSheet()
+        viewModel.joinCode = "ZZ7K9P2Q"
+        await viewModel.confirmJoinCode()
+        viewModel.shareSheetDidDismiss()
+
+        viewModel.dismissPresentedSheet()
+        viewModel.shareSheetDidDismiss()
+        let joinResult = await viewModel.completeJoin()
+
+        XCTAssertFalse(viewModel.isJoinConfirmationPresented)
+        XCTAssertNil(viewModel.pendingJoinPreview)
+        XCTAssertNil(joinResult)
+        XCTAssertTrue(api.joinInviteCodes.isEmpty)
+    }
+
+    @MainActor
     func testLoadsAllMemberPagesWithoutDuplicates() async throws {
         let groupID = try XCTUnwrap(UUID(uuidString: "11111111-1111-1111-1111-111111111111"))
         let firstMemberID = try XCTUnwrap(UUID(uuidString: "22222222-2222-2222-2222-222222222222"))
@@ -532,6 +631,38 @@ final class ShareViewModelTests: XCTestCase {
         XCTAssertEqual(api.memberCursors.count, 2)
         XCTAssertNil(api.memberCursors[0])
         XCTAssertEqual(api.memberCursors[1], "next-member")
+    }
+
+    @MainActor
+    func testMemberPaginationStopsWhenServerRepeatsCursor() async throws {
+        let groupID = try XCTUnwrap(UUID(uuidString: "11111111-1111-1111-1111-111111111111"))
+        let firstMemberID = try XCTUnwrap(UUID(uuidString: "22222222-2222-2222-2222-222222222222"))
+        let secondMemberID = try XCTUnwrap(UUID(uuidString: "33333333-3333-3333-3333-333333333333"))
+        let api = ManagementTrackingShareGroupAPI(
+            groupID: groupID,
+            role: .host,
+            memberPages: [
+                ShareGroupMemberListPageResponse(
+                    items: [makeMember(id: firstMemberID, role: .host, isMe: true)],
+                    nextCursor: "same-member-cursor",
+                    hasNext: true
+                ),
+                ShareGroupMemberListPageResponse(
+                    items: [makeMember(id: secondMemberID, role: .member, isMe: false)],
+                    nextCursor: "same-member-cursor",
+                    hasNext: true
+                )
+            ]
+        )
+        let viewModel = ShareViewModel(
+            repository: makeRepository(api: api, store: try makeStore())
+        )
+        await viewModel.loadGroups(for: testCacheOwnerID)
+
+        await viewModel.loadMembers(groupID: groupID)
+
+        XCTAssertEqual(api.memberCursors.count, 2)
+        XCTAssertEqual(viewModel.members(for: groupID).map(\.id), [firstMemberID, secondMemberID])
     }
 
     @MainActor
@@ -606,6 +737,59 @@ final class ShareViewModelTests: XCTestCase {
 
         XCTAssertTrue(retry)
         XCTAssertEqual(api.deletedGroupIDs, [groupID, groupID])
+        let groupsAfterRetry = try await store.fetchGroups()
+        XCTAssertTrue(groupsAfterRetry.isEmpty)
+        XCTAssertTrue(viewModel.groups.isEmpty)
+    }
+
+    @MainActor
+    func testRemoteMemberLeaveThenLocalFailureReconcilesOnNotFoundRetry() async throws {
+        let groupID = try XCTUnwrap(UUID(uuidString: "11111111-1111-1111-1111-111111111111"))
+        let api = ManagementTrackingShareGroupAPI(
+            groupID: groupID,
+            role: .member,
+            leaveGroupErrors: [
+                nil,
+                .server(
+                    statusCode: 404,
+                    code: "SHARED_GROUP_NOT_FOUND",
+                    message: "not found",
+                    body: nil
+                )
+            ]
+        )
+        let database = try appDatabase()
+        let store = SharedGroupStore(database: database)
+        let viewModel = ShareViewModel(repository: makeRepository(api: api, store: store))
+        await viewModel.loadGroups(for: testCacheOwnerID)
+        viewModel.presentShareManagement(groupID: groupID)
+        try await database.write { db in
+            try #sql(
+                """
+                CREATE TRIGGER "fail_shared_group_delete"
+                BEFORE DELETE ON "shared_group"
+                BEGIN
+                  SELECT RAISE(ABORT, 'forced local delete failure');
+                END
+                """
+            )
+            .execute(db)
+        }
+
+        let firstAttempt = await viewModel.leaveManagedShareGroup()
+
+        XCTAssertFalse(firstAttempt)
+        let groupsAfterLocalFailure = try await store.fetchGroups()
+        XCTAssertEqual(groupsAfterLocalFailure.map(\.id), [groupID])
+        try await database.write { db in
+            try #sql(#"DROP TRIGGER "fail_shared_group_delete""#).execute(db)
+        }
+
+        let retry = await viewModel.leaveManagedShareGroup()
+
+        XCTAssertTrue(retry)
+        XCTAssertEqual(api.leftGroupIDs, [groupID, groupID])
+        XCTAssertTrue(api.deletedGroupIDs.isEmpty)
         let groupsAfterRetry = try await store.fetchGroups()
         XCTAssertTrue(groupsAfterRetry.isEmpty)
         XCTAssertTrue(viewModel.groups.isEmpty)
@@ -792,6 +976,37 @@ final class ShareViewModelTests: XCTestCase {
     }
 
     @MainActor
+    func testChatSheetCannotDismissWhileMessageIsSending() async throws {
+        let groupID = try XCTUnwrap(UUID(uuidString: "11111111-1111-1111-1111-111111111111"))
+        let api = ManagementTrackingShareGroupAPI(
+            groupID: groupID,
+            role: .member,
+            chatMessageDelay: .milliseconds(50)
+        )
+        let viewModel = ShareViewModel(repository: makeRepository(api: api, store: try makeStore()))
+        await viewModel.loadGroups(for: testCacheOwnerID)
+        viewModel.presentComments(groupID: groupID)
+        viewModel.commentDraft = "전송 중 메시지"
+
+        let sendTask = Task { await viewModel.sendChatMessage() }
+        while api.sentChatContents.isEmpty {
+            await Task.yield()
+        }
+        viewModel.dismissComments()
+
+        XCTAssertTrue(viewModel.isCommentsPresented)
+        XCTAssertTrue(viewModel.isSendingChatMessage)
+
+        await sendTask.value
+        viewModel.dismissComments()
+        viewModel.shareSheetDidDismiss()
+
+        XCTAssertFalse(viewModel.isCommentsPresented)
+        XCTAssertNil(viewModel.activeChatGroupID)
+        XCTAssertTrue(viewModel.chatItems.isEmpty)
+    }
+
+    @MainActor
     func testRenamesAndDeletesManagedSharedAlbum() async throws {
         let groupID = try XCTUnwrap(UUID(uuidString: "11111111-1111-1111-1111-111111111111"))
         let albumID = try XCTUnwrap(UUID(uuidString: "33333333-3333-3333-3333-333333333333"))
@@ -873,6 +1088,60 @@ final class ShareViewModelTests: XCTestCase {
 
         XCTAssertFalse(detailViewModel.isAlbumDeleteAlertPresented)
         XCTAssertTrue(didDelete)
+    }
+
+    @MainActor
+    func testRemoteSharedAlbumDeleteThenLocalFailureReconcilesOnNotFoundRetry() async throws {
+        let groupID = try XCTUnwrap(UUID(uuidString: "11111111-1111-1111-1111-111111111111"))
+        let albumID = try XCTUnwrap(UUID(uuidString: "33333333-3333-3333-3333-333333333333"))
+        let api = ManagementTrackingShareGroupAPI(
+            groupID: groupID,
+            role: .member,
+            sharedAlbums: [makeSharedAlbum(id: albumID, name: "제주도")],
+            deleteSharedAlbumErrors: [
+                nil,
+                .server(
+                    statusCode: 404,
+                    code: "SHARED_ALBUM_NOT_FOUND",
+                    message: "not found",
+                    body: nil
+                )
+            ]
+        )
+        let database = try appDatabase()
+        let store = SharedGroupStore(database: database)
+        let viewModel = ShareViewModel(repository: makeRepository(api: api, store: store))
+        await viewModel.loadGroups(for: testCacheOwnerID)
+        await viewModel.loadSharedAlbums(groupID: groupID)
+        try await database.write { db in
+            try #sql(
+                """
+                CREATE TRIGGER "fail_shared_album_delete"
+                BEFORE DELETE ON "shared_album"
+                BEGIN
+                  SELECT RAISE(ABORT, 'forced local delete failure');
+                END
+                """
+            )
+            .execute(db)
+        }
+
+        let firstAttempt = await viewModel.deleteSharedAlbum(id: albumID, from: groupID)
+
+        XCTAssertFalse(firstAttempt)
+        let groupsAfterLocalFailure = try await store.fetchGroups()
+        XCTAssertEqual(groupsAfterLocalFailure.first?.albums.map(\.id), [albumID])
+        try await database.write { db in
+            try #sql(#"DROP TRIGGER "fail_shared_album_delete""#).execute(db)
+        }
+
+        let retry = await viewModel.deleteSharedAlbum(id: albumID, from: groupID)
+
+        XCTAssertTrue(retry)
+        XCTAssertEqual(api.deletedAlbumIDs, [albumID, albumID])
+        let groupsAfterRetry = try await store.fetchGroups()
+        XCTAssertTrue(groupsAfterRetry.first?.albums.isEmpty == true)
+        XCTAssertTrue(viewModel.group(withID: groupID)?.albums.isEmpty == true)
     }
 
     @MainActor
@@ -1105,6 +1374,23 @@ final class ShareViewModelTests: XCTestCase {
             isCreator: false,
             createdAt: "2026-07-15T10:15:30Z",
             updatedAt: "2026-07-15T10:15:30Z"
+        )
+    }
+
+    private func makeGroupListResponse(id: UUID, name: String) -> ShareGroupListPageResponse {
+        ShareGroupListPageResponse(
+            items: [ShareGroupSummaryResponse(
+                id: id,
+                name: name,
+                myRole: .host,
+                memberCount: 1,
+                sharedAlbumCount: 0,
+                photoCount: 0,
+                joinedAt: "2026-07-15T10:15:30Z",
+                updatedAt: "2026-07-15T10:15:30Z"
+            )],
+            nextCursor: nil,
+            hasNext: false
         )
     }
 
@@ -1387,6 +1673,9 @@ private final class ManagementTrackingShareGroupAPI: ShareGroupAPI {
     var sharedAlbums: [SharedAlbumResponse]
     var groupDetailError: NetworkError?
     var groupListErrors: [NetworkError?]
+    var groupListResponses: [ShareGroupListPageResponse]
+    var groupListDelays: [Duration]
+    var chatMessageDelay: Duration
     var chatMessageErrors: [NetworkError?]
     var createdChatMessageResponse: ChatMessageResponse?
     var renameSharedAlbumErrors: [NetworkError?]
@@ -1395,6 +1684,7 @@ private final class ManagementTrackingShareGroupAPI: ShareGroupAPI {
     var deleteSharedAlbumErrors: [NetworkError?]
     var bulkDeleteErrors: [NetworkError?]
     private(set) var memberCursors: [String?] = []
+    private(set) var groupListRequestCount = 0
     private(set) var updatedNames: [String] = []
     private(set) var deletedGroupIDs: [UUID] = []
     private(set) var leftGroupIDs: [UUID] = []
@@ -1414,7 +1704,10 @@ private final class ManagementTrackingShareGroupAPI: ShareGroupAPI {
         chatPages: [ChatTimelinePageResponse] = [],
         sharedAlbums: [SharedAlbumResponse] = [],
         groupListErrors: [NetworkError?] = [],
+        groupListResponses: [ShareGroupListPageResponse] = [],
+        groupListDelays: [Duration] = [],
         groupDetailError: NetworkError? = nil,
+        chatMessageDelay: Duration = .zero,
         chatMessageErrors: [NetworkError?] = [],
         createdChatMessageResponse: ChatMessageResponse? = nil,
         renameSharedAlbumErrors: [NetworkError?] = [],
@@ -1429,7 +1722,10 @@ private final class ManagementTrackingShareGroupAPI: ShareGroupAPI {
         self.chatPages = chatPages
         self.sharedAlbums = sharedAlbums
         self.groupListErrors = groupListErrors
+        self.groupListResponses = groupListResponses
+        self.groupListDelays = groupListDelays
         self.groupDetailError = groupDetailError
+        self.chatMessageDelay = chatMessageDelay
         self.chatMessageErrors = chatMessageErrors
         self.createdChatMessageResponse = createdChatMessageResponse
         self.renameSharedAlbumErrors = renameSharedAlbumErrors
@@ -1440,8 +1736,15 @@ private final class ManagementTrackingShareGroupAPI: ShareGroupAPI {
     }
 
     func fetchGroups(cursor: String?, size: Int) async throws -> ShareGroupListPageResponse {
+        groupListRequestCount += 1
+        let delay = groupListDelays.isEmpty ? .zero : groupListDelays.removeFirst()
+        let response = groupListResponses.isEmpty ? nil : groupListResponses.removeFirst()
+        try await Task.sleep(for: delay)
         if !groupListErrors.isEmpty, let error = groupListErrors.removeFirst() {
             throw error
+        }
+        if let response {
+            return response
         }
         return ShareGroupListPageResponse(
             items: [ShareGroupSummaryResponse(
@@ -1552,6 +1855,7 @@ private final class ManagementTrackingShareGroupAPI: ShareGroupAPI {
     ) async throws -> ChatMessageResponse {
         sentChatContents.append(content)
         chatIdempotencyKeys.append(idempotencyKey)
+        try await Task.sleep(for: chatMessageDelay)
         if !chatMessageErrors.isEmpty, let error = chatMessageErrors.removeFirst() {
             throw error
         }
