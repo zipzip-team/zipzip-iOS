@@ -92,10 +92,11 @@ protocol ShareGroupRepository {
         content: String,
         idempotencyKey: UUID
     ) async throws
-    func renameSharedAlbum(id: SharedAlbum.ID, name: String) async throws
-    func deleteSharedAlbum(id: SharedAlbum.ID) async throws
+    func renameSharedAlbum(id: SharedAlbum.ID, groupID: ShareAlbum.ID, name: String) async throws
+    func deleteSharedAlbum(id: SharedAlbum.ID, groupID: ShareAlbum.ID) async throws
     func deleteSharedAlbums(
         ids: [SharedAlbum.ID],
+        groupID: ShareAlbum.ID,
         idempotencyKey: UUID
     ) async throws -> SharedAlbumDeletionResult
     func removeCachedGroup(id: ShareAlbum.ID) async throws
@@ -262,10 +263,10 @@ final class DefaultShareGroupRepository: ShareGroupRepository {
 
         do {
             try await api.deleteGroup(groupID: id)
-            try await store.deleteGroup(id: id)
         } catch let error as NetworkError where error.serverCode == "SHARED_GROUP_NOT_FOUND" {
-            throw ShareGroupRepositoryError.groupNotFound
+            // 이미 원격 삭제가 끝난 재시도도 로컬 캐시 정리로 수렴시킨다.
         }
+        try await store.deleteGroup(id: id)
     }
 
     func leaveGroup(id: ShareAlbum.ID) async throws {
@@ -275,10 +276,10 @@ final class DefaultShareGroupRepository: ShareGroupRepository {
 
         do {
             try await api.leaveGroup(groupID: id)
-            try await store.deleteGroup(id: id)
         } catch let error as NetworkError where error.serverCode == "SHARED_GROUP_NOT_FOUND" {
-            throw ShareGroupRepositoryError.groupNotFound
+            // 이미 탈퇴했거나 멤버십이 만료된 경우에도 로컬 캐시를 제거한다.
         }
+        try await store.deleteGroup(id: id)
     }
 
     func chatTimeline(
@@ -314,26 +315,29 @@ final class DefaultShareGroupRepository: ShareGroupRepository {
         }
     }
 
-    func renameSharedAlbum(id: SharedAlbum.ID, name: String) async throws {
+    func renameSharedAlbum(id: SharedAlbum.ID, groupID: ShareAlbum.ID, name: String) async throws {
         do {
             let response = try await api.renameSharedAlbum(id: id, name: name)
             try await store.updateSharedAlbum(response)
         } catch let error as NetworkError where error.serverCode == "SHARED_ALBUM_NOT_FOUND" {
+            try await reconcileMissingSharedAlbum(id: id, groupID: groupID)
             throw ShareGroupRepositoryError.sharedAlbumNotFound
         }
     }
 
-    func deleteSharedAlbum(id: SharedAlbum.ID) async throws {
+    func deleteSharedAlbum(id: SharedAlbum.ID, groupID: ShareAlbum.ID) async throws {
         do {
             try await api.deleteSharedAlbum(id: id)
-            try await store.deleteSharedAlbums(ids: [id])
         } catch let error as NetworkError where error.serverCode == "SHARED_ALBUM_NOT_FOUND" {
-            throw ShareGroupRepositoryError.sharedAlbumNotFound
+            try await reconcileMissingSharedAlbum(id: id, groupID: groupID)
+            return
         }
+        try await store.deleteSharedAlbums(ids: [id])
     }
 
     func deleteSharedAlbums(
         ids: [SharedAlbum.ID],
+        groupID: ShareAlbum.ID,
         idempotencyKey: UUID
     ) async throws -> SharedAlbumDeletionResult {
         let uniqueIDs = Array(Set(ids)).sorted { $0.uuidString < $1.uuidString }
@@ -352,6 +356,16 @@ final class DefaultShareGroupRepository: ShareGroupRepository {
                 deletedPhotoCount: response.deletedPhotoCount
             )
         } catch let error as NetworkError where error.serverCode == "SHARED_ALBUM_NOT_FOUND" {
+            let missingIDs = try await reconcileMissingSharedAlbums(
+                ids: Set(uniqueIDs),
+                groupID: groupID
+            )
+            if missingIDs.count == uniqueIDs.count {
+                return SharedAlbumDeletionResult(
+                    deletedAlbumCount: uniqueIDs.count,
+                    deletedPhotoCount: 0
+                )
+            }
             throw ShareGroupRepositoryError.sharedAlbumNotFound
         }
     }
@@ -362,6 +376,54 @@ final class DefaultShareGroupRepository: ShareGroupRepository {
 
     private func cachedRole(groupID: ShareAlbum.ID) async throws -> ShareGroupRole? {
         try await groups().first { $0.id == groupID }?.currentUserRole
+    }
+
+    private func reconcileMissingSharedAlbum(
+        id: SharedAlbum.ID,
+        groupID: ShareAlbum.ID
+    ) async throws {
+        try await revalidateMembership(groupID: groupID)
+        try await store.deleteSharedAlbums(ids: [id])
+    }
+
+    private func reconcileMissingSharedAlbums(
+        ids: Set<SharedAlbum.ID>,
+        groupID: ShareAlbum.ID
+    ) async throws -> Set<SharedAlbum.ID> {
+        try await revalidateMembership(groupID: groupID)
+
+        var existingIDs: Set<SharedAlbum.ID> = []
+        var cursor: String?
+        repeat {
+            let page: SharedAlbumListPageResponse
+            do {
+                page = try await api.fetchSharedAlbums(
+                    groupID: groupID,
+                    cursor: cursor,
+                    size: 100
+                )
+            } catch let error as NetworkError where error.serverCode == "SHARED_GROUP_NOT_FOUND" {
+                try await store.deleteGroup(id: groupID)
+                throw ShareGroupRepositoryError.groupNotFound
+            }
+            try await store.upsertSharedAlbums(page.items, groupID: groupID)
+            existingIDs.formUnion(page.items.map(\.id))
+            cursor = page.hasNext ? page.nextCursor : nil
+        } while cursor != nil
+
+        let missingIDs = ids.subtracting(existingIDs)
+        try await store.deleteSharedAlbums(ids: Array(missingIDs))
+        return missingIDs
+    }
+
+    private func revalidateMembership(groupID: ShareAlbum.ID) async throws {
+        do {
+            let detail = try await api.fetchGroup(id: groupID)
+            try await store.upsertGroupDetail(detail)
+        } catch let error as NetworkError where error.serverCode == "SHARED_GROUP_NOT_FOUND" {
+            try await store.deleteGroup(id: groupID)
+            throw ShareGroupRepositoryError.groupNotFound
+        }
     }
 
     private static func makeGroup(from stored: StoredSharedGroup) -> ShareAlbum {

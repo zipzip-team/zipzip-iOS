@@ -689,9 +689,12 @@ final class ShareViewModel {
         defer { isUpdatingSharedAlbum = false }
 
         do {
-            try await repository.renameSharedAlbum(id: albumID, name: name)
+            try await repository.renameSharedAlbum(id: albumID, groupID: groupID, name: name)
             try await reloadGroups()
             return true
+        } catch ShareGroupRepositoryError.groupNotFound {
+            await removeMissingGroup(id: groupID)
+            return false
         } catch ShareGroupRepositoryError.sharedAlbumNotFound {
             removeSharedAlbumState(id: albumID, groupID: groupID)
             try? await reloadGroups()
@@ -727,13 +730,12 @@ final class ShareViewModel {
         defer { isDeletingSharedAlbums = false }
 
         do {
-            try await repository.deleteSharedAlbum(id: albumID)
+            try await repository.deleteSharedAlbum(id: albumID, groupID: groupID)
             removeSharedAlbumState(id: albumID, groupID: groupID)
             await refreshGroupAfterAlbumMutation(groupID: groupID)
             return true
-        } catch ShareGroupRepositoryError.sharedAlbumNotFound {
-            removeSharedAlbumState(id: albumID, groupID: groupID)
-            try? await reloadGroups()
+        } catch ShareGroupRepositoryError.groupNotFound {
+            await removeMissingGroup(id: groupID)
             return true
         } catch let error as ShareGroupRepositoryError {
             sharedAlbumErrorCode = String(describing: error)
@@ -773,6 +775,7 @@ final class ShareViewModel {
         do {
             _ = try await repository.deleteSharedAlbums(
                 ids: Array(albumIDs),
+                groupID: groupID,
                 idempotencyKey: idempotencyKey
             )
             for albumID in albumIDs {
@@ -782,6 +785,19 @@ final class ShareViewModel {
             bulkDeleteIdempotencyKey = nil
             await refreshGroupAfterAlbumMutation(groupID: groupID)
             return true
+        } catch ShareGroupRepositoryError.groupNotFound {
+            bulkDeleteAlbumIDs = nil
+            bulkDeleteIdempotencyKey = nil
+            await removeMissingGroup(id: groupID)
+            return true
+        } catch ShareGroupRepositoryError.sharedAlbumNotFound {
+            try? await reloadGroups()
+            sharedAlbumErrorCode = String(describing: ShareGroupRepositoryError.sharedAlbumNotFound)
+            presentError(
+                ShareGroupRepositoryError.sharedAlbumNotFound,
+                fallback: "선택한 공유집을 삭제하지 못했어요."
+            )
+            return false
         } catch let error as ShareGroupRepositoryError {
             sharedAlbumErrorCode = String(describing: error)
             presentError(error, fallback: "선택한 공유집을 삭제하지 못했어요.")
@@ -853,12 +869,15 @@ final class ShareViewModel {
                 try await repository.leaveGroup(id: group.id)
             }
             removeGroupState(id: group.id)
-            try await reloadGroups()
+            do {
+                try await reloadGroups()
+            } catch {
+                presentError(error, fallback: "그룹 정리는 완료됐지만 목록을 갱신하지 못했어요.")
+            }
             dismissShareManagement()
             return true
         } catch ShareGroupRepositoryError.groupNotFound {
-            removeGroupState(id: group.id)
-            try? await reloadGroups()
+            await removeMissingGroup(id: group.id)
             dismissShareManagement()
             return true
         } catch let error as ShareGroupRepositoryError {
@@ -971,8 +990,14 @@ final class ShareViewModel {
     }
 
     private func refreshGroupAfterAlbumMutation(groupID: ShareAlbum.ID) async {
-        try? await repository.syncGroup(id: groupID)
-        try? await reloadGroups()
+        do {
+            try await repository.syncGroup(id: groupID)
+            try await reloadGroups()
+        } catch ShareGroupRepositoryError.groupNotFound {
+            await removeMissingGroup(id: groupID)
+        } catch {
+            presentError(error, fallback: "삭제는 완료됐지만 최신 정보를 불러오지 못했어요.")
+        }
     }
 
     private func prepareJoinedGroup(id: ShareAlbum.ID) async {
