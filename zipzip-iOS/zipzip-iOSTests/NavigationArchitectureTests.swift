@@ -7,22 +7,23 @@ final class NavigationArchitectureTests: XCTestCase {
     func testRouterMutatesOneHomogeneousRoutePath() throws {
         let router = Router()
         let groupID = try XCTUnwrap(UUID(uuidString: "2B7CC071-0559-4584-AEA7-F7E4E77385D9"))
+        let albumID = try XCTUnwrap(UUID(uuidString: "9F1C7A64-6C2E-4B3A-9E0D-1F4B2C8A7D51"))
 
         router.push(.shareGroup(groupID))
-        router.push(.shareAlbum(groupID: groupID, albumID: 42))
+        router.push(.shareAlbum(groupID: groupID, albumID: albumID))
         router.push(.shareImport(groupID))
 
         XCTAssertEqual(
             router.path,
             [
                 .shareGroup(groupID),
-                .shareAlbum(groupID: groupID, albumID: 42),
+                .shareAlbum(groupID: groupID, albumID: albumID),
                 .shareImport(groupID)
             ]
         )
 
         router.pop()
-        XCTAssertEqual(router.path.last, .shareAlbum(groupID: groupID, albumID: 42))
+        XCTAssertEqual(router.path.last, .shareAlbum(groupID: groupID, albumID: albumID))
 
         router.replacePath(with: [.albumDetail(7)])
         XCTAssertEqual(router.path, [.albumDetail(7)])
