@@ -28,11 +28,8 @@ struct DateTimeEditSheet: View {
             ScrollViewReader { proxy in
                 ScrollView {
                     VStack(spacing: 10) {
-                        DatePicker("", selection: $date, displayedComponents: .date)
-                            .datePickerStyle(.graphical)
-                            .labelsHidden()
-                            .environment(\.locale, Locale(identifier: "ko_KR"))
-                            .colorScheme(.dark)
+                        PhotoCalendarView(selection: calendarSelection)
+                            .background(.grey1000, in: .rect(cornerRadius: 12))
 
                         timeRow
 
@@ -56,6 +53,28 @@ struct DateTimeEditSheet: View {
                         proxy.scrollTo(timeAnchor, anchor: .bottom)
                     }
                 }
+            }
+        }
+    }
+
+    /// 캘린더는 날짜(연·월·일)만 바꾸고 기존 시각(시·분)은 유지한다.
+    private var calendarSelection: Binding<Date?> {
+        Binding {
+            date
+        } set: { newValue in
+            guard let newValue else { return }
+            let calendar = Calendar.current
+            let day = calendar.dateComponents([.year, .month, .day], from: newValue)
+            let time = calendar.dateComponents([.hour, .minute, .second], from: date)
+            var merged = DateComponents()
+            merged.year = day.year
+            merged.month = day.month
+            merged.day = day.day
+            merged.hour = time.hour
+            merged.minute = time.minute
+            merged.second = time.second
+            if let combined = calendar.date(from: merged) {
+                date = combined
             }
         }
     }

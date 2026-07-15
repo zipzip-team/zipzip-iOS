@@ -12,7 +12,8 @@ import SwiftUI
 /// 기본 시스템 캘린더처럼 이번 달 날짜만 노출하고, 월 전환 시 슬라이드 애니메이션을 준다.
 struct PhotoCalendarView: View {
     @Binding var selection: Date?
-    let availableDays: Set<DateComponents>
+    /// 선택 가능한 날짜 집합. `nil`이면 모든 날짜를 선택할 수 있다(날짜 편집 용도).
+    let availableDays: Set<DateComponents>?
 
     @State private var visibleMonth: Date
     @State private var slideEdge: Edge = .trailing
@@ -34,7 +35,7 @@ struct PhotoCalendarView: View {
         return formatter
     }()
 
-    init(selection: Binding<Date?>, availableDays: Set<DateComponents>) {
+    init(selection: Binding<Date?>, availableDays: Set<DateComponents>? = nil) {
         self._selection = selection
         self.availableDays = availableDays
         let base = selection.wrappedValue ?? Date()
@@ -155,7 +156,7 @@ struct PhotoCalendarView: View {
 
     private func dayCell(_ date: Date) -> some View {
         let comps = calendar.dateComponents([.year, .month, .day], from: date)
-        let isSelectable = availableDays.contains(comps)
+        let isSelectable = availableDays?.contains(comps) ?? true
         let isSelected = selection.map { calendar.isDate($0, inSameDayAs: date) } ?? false
 
         return Text("\(calendar.component(.day, from: date))")
