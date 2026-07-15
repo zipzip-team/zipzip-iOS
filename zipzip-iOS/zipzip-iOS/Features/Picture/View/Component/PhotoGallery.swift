@@ -10,8 +10,6 @@ import UIKit
 
 struct PhotoGallery: View {
     let sections: [PhotoSection]
-    var thumbnailImages: [String: UIImage] = [:]
-    var loadThumbnail: (String) async -> Void = { _ in }
     var isSelectionMode: Bool = false
     var selectedPhotoIDs: [UUID] = []
     var onTapPhoto: ((UUID) -> Void)? = nil
@@ -42,11 +40,8 @@ struct PhotoGallery: View {
     }
 
     private func photoCell(_ photo: Photo) -> some View {
-        PhotoThumbnail(image: thumbnailImages[photo.localIdentifier])
+        PhotoThumbnailImage(localIdentifier: photo.localIdentifier)
             .aspectRatio(1, contentMode: .fit)
-            .task(id: photo.localIdentifier) {
-                await loadThumbnail(photo.localIdentifier)
-            }
             .overlay {
                 if isSelectionMode, selectedPhotoIDs.contains(photo.id) {
                     Rectangle()
@@ -96,6 +91,27 @@ struct PhotoGallery: View {
         }
 
         return "선택 안 됨"
+    }
+}
+
+private struct PhotoThumbnailImage: View {
+    let localIdentifier: String
+    @State private var image: UIImage?
+
+    private static let targetSize = CGSize(width: 300, height: 300)
+
+    var body: some View {
+        PhotoThumbnail(image: image)
+            .task(id: localIdentifier) {
+                image = nil
+                guard !localIdentifier.isEmpty else { return }
+                let loaded = await PhotoThumbnailLoader.shared.thumbnail(
+                    for: localIdentifier,
+                    targetSize: Self.targetSize
+                )
+                guard !Task.isCancelled, let loaded else { return }
+                image = loaded
+            }
     }
 }
 

@@ -10,6 +10,8 @@ import Foundation
 import MapKit
 
 nonisolated struct LocalReverseGeocoder {
+    static let shared = LocalReverseGeocoder()
+
     private let domestic: [GeoRegion]
     private let foreign: [GeoRegion]
 

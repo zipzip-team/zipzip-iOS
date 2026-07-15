@@ -13,6 +13,12 @@ final class PhotoThumbnailLoader: @unchecked Sendable {
 
     private let manager = PHCachingImageManager()
 
+    private let cache: NSCache<NSString, UIImage> = {
+        let cache = NSCache<NSString, UIImage>()
+        cache.countLimit = 500
+        return cache
+    }()
+
     func thumbnail(for localIdentifier: String, targetSize: CGSize) async -> UIImage? {
         await requestImage(for: localIdentifier, targetSize: targetSize, contentMode: .aspectFill)
     }
@@ -36,6 +42,12 @@ final class PhotoThumbnailLoader: @unchecked Sendable {
         contentMode: PHImageContentMode,
         deliveryMode: PHImageRequestOptionsDeliveryMode = .highQualityFormat
     ) async -> UIImage? {
+        let cacheKey =
+            "\(localIdentifier)|\(Int(targetSize.width))x\(Int(targetSize.height))|\(contentMode.rawValue)" as NSString
+        if let cached = cache.object(forKey: cacheKey) {
+            return cached
+        }
+
         guard let asset = PHAsset.fetchAssets(withLocalIdentifiers: [localIdentifier], options: nil).firstObject else {
             return nil
         }
@@ -67,7 +79,11 @@ final class PhotoThumbnailLoader: @unchecked Sendable {
                 manager.cancelImageRequest(requestID)
             }
         }
-        return Task.isCancelled ? nil : image
+        guard !Task.isCancelled else { return nil }
+        if let image {
+            cache.setObject(image, forKey: cacheKey)
+        }
+        return image
     }
 }
 
