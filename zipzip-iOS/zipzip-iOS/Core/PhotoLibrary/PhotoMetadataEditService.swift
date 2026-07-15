@@ -16,8 +16,9 @@ private let logger = Logger(subsystem: "com.zipzip.zipzip-iOS", category: "Photo
 nonisolated struct PhotoMetadataEditService {
     @Dependency(\.defaultDatabase) private var database
 
-    func updateDate(localIdentifiers: [String], date: Date) async throws {
-        guard !localIdentifiers.isEmpty else { return }
+    @discardableResult
+    func updateDate(localIdentifiers: [String], date: Date) async throws -> Bool {
+        guard !localIdentifiers.isEmpty else { return false }
 
         let assets = Self.fetchAssets(localIdentifiers)
         if !assets.isEmpty {
@@ -34,19 +35,21 @@ nonisolated struct PhotoMetadataEditService {
                 .where { $0.localIdentifier.in(localIdentifiers) }
                 .execute(db)
         }
+        return true
     }
 
+    @discardableResult
     func updateLocation(
         localIdentifiers: [String],
         name: String,
         latitude: Double?,
         longitude: Double?
-    ) async throws {
-        guard !localIdentifiers.isEmpty else { return }
+    ) async throws -> Bool {
+        guard !localIdentifiers.isEmpty else { return false }
 
         guard let coordinate = try await resolveCoordinate(name: name, latitude: latitude, longitude: longitude) else {
             logger.error("location edit: coordinate unresolved, skipping \(name)")
-            return
+            return false
         }
 
         let location = CLLocation(latitude: coordinate.latitude, longitude: coordinate.longitude)
@@ -75,6 +78,7 @@ nonisolated struct PhotoMetadataEditService {
                 .where { $0.localIdentifier.in(localIdentifiers) }
                 .execute(db)
         }
+        return true
     }
 
     @discardableResult

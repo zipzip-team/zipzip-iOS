@@ -175,10 +175,11 @@ struct FilteredPictureView: View {
             .init(icon: .moveToAlbum, title: "집으로") { showShareSheet = true },
             .init(icon: .metadata, title: "정보 수정") {
                 if let metadata = pictureViewModel.firstSelectedMetadata {
-                    router.push(.photoInfoEdit(
+                    router.push(.photoInfoEdit(PhotoInfoEditDestination(
                         metadata: metadata,
-                        localIdentifiers: pictureViewModel.selectedPhotoLocalIdentifiers
-                    ))
+                        localIdentifiers: pictureViewModel.selectedPhotoLocalIdentifiers,
+                        onSuccessfulDismiss: pictureViewModel.cancelSelection
+                    )))
                 }
             },
             .init(icon: .delete, title: "삭제") { pictureViewModel.requestDelete() }

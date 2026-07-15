@@ -74,8 +74,12 @@ struct RootView: View {
                         albumViewModel: albumViewModel,
                         shareViewModel: shareViewModel
                     )
-                case let .photoInfoEdit(metadata, localIdentifiers):
-                    PhotoInfoEditView(metadata: metadata, localIdentifiers: localIdentifiers)
+                case let .photoInfoEdit(destination):
+                    PhotoInfoEditView(
+                        metadata: destination.metadata,
+                        localIdentifiers: destination.localIdentifiers,
+                        onSuccessfulDismiss: destination.completeSuccessfulEdit
+                    )
                 case let .photoDetail(photo):
                     PhotoDetailView(
                         photo: photo,

@@ -108,7 +108,12 @@ final class AlbumViewModel {
         router.push(.albumPhotoDetail(albumID: albumID, photo: photo))
     }
 
-    func showPhotoInfoEdit(for photoIDs: [UUID], from albumID: AlbumViewItem.ID, router: Router) async {
+    func showPhotoInfoEdit(
+        for photoIDs: [UUID],
+        from albumID: AlbumViewItem.ID,
+        onSuccessfulDismiss: @escaping () -> Void,
+        router: Router
+    ) async {
         guard let sections = try? await photoSectionsProvider.loadAlbumSections(albumID: albumID) else {
             return
         }
@@ -126,7 +131,11 @@ final class AlbumViewModel {
         guard !localIdentifiers.isEmpty else {
             return
         }
-        router.push(.photoInfoEdit(metadata: firstPhoto.metadata, localIdentifiers: localIdentifiers))
+        router.push(.photoInfoEdit(PhotoInfoEditDestination(
+            metadata: firstPhoto.metadata,
+            localIdentifiers: localIdentifiers,
+            onSuccessfulDismiss: onSuccessfulDismiss
+        )))
     }
 
     func toggleSelection(for album: AlbumViewItem) {
@@ -230,8 +239,15 @@ final class AlbumViewModel {
                     }
                 }
             ),
-            onEditPhotoInfo: { [weak self] photoIDs in
-                Task { await self?.showPhotoInfoEdit(for: photoIDs, from: albumID, router: router) }
+            onEditPhotoInfo: { [weak self] photoIDs, onSuccessfulDismiss in
+                Task {
+                    await self?.showPhotoInfoEdit(
+                        for: photoIDs,
+                        from: albumID,
+                        onSuccessfulDismiss: onSuccessfulDismiss,
+                        router: router
+                    )
+                }
             }
         )
     }
