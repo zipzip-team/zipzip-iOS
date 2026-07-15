@@ -38,6 +38,11 @@ final class ShareViewModel {
     private(set) var joinErrorCode: String?
     private(set) var groupManagementErrorCode: String?
     private(set) var membersByGroupID: [ShareAlbum.ID: [ShareGroupMember]] = [:]
+    private(set) var activeChatGroupID: ShareAlbum.ID?
+    private(set) var chatItems: [ShareGroupChatItem] = []
+    private(set) var isLoadingChat = false
+    private(set) var isSendingChatMessage = false
+    private(set) var chatErrorCode: String?
 
     private(set) var hasLoadedGroups = false
     private(set) var isLoadingGroups = false
@@ -73,6 +78,9 @@ final class ShareViewModel {
     private var loadingMemberGroupIDs: Set<ShareAlbum.ID> = []
     private var visibleGroupIDs: [ShareAlbum.ID]?
     private var visibleSharedAlbumIDs: [ShareAlbum.ID: [SharedAlbum.ID]] = [:]
+    private var chatMessageContent: String?
+    private var chatMessageIdempotencyKey: UUID?
+    private var chatSessionID: UUID?
 
     init(repository: ShareGroupRepository) {
         self.groups = []
@@ -280,6 +288,127 @@ final class ShareViewModel {
         } catch {}
     }
 
+    func presentComments(groupID: ShareAlbum.ID) {
+        chatSessionID = UUID()
+        activeChatGroupID = groupID
+        chatItems = []
+        commentDraft = ""
+        chatErrorCode = nil
+        chatMessageContent = nil
+        chatMessageIdempotencyKey = nil
+        isLoadingChat = false
+        isSendingChatMessage = false
+        isCommentsPresented = true
+    }
+
+    func dismissComments() {
+        isCommentsPresented = false
+        activeChatGroupID = nil
+        chatItems = []
+        commentDraft = ""
+        chatErrorCode = nil
+        chatMessageContent = nil
+        chatMessageIdempotencyKey = nil
+        chatSessionID = nil
+        isLoadingChat = false
+        isSendingChatMessage = false
+    }
+
+    func loadChatTimeline(refresh: Bool = false) async {
+        guard let activeChatGroupID, let chatSessionID, !isLoadingChat else { return }
+        guard refresh || chatItems.isEmpty else { return }
+
+        isLoadingChat = true
+        chatErrorCode = nil
+        defer {
+            if self.chatSessionID == chatSessionID {
+                isLoadingChat = false
+            }
+        }
+
+        do {
+            var items: [ShareGroupChatItem] = []
+            var cursor: String?
+            repeat {
+                let page = try await repository.chatTimeline(
+                    groupID: activeChatGroupID,
+                    cursor: cursor,
+                    size: 100
+                )
+                for item in page.items where !items.contains(where: { $0.id == item.id }) {
+                    items.append(item)
+                }
+                cursor = page.hasNext ? page.nextCursor : nil
+            } while cursor != nil
+            guard self.chatSessionID == chatSessionID else {
+                return
+            }
+            chatItems = Array(items.reversed())
+        } catch ShareGroupRepositoryError.groupNotFound {
+            guard self.chatSessionID == chatSessionID else { return }
+            await removeMissingGroup(id: activeChatGroupID)
+            dismissComments()
+        } catch let error as NetworkError {
+            guard self.chatSessionID == chatSessionID else { return }
+            chatErrorCode = error.serverCode ?? "NETWORK_ERROR"
+        } catch {
+            guard self.chatSessionID == chatSessionID else { return }
+            chatErrorCode = "UNKNOWN_ERROR"
+        }
+    }
+
+    func sendChatMessage() async {
+        guard let activeChatGroupID,
+              let chatSessionID,
+              !isSendingChatMessage,
+              !isLoadingChat
+        else {
+            return
+        }
+        let content = commentDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !content.isEmpty else { return }
+
+        let idempotencyKey: UUID
+        if chatMessageContent == content, let chatMessageIdempotencyKey {
+            idempotencyKey = chatMessageIdempotencyKey
+        } else {
+            idempotencyKey = UUID()
+            chatMessageContent = content
+            chatMessageIdempotencyKey = idempotencyKey
+        }
+
+        isSendingChatMessage = true
+        chatErrorCode = nil
+        defer {
+            if self.chatSessionID == chatSessionID {
+                isSendingChatMessage = false
+            }
+        }
+
+        do {
+            try await repository.createChatMessage(
+                groupID: activeChatGroupID,
+                content: content,
+                idempotencyKey: idempotencyKey
+            )
+            guard self.chatSessionID == chatSessionID else { return }
+            commentDraft = ""
+            chatMessageContent = nil
+            chatMessageIdempotencyKey = nil
+            await loadChatTimeline(refresh: true)
+        } catch ShareGroupRepositoryError.groupNotFound {
+            guard self.chatSessionID == chatSessionID else { return }
+            await removeMissingGroup(id: activeChatGroupID)
+            dismissComments()
+        } catch let error as NetworkError {
+            guard self.chatSessionID == chatSessionID else { return }
+            chatErrorCode = error.serverCode ?? "NETWORK_ERROR"
+        } catch {
+            guard self.chatSessionID == chatSessionID else { return }
+            chatErrorCode = "UNKNOWN_ERROR"
+        }
+    }
+
     func resetRemoteData() {
         groups = []
         hasLoadedGroups = false
@@ -301,6 +430,7 @@ final class ShareViewModel {
         visibleGroupIDs = nil
         visibleSharedAlbumIDs = [:]
         inviteCode = ""
+        dismissComments()
         resetJoinState()
     }
 
@@ -567,7 +697,7 @@ final class ShareViewModel {
         isJoinConfirmationPresented = false
         isCreateSheetPresented = false
         isInviteSheetPresented = false
-        isCommentsPresented = false
+        dismissComments()
         isShareManagementPresented = false
         pendingJoinGroup = nil
         managedShareGroup = nil
@@ -634,6 +764,9 @@ final class ShareViewModel {
         sharedAlbumHasNextPage.removeValue(forKey: id)
         inviteCodes.removeValue(forKey: id)
         membersByGroupID.removeValue(forKey: id)
+        if activeChatGroupID == id {
+            dismissComments()
+        }
     }
 
     private func prepareJoinedGroup(id: ShareAlbum.ID) async {

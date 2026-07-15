@@ -95,9 +95,18 @@ struct ShareView: View {
                 expandsToLargestDetentOnScroll: false
             ) { _ in
                 ShareCommentsSheet(
+                    messages: viewModel.chatItems,
                     comment: $viewModel.commentDraft,
-                    onClose: { viewModel.isCommentsPresented = false }
+                    onClose: viewModel.dismissComments,
+                    onSend: {
+                        Task {
+                            await viewModel.sendChatMessage()
+                        }
+                    }
                 )
+                .task(id: viewModel.activeChatGroupID) {
+                    await viewModel.loadChatTimeline()
+                }
             }
             .bottomSheet(
                 isPresented: $viewModel.isAlbumManagementPresented,
@@ -501,8 +510,10 @@ private struct ShareInvitationSheet: View {
 }
 
 private struct ShareCommentsSheet: View {
+    let messages: [ShareGroupChatItem]
     @Binding var comment: String
     let onClose: () -> Void
+    let onSend: () -> Void
 
     var body: some View {
         BottomSheet(
@@ -517,10 +528,9 @@ private struct ShareCommentsSheet: View {
             VStack(spacing: 12) {
                 ScrollView(showsIndicators: false) {
                     LazyVStack(spacing: 16) {
-                        ShareCommentBubble(text: "단어 대박이네", isMine: false)
-                        ShareCommentBubble(text: "단어 대박이네", isMine: true)
-                        ShareCommentBubble(text: "좋은 추억이다", isMine: false)
-                        ShareCommentBubble(text: "사진 더 올려줘", isMine: false)
+                        ForEach(messages) { message in
+                            ShareCommentBubble(text: message.content, isMine: message.isAuthor)
+                        }
                     }
                     .padding(.horizontal, 16)
                     .padding(.top, 12)
@@ -528,7 +538,7 @@ private struct ShareCommentsSheet: View {
 
                 HStack(spacing: 12) {
                     TextInput("메시지 입력", text: $comment, style: .comment)
-                    ExtraSmallButton(icon: .send, action: { comment = "" })
+                    ExtraSmallButton(icon: .send, action: onSend)
                 }
                 .padding(.horizontal, 16)
                 .padding(.bottom, 12)

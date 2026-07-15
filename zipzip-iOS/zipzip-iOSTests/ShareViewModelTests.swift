@@ -371,6 +371,82 @@ final class ShareViewModelTests: XCTestCase {
         XCTAssertTrue(viewModel.groups.isEmpty)
     }
 
+    @MainActor
+    func testLoadsChatTimelineInChronologicalOrder() async throws {
+        let groupID = try XCTUnwrap(UUID(uuidString: "11111111-1111-1111-1111-111111111111"))
+        let newerID = try XCTUnwrap(UUID(uuidString: "77777777-7777-7777-7777-777777777777"))
+        let olderID = try XCTUnwrap(UUID(uuidString: "66666666-6666-6666-6666-666666666666"))
+        let api = ManagementTrackingShareGroupAPI(
+            groupID: groupID,
+            role: .member,
+            chatPages: [
+                ChatTimelinePageResponse(
+                    items: [makeChatItem(id: newerID, content: "최신")],
+                    nextCursor: "older-chat",
+                    hasNext: true
+                ),
+                ChatTimelinePageResponse(
+                    items: [makeChatItem(id: olderID, content: "이전")],
+                    nextCursor: nil,
+                    hasNext: false
+                )
+            ]
+        )
+        let viewModel = ShareViewModel(
+            repository: makeRepository(api: api, store: try makeStore())
+        )
+        await viewModel.loadGroups()
+        viewModel.presentComments(groupID: groupID)
+
+        await viewModel.loadChatTimeline()
+
+        XCTAssertEqual(viewModel.chatItems.map(\.id), [olderID, newerID])
+        XCTAssertEqual(api.chatCursors.count, 2)
+        XCTAssertNil(api.chatCursors[0])
+        XCTAssertEqual(api.chatCursors[1], "older-chat")
+    }
+
+    @MainActor
+    func testSendsChatMessageThenRefreshesTimeline() async throws {
+        let groupID = try XCTUnwrap(UUID(uuidString: "11111111-1111-1111-1111-111111111111"))
+        let firstID = try XCTUnwrap(UUID(uuidString: "66666666-6666-6666-6666-666666666666"))
+        let sentID = try XCTUnwrap(UUID(uuidString: "77777777-7777-7777-7777-777777777777"))
+        let api = ManagementTrackingShareGroupAPI(
+            groupID: groupID,
+            role: .member,
+            chatPages: [
+                ChatTimelinePageResponse(
+                    items: [makeChatItem(id: firstID, content: "기존")],
+                    nextCursor: nil,
+                    hasNext: false
+                ),
+                ChatTimelinePageResponse(
+                    items: [
+                        makeChatItem(id: sentID, content: "사진 더 올려줘", isAuthor: true),
+                        makeChatItem(id: firstID, content: "기존")
+                    ],
+                    nextCursor: nil,
+                    hasNext: false
+                )
+            ]
+        )
+        let viewModel = ShareViewModel(
+            repository: makeRepository(api: api, store: try makeStore())
+        )
+        await viewModel.loadGroups()
+        viewModel.presentComments(groupID: groupID)
+        await viewModel.loadChatTimeline()
+        viewModel.commentDraft = "  사진 더 올려줘  "
+
+        await viewModel.sendChatMessage()
+
+        XCTAssertEqual(api.sentChatContents, ["사진 더 올려줘"])
+        XCTAssertEqual(api.chatIdempotencyKeys.count, 1)
+        XCTAssertEqual(api.chatCursors.count, 2)
+        XCTAssertEqual(viewModel.chatItems.map(\.id), [firstID, sentID])
+        XCTAssertTrue(viewModel.commentDraft.isEmpty)
+    }
+
     private func makeJoinPreview(
         groupID: UUID,
         alreadyJoined: Bool
@@ -398,6 +474,23 @@ final class ShareViewModelTests: XCTestCase {
             role: role,
             isMe: isMe,
             joinedAt: "2026-07-15T10:15:30Z"
+        )
+    }
+
+    private func makeChatItem(
+        id: UUID,
+        content: String,
+        isAuthor: Bool = false
+    ) -> ChatTimelineItemResponse {
+        ChatTimelineItemResponse(
+            type: .chatMessage,
+            id: id,
+            photoId: nil,
+            content: content,
+            author: ChatAuthorResponse(userId: nil, displayName: "집집이"),
+            isAuthor: isAuthor,
+            createdAt: "2026-07-15T10:15:30Z",
+            updatedAt: "2026-07-15T10:15:30Z"
         )
     }
 
@@ -473,6 +566,22 @@ private struct StubShareGroupAPI: ShareGroupAPI {
     func deleteGroup(groupID: UUID) async throws {}
 
     func leaveGroup(groupID: UUID) async throws {}
+
+    func fetchChatTimeline(
+        groupID: UUID,
+        cursor: String?,
+        size: Int
+    ) async throws -> ChatTimelinePageResponse {
+        ChatTimelinePageResponse(items: [], nextCursor: nil, hasNext: false)
+    }
+
+    func createChatMessage(
+        groupID: UUID,
+        content: String,
+        idempotencyKey: UUID
+    ) async throws -> ChatMessageResponse {
+        throw URLError(.unsupportedURL)
+    }
 }
 
 private struct UnavailableShareGroupAPI: ShareGroupAPI {
@@ -525,6 +634,22 @@ private struct UnavailableShareGroupAPI: ShareGroupAPI {
     }
 
     func leaveGroup(groupID: UUID) async throws {
+        throw URLError(.notConnectedToInternet)
+    }
+
+    func fetchChatTimeline(
+        groupID: UUID,
+        cursor: String?,
+        size: Int
+    ) async throws -> ChatTimelinePageResponse {
+        throw URLError(.notConnectedToInternet)
+    }
+
+    func createChatMessage(
+        groupID: UUID,
+        content: String,
+        idempotencyKey: UUID
+    ) async throws -> ChatMessageResponse {
         throw URLError(.notConnectedToInternet)
     }
 }
@@ -598,25 +723,47 @@ private final class JoinTrackingShareGroupAPI: ShareGroupAPI {
     func leaveGroup(groupID: UUID) async throws {
         throw URLError(.unsupportedURL)
     }
+
+    func fetchChatTimeline(
+        groupID: UUID,
+        cursor: String?,
+        size: Int
+    ) async throws -> ChatTimelinePageResponse {
+        ChatTimelinePageResponse(items: [], nextCursor: nil, hasNext: false)
+    }
+
+    func createChatMessage(
+        groupID: UUID,
+        content: String,
+        idempotencyKey: UUID
+    ) async throws -> ChatMessageResponse {
+        throw URLError(.unsupportedURL)
+    }
 }
 
 private final class ManagementTrackingShareGroupAPI: ShareGroupAPI {
     let groupID: UUID
     let role: ShareGroupRoleResponse
     var memberPages: [ShareGroupMemberListPageResponse]
+    var chatPages: [ChatTimelinePageResponse]
     private(set) var memberCursors: [String?] = []
     private(set) var updatedNames: [String] = []
     private(set) var deletedGroupIDs: [UUID] = []
     private(set) var leftGroupIDs: [UUID] = []
+    private(set) var chatCursors: [String?] = []
+    private(set) var sentChatContents: [String] = []
+    private(set) var chatIdempotencyKeys: [UUID] = []
 
     init(
         groupID: UUID,
         role: ShareGroupRoleResponse,
-        memberPages: [ShareGroupMemberListPageResponse] = []
+        memberPages: [ShareGroupMemberListPageResponse] = [],
+        chatPages: [ChatTimelinePageResponse] = []
     ) {
         self.groupID = groupID
         self.role = role
         self.memberPages = memberPages
+        self.chatPages = chatPages
     }
 
     func fetchGroups(cursor: String?, size: Int) async throws -> ShareGroupListPageResponse {
@@ -690,5 +837,33 @@ private final class ManagementTrackingShareGroupAPI: ShareGroupAPI {
 
     func leaveGroup(groupID: UUID) async throws {
         leftGroupIDs.append(groupID)
+    }
+
+    func fetchChatTimeline(
+        groupID: UUID,
+        cursor: String?,
+        size: Int
+    ) async throws -> ChatTimelinePageResponse {
+        chatCursors.append(cursor)
+        return chatPages.isEmpty
+            ? ChatTimelinePageResponse(items: [], nextCursor: nil, hasNext: false)
+            : chatPages.removeFirst()
+    }
+
+    func createChatMessage(
+        groupID: UUID,
+        content: String,
+        idempotencyKey: UUID
+    ) async throws -> ChatMessageResponse {
+        sentChatContents.append(content)
+        chatIdempotencyKeys.append(idempotencyKey)
+        return ChatMessageResponse(
+            id: UUID(),
+            content: content,
+            author: ChatAuthorResponse(userId: nil, displayName: "집집이"),
+            isAuthor: true,
+            createdAt: "2026-07-15T10:15:30Z",
+            updatedAt: "2026-07-15T10:15:30Z"
+        )
     }
 }

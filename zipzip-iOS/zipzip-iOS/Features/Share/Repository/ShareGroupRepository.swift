@@ -35,6 +35,23 @@ struct ShareGroupMemberPage {
     let hasNext: Bool
 }
 
+struct ShareGroupChatItem: Identifiable, Equatable {
+    let id: UUID
+    let type: ChatTimelineItemTypeResponse
+    let photoID: UUID?
+    let content: String
+    let author: ShareGroupUser?
+    let isAuthor: Bool
+    let createdAt: Date
+    let updatedAt: Date
+}
+
+struct ShareGroupChatPage {
+    let items: [ShareGroupChatItem]
+    let nextCursor: String?
+    let hasNext: Bool
+}
+
 enum ShareGroupRepositoryError: Error, Equatable {
     case groupNotFound
     case invalidInviteCode
@@ -61,6 +78,12 @@ protocol ShareGroupRepository {
     func updateGroupName(id: ShareAlbum.ID, name: String) async throws
     func deleteRemoteGroup(id: ShareAlbum.ID) async throws
     func leaveGroup(id: ShareAlbum.ID) async throws
+    func chatTimeline(groupID: ShareAlbum.ID, cursor: String?, size: Int) async throws -> ShareGroupChatPage
+    func createChatMessage(
+        groupID: ShareAlbum.ID,
+        content: String,
+        idempotencyKey: UUID
+    ) async throws
     func removeCachedGroup(id: ShareAlbum.ID) async throws
 }
 
@@ -240,6 +263,39 @@ final class DefaultShareGroupRepository: ShareGroupRepository {
         }
     }
 
+    func chatTimeline(
+        groupID: ShareAlbum.ID,
+        cursor: String?,
+        size: Int
+    ) async throws -> ShareGroupChatPage {
+        do {
+            let page = try await api.fetchChatTimeline(groupID: groupID, cursor: cursor, size: size)
+            return ShareGroupChatPage(
+                items: page.items.map(Self.makeChatItem),
+                nextCursor: page.nextCursor,
+                hasNext: page.hasNext
+            )
+        } catch let error as NetworkError where error.serverCode == "SHARED_GROUP_NOT_FOUND" {
+            throw ShareGroupRepositoryError.groupNotFound
+        }
+    }
+
+    func createChatMessage(
+        groupID: ShareAlbum.ID,
+        content: String,
+        idempotencyKey: UUID
+    ) async throws {
+        do {
+            _ = try await api.createChatMessage(
+                groupID: groupID,
+                content: content,
+                idempotencyKey: idempotencyKey
+            )
+        } catch let error as NetworkError where error.serverCode == "SHARED_GROUP_NOT_FOUND" {
+            throw ShareGroupRepositoryError.groupNotFound
+        }
+    }
+
     func removeCachedGroup(id: ShareAlbum.ID) async throws {
         try await store.deleteGroup(id: id)
     }
@@ -285,6 +341,19 @@ final class DefaultShareGroupRepository: ShareGroupRepository {
     private static func makeUser(id: UUID?, displayName: String?) -> ShareGroupUser? {
         guard id != nil || displayName != nil else { return nil }
         return ShareGroupUser(id: id, displayName: displayName)
+    }
+
+    private static func makeChatItem(_ response: ChatTimelineItemResponse) -> ShareGroupChatItem {
+        ShareGroupChatItem(
+            id: response.id,
+            type: response.type,
+            photoID: response.photoId,
+            content: response.content,
+            author: makeUser(id: response.author.userId, displayName: response.author.displayName),
+            isAuthor: response.isAuthor,
+            createdAt: date(response.createdAt) ?? .distantPast,
+            updatedAt: date(response.updatedAt) ?? .distantPast
+        )
     }
 
     private static func date(_ value: String?) -> Date? {

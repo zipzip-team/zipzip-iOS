@@ -183,6 +183,47 @@ final class ShareGroupAPITests: XCTestCase {
         XCTAssertEqual(provider.request?.httpMethod, "DELETE")
     }
 
+    @MainActor
+    func testChatTimelineRequestMatchesDocumentedContract() async throws {
+        let provider = ShareGroupRecordingNetworkProvider(json: Self.chatTimelineJSON)
+        let api = DefaultShareGroupAPI(networkProvider: provider)
+        let groupID = try XCTUnwrap(UUID(uuidString: "11111111-1111-1111-1111-111111111111"))
+
+        let response = try await api.fetchChatTimeline(groupID: groupID, cursor: "chat-cursor", size: 30)
+
+        XCTAssertEqual(response.items.first?.type, .photoComment)
+        let request = try XCTUnwrap(provider.request)
+        XCTAssertEqual(request.url?.path, "/api/v1/shared-groups/\(groupID.uuidString)/chat-messages")
+        XCTAssertEqual(request.httpMethod, "GET")
+        let queryItems = try XCTUnwrap(URLComponents(
+            url: try XCTUnwrap(request.url),
+            resolvingAgainstBaseURL: false
+        )?.queryItems)
+        XCTAssertEqual(queryItems.first(where: { $0.name == "cursor" })?.value, "chat-cursor")
+        XCTAssertEqual(queryItems.first(where: { $0.name == "size" })?.value, "30")
+    }
+
+    @MainActor
+    func testCreateChatMessageRequestMatchesDocumentedContract() async throws {
+        let provider = ShareGroupRecordingNetworkProvider(json: Self.chatMessageJSON)
+        let api = DefaultShareGroupAPI(networkProvider: provider)
+        let groupID = try XCTUnwrap(UUID(uuidString: "11111111-1111-1111-1111-111111111111"))
+        let idempotencyKey = UUID()
+
+        let response = try await api.createChatMessage(
+            groupID: groupID,
+            content: "사진 더 올려줘",
+            idempotencyKey: idempotencyKey
+        )
+
+        XCTAssertEqual(response.content, "사진 더 올려줘")
+        let request = try XCTUnwrap(provider.request)
+        XCTAssertEqual(request.url?.path, "/api/v1/shared-groups/\(groupID.uuidString)/chat-messages")
+        XCTAssertEqual(request.httpMethod, "POST")
+        XCTAssertEqual(request.value(forHTTPHeaderField: "Idempotency-Key"), idempotencyKey.uuidString)
+        XCTAssertEqual(try requestBody(request)["content"] as? String, "사진 더 올려줘")
+    }
+
     private func requestBody(_ request: URLRequest) throws -> [String: Any] {
         let data = try XCTUnwrap(request.httpBody)
         return try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
@@ -327,6 +368,44 @@ final class ShareGroupAPITests: XCTestCase {
       "code": "SUCCESS",
       "message": "success",
       "data": null
+    }
+    """
+
+    private static let chatTimelineJSON = """
+    {
+      "data": {
+        "items": [{
+          "type": "PHOTO_COMMENT",
+          "id": "55555555-5555-5555-5555-555555555555",
+          "photoId": "66666666-6666-6666-6666-666666666666",
+          "content": "사진 너무 좋다",
+          "author": {
+            "userId": null,
+            "displayName": "집집이"
+          },
+          "isAuthor": false,
+          "createdAt": "2026-07-15T10:15:30Z",
+          "updatedAt": "2026-07-15T10:15:30Z"
+        }],
+        "nextCursor": null,
+        "hasNext": false
+      }
+    }
+    """
+
+    private static let chatMessageJSON = """
+    {
+      "data": {
+        "id": "55555555-5555-5555-5555-555555555555",
+        "content": "사진 더 올려줘",
+        "author": {
+          "userId": null,
+          "displayName": "집집이"
+        },
+        "isAuthor": true,
+        "createdAt": "2026-07-15T10:15:30Z",
+        "updatedAt": "2026-07-15T10:15:30Z"
+      }
     }
     """
 }

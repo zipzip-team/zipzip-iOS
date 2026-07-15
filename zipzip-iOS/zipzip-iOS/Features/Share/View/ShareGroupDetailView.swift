@@ -85,7 +85,7 @@ struct ShareGroupDetailView: View {
                             router.push(.shareImport(groupID))
                         },
                         .init(id: "open-comments", icon: .chatStroke, accessibilityLabel: "댓글") {
-                            viewModel.isCommentsPresented = true
+                            viewModel.presentComments(groupID: groupID)
                         }
                     ])
                 }
