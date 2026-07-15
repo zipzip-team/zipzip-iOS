@@ -53,7 +53,7 @@ struct DateFilterSheet: View {
 
             let photos = photosVM.photos(on: date)
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 4) {
+                LazyHStack(spacing: 4) {
                     ForEach(photos) { photo in
                         PhotoThumbnail(image: photosVM.thumbnailImages[photo.localIdentifier])
                             .frame(width: 88, height: 88)
