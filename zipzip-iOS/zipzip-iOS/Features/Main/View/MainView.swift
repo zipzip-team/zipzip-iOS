@@ -79,7 +79,7 @@ struct MainView: View {
         }
         .foregroundStyle(.grey1000)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("집집에서 정리한 사진 \(organizedPhotoCount)장")
+        .accessibilityLabel("집집에 모인 사진 \(organizedPhotoCount)장")
     }
 
     private var unresolvedPhotosSection: some View {
