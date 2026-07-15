@@ -11,6 +11,7 @@ import UIKit
 struct MyPageView: View {
     @Environment(Router.self) private var router
     @Environment(AuthenticationState.self) private var authenticationState
+    @Environment(UserProfileState.self) private var userProfileState
     @Environment(\.openURL) private var openURL
     @State private var viewModel: MyPageViewModel
     @State private var showsLogoutConfirmation = false
@@ -27,6 +28,7 @@ struct MyPageView: View {
     }
 
     var body: some View {
+        @Bindable var userProfileState = userProfileState
         MyPageContainerView {
             RoundedIconButton(items: [
                 .init(id: "back", icon: .iconChevronLeft, accessibilityLabel: "") { router.pop() }
@@ -70,6 +72,14 @@ struct MyPageView: View {
         } message: {
             Text("탈퇴가 완료된 뒤 이 기기의 로그인 정보가 삭제돼요.")
         }
+        .alert("프로필을 불러오지 못했어요", isPresented: $userProfileState.isErrorAlertPresented) {
+            Button("다시 시도") {
+                Task { await userProfileState.retry() }
+            }
+            Button("확인", role: .cancel, action: userProfileState.dismissErrorAlert)
+        } message: {
+            Text(userProfileState.errorAlertMessage)
+        }
     }
 
     private var loginSection: some View {
@@ -85,7 +95,7 @@ struct MyPageView: View {
                     ProfileImage(size: 44, isStroke: false)
 
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(user.displayName)
+                        Text(userProfileState.resolvedDisplayName(for: user))
                             .font(.t2_sb)
                             .foregroundStyle(.grey1000)
                             .lineLimit(1)
@@ -234,5 +244,6 @@ struct MyPageView: View {
         MyPageView()
             .environment(Router())
             .environment(AuthenticationState.preview())
+            .environment(UserProfileState.preview())
     }
 #endif

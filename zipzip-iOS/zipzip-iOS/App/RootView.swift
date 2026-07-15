@@ -181,6 +181,13 @@ struct RootView: View {
                 shareViewModel.resetRemoteData()
             }
         }
+        .task(id: authenticationState.currentUser?.id) {
+            if let user = authenticationState.currentUser {
+                await container.userProfileState.load(for: user)
+            } else {
+                container.userProfileState.reset()
+            }
+        }
         .onChange(of: scenePhase) { _, phase in
             guard phase == .active else { return }
             Task { await authenticationState.checkAppleCredentialState() }
