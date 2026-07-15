@@ -78,6 +78,9 @@ final class ShareGroupAPITests: XCTestCase {
         XCTAssertEqual(response.id, expectedID)
         XCTAssertEqual(response.name, "우리 가족")
         XCTAssertEqual(response.inviteCode, "ZZ7K9P2Q")
+        XCTAssertEqual(response.myRole, .host)
+        XCTAssertEqual(response.createdBy.displayName, "집집이")
+        XCTAssertEqual(response.createdAt, "2026-07-03T10:15:30Z")
 
         let request = try XCTUnwrap(provider.request)
         XCTAssertEqual(request.url?.path, "/api/v1/shared-groups")
@@ -353,7 +356,13 @@ final class ShareGroupAPITests: XCTestCase {
       "data": {
         "id": "11111111-1111-1111-1111-111111111111",
         "name": "우리 가족",
-        "inviteCode": "ZZ7K9P2Q"
+        "inviteCode": "ZZ7K9P2Q",
+        "myRole": "HOST",
+        "createdBy": {
+          "userId": "22222222-2222-2222-2222-222222222222",
+          "displayName": "집집이"
+        },
+        "createdAt": "2026-07-03T10:15:30Z"
       }
     }
     """

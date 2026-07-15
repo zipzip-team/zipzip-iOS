@@ -175,13 +175,14 @@ nonisolated struct SharedGroupStore {
         }
     }
 
-    func upsertCreatedGroup(_ response: CreateSharedGroupResponse, createdAt: Date = .now) async throws {
+    func upsertCreatedGroup(_ response: CreateSharedGroupResponse) async throws {
         try await database.write { db in
+            let createdAt = Self.date(response.createdAt)
             try SharedGroupRecord.upsert {
                 SharedGroupRecord.Draft(
                     id: response.id.uuidString,
-                    createdByUserID: nil,
-                    createdByDisplayName: nil,
+                    createdByUserID: response.createdBy.userId?.uuidString,
+                    createdByDisplayName: response.createdBy.displayName,
                     name: response.name,
                     inviteCode: response.inviteCode,
                     createdAt: createdAt,
@@ -190,7 +191,7 @@ nonisolated struct SharedGroupStore {
                     memberCount: 1,
                     sharedAlbumCount: 0,
                     photoCount: 0,
-                    myRole: ShareGroupRoleResponse.host.rawValue
+                    myRole: response.myRole.rawValue
                 )
             }
             .execute(db)

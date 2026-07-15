@@ -26,7 +26,13 @@ final class ShareViewModelTests: XCTestCase {
         let response = CreateSharedGroupResponse(
             id: try XCTUnwrap(UUID(uuidString: "11111111-1111-1111-1111-111111111111")),
             name: "우리 가족",
-            inviteCode: "ZZ7K9P2Q"
+            inviteCode: "ZZ7K9P2Q",
+            myRole: .host,
+            createdBy: ShareGroupUserResponse(
+                userId: try XCTUnwrap(UUID(uuidString: "22222222-2222-2222-2222-222222222222")),
+                displayName: "집집이"
+            ),
+            createdAt: "2026-07-03T10:15:30Z"
         )
         let store = try makeStore()
         let viewModel = ShareViewModel(
@@ -48,6 +54,11 @@ final class ShareViewModelTests: XCTestCase {
         XCTAssertEqual(viewModel.inviteCode, response.inviteCode)
         let storedGroups = try await store.fetchGroups()
         XCTAssertEqual(storedGroups.map(\.id), [response.id])
+        let storedGroup = try XCTUnwrap(storedGroups.first)
+        XCTAssertEqual(storedGroup.role, ShareGroupRoleResponse.host.rawValue)
+        XCTAssertEqual(storedGroup.createdByUserID, response.createdBy.userId)
+        XCTAssertEqual(storedGroup.createdByDisplayName, response.createdBy.displayName)
+        XCTAssertEqual(storedGroup.date.timeIntervalSince1970, 1_783_073_730, accuracy: 0.001)
 
         let restoredViewModel = ShareViewModel(
             repository: makeRepository(api: UnavailableShareGroupAPI(), store: store)

@@ -1,3 +1,4 @@
+import Alamofire
 import XCTest
 @testable import zipzip_iOS
 
@@ -158,6 +159,33 @@ final class AuthenticationCoreTests: XCTestCase {
         XCTAssertEqual(api.refreshCount, 1)
         let blockedCode = await store.credential?.refreshBlockedCode
         XCTAssertEqual(blockedCode, "IDEMPOTENCY_KEY_REUSED")
+    }
+
+    @MainActor
+    func testAuthenticatedRetryPreservesServerErrorCode() async throws {
+        let store = TestCredentialStore(initial: sessionCredential())
+        let authAPI = TestAuthAPI(delay: .zero)
+        let controller = SessionCredentialController(store: store, authAPI: authAPI)
+        _ = try await controller.restore()
+        let recordingProvider = UnauthorizedThenConflictNetworkProvider()
+        var didLoseAuthentication = false
+        let provider = AuthenticatedNetworkProvider(
+            provider: recordingProvider,
+            credentialController: controller,
+            onAuthenticationLost: { didLoseAuthentication = true }
+        )
+
+        do {
+            let _: APIVoidEnvelope = try await provider.request(ProtectedTestEndpoint())
+            XCTFail("인증 갱신 뒤 서버 충돌 응답을 그대로 전달해야 합니다.")
+        } catch let error as NetworkError {
+            XCTAssertEqual(error.statusCode, 409)
+            XCTAssertEqual(error.serverCode, "IDEMPOTENCY_KEY_REUSED")
+        }
+
+        XCTAssertEqual(recordingProvider.requestCount, 2)
+        XCTAssertEqual(authAPI.refreshCount, 1)
+        XCTAssertFalse(didLoseAuthentication)
     }
 
     @MainActor
@@ -502,4 +530,35 @@ private final class RecordingNetworkProvider: NetworkProvider {
 
         return try JSONDecoder().decode(T.self, from: Data(json.utf8))
     }
+}
+
+@MainActor
+private final class UnauthorizedThenConflictNetworkProvider: NetworkProvider {
+    private(set) var requestCount = 0
+
+    func request<T: Decodable>(_ endpoint: APIEndpoint) async throws -> T {
+        requestCount += 1
+        if requestCount == 1 {
+            throw NetworkError.server(
+                statusCode: 401,
+                code: "UNAUTHORIZED",
+                message: "expired",
+                body: nil
+            )
+        }
+        throw NetworkError.server(
+            statusCode: 409,
+            code: "IDEMPOTENCY_KEY_REUSED",
+            message: "conflict",
+            body: nil
+        )
+    }
+}
+
+private struct ProtectedTestEndpoint: APIEndpoint {
+    let path = "/api/v1/protected-test"
+    let method: HTTPMethod = .get
+    let headers: HTTPHeaders? = nil
+    let parameters: Parameters? = nil
+    let encoding: ParameterEncoding = URLEncoding.default
 }

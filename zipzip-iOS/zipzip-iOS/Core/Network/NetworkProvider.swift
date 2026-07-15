@@ -40,7 +40,7 @@ final class DefaultNetworkProvider: NetworkProvider {
         }
     }
 
-    private func mapError(_ afError: AFError, statusCode: Int?, data: Data?) -> NetworkError {
+    func mapError(_ afError: AFError, statusCode: Int?, data: Data?) -> NetworkError {
         if case let .sessionTaskFailed(error as URLError) = afError {
             let transientCodes: Set<URLError.Code> = [
                 .cannotConnectToHost,
@@ -55,7 +55,14 @@ final class DefaultNetworkProvider: NetworkProvider {
             }
         }
 
-        guard let statusCode = statusCode ?? afError.responseCode else {
+        let statusCode = statusCode ?? afError.responseCode
+        if let statusCode,
+           200 ..< 300 ~= statusCode,
+           case .responseSerializationFailed = afError {
+            return .decodingError
+        }
+
+        guard let statusCode else {
             if case .responseSerializationFailed = afError {
                 return .decodingError
             }

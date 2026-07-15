@@ -239,6 +239,9 @@ nonisolated struct CreateSharedGroupResponse: Decodable {
     let id: UUID
     let name: String
     let inviteCode: String
+    let myRole: ShareGroupRoleResponse
+    let createdBy: ShareGroupUserResponse
+    let createdAt: String
 }
 
 nonisolated struct ShareGroupJoinPreviewResponse: Decodable {
