@@ -7,15 +7,15 @@ import Foundation
 import Observation
 
 struct AlbumDetailActions {
-    let onRename: (String) -> Void
-    let onDelete: () -> Void
+    let onRename: (String) async -> Bool
+    let onDelete: () async -> Bool
     let onAddPhotos: ([String]) -> Void
     let onDeletePhotos: ([UUID], PhotoDeletionAction) -> Void
     let onMovePhotos: ([UUID], [ShareDestination]) -> Void
 
     init(
-        onRename: @escaping (String) -> Void = { _ in },
-        onDelete: @escaping () -> Void = {},
+        onRename: @escaping (String) async -> Bool = { _ in true },
+        onDelete: @escaping () async -> Bool = { true },
         onAddPhotos: @escaping ([String]) -> Void = { _ in },
         onDeletePhotos: @escaping ([UUID], PhotoDeletionAction) -> Void = { _, _ in },
         onMovePhotos: @escaping ([UUID], [ShareDestination]) -> Void = { _, _ in }
@@ -37,6 +37,8 @@ final class AlbumDetailViewModel {
     var isMoveSheetPresented = false
     var isDeleteAlertPresented = false
     var albumTitleDraft = ""
+    private(set) var isUpdatingAlbum = false
+    private(set) var isDeletingAlbum = false
 
     private(set) var selectedPhotoIDs: [UUID] = []
     private var shouldPresentAlbumDeleteAlertAfterManagementDismissal = false
@@ -99,16 +101,19 @@ final class AlbumDetailViewModel {
     }
 
     func dismissAlbumManagement() {
+        guard !isUpdatingAlbum else { return }
         isAlbumManagementPresented = false
     }
 
-    func completeAlbumManagement() {
+    func completeAlbumManagement() async {
         let trimmedTitle = albumTitleDraft.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmedTitle.isEmpty else {
+        guard !trimmedTitle.isEmpty, !isUpdatingAlbum else {
             return
         }
 
-        actions.onRename(trimmedTitle)
+        isUpdatingAlbum = true
+        defer { isUpdatingAlbum = false }
+        guard await actions.onRename(trimmedTitle) else { return }
         isAlbumManagementPresented = false
     }
 
@@ -121,10 +126,13 @@ final class AlbumDetailViewModel {
         isAlbumDeleteAlertPresented = false
     }
 
-    func confirmAlbumDeletion() {
+    func confirmAlbumDeletion() async {
+        guard !isDeletingAlbum else { return }
+        isDeletingAlbum = true
+        defer { isDeletingAlbum = false }
+        guard await actions.onDelete() else { return }
         isAlbumDeleteAlertPresented = false
         isAlbumManagementPresented = false
-        actions.onDelete()
     }
 
     func completeAlbumManagementDismissal() {

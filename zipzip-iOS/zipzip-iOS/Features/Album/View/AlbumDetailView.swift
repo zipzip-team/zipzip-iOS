@@ -14,6 +14,20 @@ struct AlbumDetailItem: Hashable, Identifiable {
     let photoCount: Int
 }
 
+struct AlbumDeletionAlertContent {
+    let title: String
+    let message: String
+
+    static let personal = AlbumDeletionAlertContent(
+        title: "이 사진집을 삭제하시겠어요?",
+        message: "사진집에 담긴 사진들은 삭제되지 않아요."
+    )
+    static let shared = AlbumDeletionAlertContent(
+        title: "이 사진집을 삭제하시겠어요?",
+        message: "삭제하기 전에 로컬 앨범에 저장하세요.\n로컬 앨범에 저장되지 않은 사진은 완전히 삭제돼요."
+    )
+}
+
 struct AlbumDetailView<Content: View>: View {
     @Environment(\.dismiss) private var dismiss
     @State private var viewModel: AlbumDetailViewModel
@@ -25,6 +39,7 @@ struct AlbumDetailView<Content: View>: View {
     private let moveAlbums: [Album]
     private let shareAlbums: [ShareAlbum]
     private let onOpenShareAlbum: (ShareAlbum.ID) async -> Void
+    private let albumDeletionAlertContent: AlbumDeletionAlertContent
 
     init(
         album: AlbumDetailItem,
@@ -34,6 +49,7 @@ struct AlbumDetailView<Content: View>: View {
         moveAlbums: [Album] = [],
         shareAlbums: [ShareAlbum] = [],
         onOpenShareAlbum: @escaping (ShareAlbum.ID) async -> Void = { _ in },
+        albumDeletionAlertContent: AlbumDeletionAlertContent = .personal,
         @ViewBuilder content: @escaping (AlbumDetailViewModel) -> Content
     ) {
         self.album = album
@@ -44,6 +60,7 @@ struct AlbumDetailView<Content: View>: View {
         self.moveAlbums = moveAlbums
         self.shareAlbums = shareAlbums
         self.onOpenShareAlbum = onOpenShareAlbum
+        self.albumDeletionAlertContent = albumDeletionAlertContent
     }
 
     var body: some View {
@@ -89,30 +106,41 @@ struct AlbumDetailView<Content: View>: View {
             initialDetent: .height(549),
             showsDragIndicator: .visible,
             expandsToLargestDetentOnScroll: false,
+            isInteractiveDismissDisabled: viewModel.isUpdatingAlbum,
             onDismiss: viewModel.completeAlbumManagementDismissal
         ) { _ in
             BottomSheet(
                 leftItem: {
                     BottomSheetCloseButton(action: viewModel.dismissAlbumManagement)
+                        .disabled(viewModel.isUpdatingAlbum)
                 },
                 rightItem: {
-                    AlbumManagementSheetHeaderButton(title: "삭제", action: viewModel.presentAlbumDeleteAlert)
+                    AlbumManagementSheetHeaderButton(
+                        title: "삭제",
+                        isDisabled: viewModel.isUpdatingAlbum,
+                        action: viewModel.presentAlbumDeleteAlert
+                    )
                 }
             ) {
                 AlbumManagementSheetContent(
                     albumName: $viewModel.albumTitleDraft,
-                    onCompleteTap: viewModel.completeAlbumManagement
+                    isBusy: viewModel.isUpdatingAlbum,
+                    onCompleteTap: {
+                        Task { await viewModel.completeAlbumManagement() }
+                    }
                 )
             }
         }
         .bottomSheetAlert(
             isPresented: $viewModel.isAlbumDeleteAlertPresented,
-            title: "이 사진집을 삭제하시겠어요?",
-            message: "사진집에 담긴 사진들은 삭제되지 않아요.",
+            title: albumDeletionAlertContent.title,
+            message: albumDeletionAlertContent.message,
             secondaryTitle: "취소",
             primaryTitle: "삭제",
             onSecondaryTap: viewModel.dismissAlbumDeleteAlert,
-            onPrimaryTap: viewModel.confirmAlbumDeletion
+            onPrimaryTap: {
+                Task { await viewModel.confirmAlbumDeletion() }
+            }
         )
         .bottomSheet(isPresented: $viewModel.isMoveSheetPresented, detents: [.full]) { sheetDismiss in
             ShareSheet(
@@ -276,6 +304,7 @@ private struct AlbumDetailTitleSection: View {
 
 private struct AlbumManagementSheetHeaderButton: View {
     let title: String
+    let isDisabled: Bool
     let action: () -> Void
 
     var body: some View {
@@ -287,12 +316,14 @@ private struct AlbumManagementSheetHeaderButton: View {
                 .contentShape(.rect)
         }
         .buttonStyle(.plain)
+        .disabled(isDisabled)
     }
 }
 
 private struct AlbumManagementSheetContent: View {
     @Binding var albumName: String
 
+    let isBusy: Bool
     let onCompleteTap: () -> Void
 
     var body: some View {
@@ -316,6 +347,7 @@ private struct AlbumManagementSheetContent: View {
                     property1: isCompletionDisabled ? .disabled : .cta,
                     action: onCompleteTap
                 )
+                .disabled(isCompletionDisabled)
             }
             .frame(maxWidth: 358)
         }
@@ -325,7 +357,7 @@ private struct AlbumManagementSheetContent: View {
     }
 
     private var isCompletionDisabled: Bool {
-        albumName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        isBusy || albumName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 }
 

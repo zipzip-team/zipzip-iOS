@@ -187,21 +187,19 @@ final class ShareViewModel {
         AlbumDetailViewModel(
             actions: AlbumDetailActions(
                 onRename: { [weak self] name in
-                    Task {
-                        await self?.renameSharedAlbum(
-                            id: albumID,
-                            in: groupID,
-                            name: name
-                        )
-                    }
+                    guard let self else { return false }
+                    return await self.renameSharedAlbum(
+                        id: albumID,
+                        in: groupID,
+                        name: name
+                    )
                 },
                 onDelete: { [weak self] in
-                    Task {
-                        guard await self?.deleteSharedAlbum(id: albumID, from: groupID) == true else {
-                            return
-                        }
-                        onDelete()
-                    }
+                    guard let self,
+                          await self.deleteSharedAlbum(id: albumID, from: groupID)
+                    else { return false }
+                    onDelete()
+                    return true
                 },
                 onAddPhotos: { _ in
                     // TODO: 정교은 담당 API가 합쳐지면 upload-urls 요청, object storage PUT,
@@ -938,7 +936,10 @@ final class ShareViewModel {
     func completeShareManagement() async {
         guard let group = managedShareGroup, !isUpdatingGroup else { return }
         guard group.currentUserRole == .admin else {
-            dismissShareManagement()
+            presentError(
+                ShareGroupRepositoryError.hostRequired,
+                fallback: "공유 그룹 이름은 방장만 변경할 수 있어요."
+            )
             return
         }
 

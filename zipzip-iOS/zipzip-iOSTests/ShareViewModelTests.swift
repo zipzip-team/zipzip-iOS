@@ -625,7 +625,10 @@ final class ShareViewModelTests: XCTestCase {
         await viewModel.completeShareManagement()
 
         XCTAssertTrue(api.updatedNames.isEmpty)
-        viewModel.presentShareManagement(groupID: groupID)
+        XCTAssertTrue(viewModel.isShareManagementPresented)
+        XCTAssertTrue(viewModel.isErrorAlertPresented)
+        XCTAssertEqual(viewModel.errorAlertMessage, "방장만 변경할 수 있어요.")
+        viewModel.dismissErrorAlert()
         let didLeave = await viewModel.leaveManagedShareGroup()
 
         XCTAssertTrue(didLeave)
@@ -740,6 +743,58 @@ final class ShareViewModelTests: XCTestCase {
         XCTAssertTrue(didDelete)
         XCTAssertEqual(api.deletedAlbumIDs, [albumID])
         XCTAssertTrue(viewModel.group(withID: groupID)?.albums.isEmpty == true)
+    }
+
+    @MainActor
+    func testSharedAlbumManagementStaysPresentedUntilMutationSucceeds() async throws {
+        let groupID = try XCTUnwrap(UUID(uuidString: "11111111-1111-1111-1111-111111111111"))
+        let albumID = try XCTUnwrap(UUID(uuidString: "33333333-3333-3333-3333-333333333333"))
+        let api = ManagementTrackingShareGroupAPI(
+            groupID: groupID,
+            role: .member,
+            sharedAlbums: [makeSharedAlbum(id: albumID, name: "제주도")],
+            renameSharedAlbumErrors: [.noResponse, nil],
+            deleteSharedAlbumErrors: [.noResponse, nil]
+        )
+        let viewModel = ShareViewModel(
+            repository: makeRepository(api: api, store: try makeStore())
+        )
+        await viewModel.loadGroups(for: testCacheOwnerID)
+        await viewModel.loadSharedAlbums(groupID: groupID)
+        var didDelete = false
+        let detailViewModel = viewModel.makeSharedAlbumDetailViewModel(
+            groupID: groupID,
+            albumID: albumID,
+            onDelete: { didDelete = true }
+        )
+        detailViewModel.presentAlbumManagement(albumTitle: "제주도")
+        detailViewModel.albumTitleDraft = "제주 여름"
+
+        await detailViewModel.completeAlbumManagement()
+
+        XCTAssertTrue(detailViewModel.isAlbumManagementPresented)
+        XCTAssertTrue(viewModel.isErrorAlertPresented)
+        viewModel.dismissErrorAlert()
+
+        await detailViewModel.completeAlbumManagement()
+
+        XCTAssertFalse(detailViewModel.isAlbumManagementPresented)
+        XCTAssertEqual(viewModel.album(groupID: groupID, albumID: albumID)?.name, "제주 여름")
+
+        detailViewModel.presentAlbumManagement(albumTitle: "제주 여름")
+        detailViewModel.presentAlbumDeleteAlert()
+        detailViewModel.completeAlbumManagementDismissal()
+        await detailViewModel.confirmAlbumDeletion()
+
+        XCTAssertTrue(detailViewModel.isAlbumDeleteAlertPresented)
+        XCTAssertFalse(didDelete)
+        XCTAssertTrue(viewModel.isErrorAlertPresented)
+        viewModel.dismissErrorAlert()
+
+        await detailViewModel.confirmAlbumDeletion()
+
+        XCTAssertFalse(detailViewModel.isAlbumDeleteAlertPresented)
+        XCTAssertTrue(didDelete)
     }
 
     @MainActor
@@ -1243,6 +1298,7 @@ private final class ManagementTrackingShareGroupAPI: ShareGroupAPI {
     var sharedAlbums: [SharedAlbumResponse]
     var groupDetailError: NetworkError?
     var groupListErrors: [NetworkError?]
+    var renameSharedAlbumErrors: [NetworkError?]
     var deleteGroupErrors: [NetworkError?]
     var leaveGroupErrors: [NetworkError?]
     var deleteSharedAlbumErrors: [NetworkError?]
@@ -1268,6 +1324,7 @@ private final class ManagementTrackingShareGroupAPI: ShareGroupAPI {
         sharedAlbums: [SharedAlbumResponse] = [],
         groupListErrors: [NetworkError?] = [],
         groupDetailError: NetworkError? = nil,
+        renameSharedAlbumErrors: [NetworkError?] = [],
         deleteGroupErrors: [NetworkError?] = [],
         leaveGroupErrors: [NetworkError?] = [],
         deleteSharedAlbumErrors: [NetworkError?] = [],
@@ -1280,6 +1337,7 @@ private final class ManagementTrackingShareGroupAPI: ShareGroupAPI {
         self.sharedAlbums = sharedAlbums
         self.groupListErrors = groupListErrors
         self.groupDetailError = groupDetailError
+        self.renameSharedAlbumErrors = renameSharedAlbumErrors
         self.deleteGroupErrors = deleteGroupErrors
         self.leaveGroupErrors = leaveGroupErrors
         self.deleteSharedAlbumErrors = deleteSharedAlbumErrors
@@ -1412,6 +1470,9 @@ private final class ManagementTrackingShareGroupAPI: ShareGroupAPI {
     func renameSharedAlbum(id: UUID, name: String) async throws -> SharedAlbumRenameResponse {
         renamedAlbumIDs.append(id)
         renamedAlbumNames.append(name)
+        if !renameSharedAlbumErrors.isEmpty, let error = renameSharedAlbumErrors.removeFirst() {
+            throw error
+        }
         return SharedAlbumRenameResponse(
             id: id,
             name: name,

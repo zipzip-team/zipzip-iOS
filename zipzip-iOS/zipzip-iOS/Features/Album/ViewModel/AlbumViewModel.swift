@@ -201,19 +201,15 @@ final class AlbumViewModel {
         AlbumDetailViewModel(
             actions: AlbumDetailActions(
                 onRename: { [weak self] name in
-                    Task {
-                        await self?.renameAlbum(albumID, to: name)
-                    }
+                    guard let self else { return false }
+                    return await self.renameAlbum(albumID, to: name)
                 },
                 onDelete: { [weak self] in
-                    Task {
-                        guard await self?.deleteAlbums(
-                            ids: [albumID],
-                            beforeLocalStateUpdate: router.pop
-                        ) == true else {
-                            return
-                        }
-                    }
+                    guard let self else { return false }
+                    return await self.deleteAlbums(
+                        ids: [albumID],
+                        beforeLocalStateUpdate: router.pop
+                    )
                 },
                 onAddPhotos: { [weak self] localIdentifiers in
                     Task {
@@ -383,19 +379,20 @@ final class AlbumViewModel {
         return true
     }
 
-    private func renameAlbum(_ albumID: AlbumViewItem.ID, to name: String) async {
+    private func renameAlbum(_ albumID: AlbumViewItem.ID, to name: String) async -> Bool {
         if loadsAlbumsFromDatabase {
             do {
                 try await albumStore.renameAlbum(id: albumID, name: name)
             } catch {
-                return
+                return false
             }
         }
 
         guard let index = albums.firstIndex(where: { $0.id == albumID }) else {
-            return
+            return false
         }
         albums[index].name = name
+        return true
     }
 
     private func deleteAlbums(

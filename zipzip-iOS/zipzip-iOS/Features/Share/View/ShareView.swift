@@ -166,7 +166,8 @@ struct ShareAlbumDetailDestinationView: View {
                     albumID: albumID,
                     onDelete: router.pop
                 ),
-                moveAlbums: []
+                moveAlbums: [],
+                albumDeletionAlertContent: .shared
             ) { _ in
                 // TODO: 정교은 담당 GET 공유집 상세·사진 목록 API가 합쳐지면 응답을
                 // PhotoGallery에 전달하고 cursor 기반 다음 페이지 로딩을 연결합니다.
