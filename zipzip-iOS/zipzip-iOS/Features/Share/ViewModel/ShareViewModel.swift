@@ -211,14 +211,17 @@ final class ShareViewModel {
                 onAddPhotos: { _ in
                     // TODO: 정교은 담당 API가 합쳐지면 upload-urls 요청, object storage PUT,
                     // photos/complete 호출 순서로 업로드한 뒤 공유집 사진 목록을 다시 조회합니다.
+                    false
                 },
                 onDeletePhotos: { _, _ in
                     // TODO: 정교은 담당 detach API가 합쳐지면 선택한 server photo id를
                     // POST /api/v1/shared-albums/{sharedAlbumId}/photos/detach로 제거하고 목록을 갱신합니다.
+                    false
                 },
                 onMovePhotos: { _, _ in
                     // TODO: 정교은 담당 attach/detach API가 합쳐지면 대상 공유집에 먼저 attach하고,
                     // 이동인 경우 원본 공유집에서 detach한 뒤 양쪽 사진 목록을 갱신합니다.
+                    false
                 }
             )
         )

@@ -54,6 +54,12 @@ struct FilteredPictureView: View {
         .task(id: viewModel.appliedFilters) {
             await pictureViewModel.applyFilters(viewModel.appliedFilters)
         }
+        .alert("필터 정보를 불러오지 못했어요.", isPresented: $viewModel.isErrorAlertPresented) {
+            Button("다시 시도") {
+                Task { await viewModel.loadOptions() }
+            }
+            Button("확인", role: .cancel) {}
+        }
         .bottomSheet(isPresented: $viewModel.showDeviceSheet, detents: [.content]) { dismiss in
             DeviceFilterSheet(
                 devices: viewModel.options.devices,
@@ -131,6 +137,11 @@ struct FilteredPictureView: View {
                 Task { await pictureViewModel.deleteSelectedPhotos() }
             }
         )
+        .alert("요청을 완료하지 못했어요.", isPresented: $pictureViewModel.isErrorAlertPresented) {
+            Button("확인", role: .cancel, action: pictureViewModel.dismissErrorAlert)
+        } message: {
+            Text(pictureViewModel.errorAlertMessage)
+        }
         .overlay(alignment: .topLeading) {
             FloatingHeaderBar {
                 topBar

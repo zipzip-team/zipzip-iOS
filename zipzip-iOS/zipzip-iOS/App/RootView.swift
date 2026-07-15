@@ -168,6 +168,16 @@ struct RootView: View {
         } message: {
             Text(shareViewModel.errorAlertMessage)
         }
+        .alert("요청을 완료하지 못했어요", isPresented: $albumViewModel.isErrorAlertPresented) {
+            if albumViewModel.canRetryError {
+                Button("다시 시도") {
+                    Task { await albumViewModel.retryErrorAction() }
+                }
+            }
+            Button("확인", role: .cancel, action: albumViewModel.dismissErrorAlert)
+        } message: {
+            Text(albumViewModel.errorAlertMessage)
+        }
         .task {
             await authenticationState.restore(
                 minimumDuration: hasCompletedOnboarding ? .seconds(2) : .zero
@@ -221,8 +231,8 @@ struct RootView: View {
         }
     }
 
-    private func togglePhotoFavorite(localIdentifier: String, isFavorite: Bool) {
-        albumViewModel.setPhotoFavorite(
+    private func togglePhotoFavorite(localIdentifier: String, isFavorite: Bool) async -> Bool {
+        await albumViewModel.setPhotoFavorite(
             localIdentifier: localIdentifier,
             isFavorite: isFavorite
         )

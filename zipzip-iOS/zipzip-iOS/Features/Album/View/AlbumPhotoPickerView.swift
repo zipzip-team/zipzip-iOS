@@ -57,8 +57,11 @@ struct AlbumPhotoPickerView: View {
 
     private var completionButton: some View {
         RoundedTextButton(title: "완료", style: .cancel) {
-            viewModel.completeSelection()
-            dismiss()
+            Task {
+                if await viewModel.completeSelection() {
+                    dismiss()
+                }
+            }
         }
         .disabled(viewModel.isCompletionDisabled)
         .opacity(viewModel.isCompletionDisabled ? 0.4 : 1)
@@ -69,7 +72,7 @@ struct AlbumPhotoPickerView: View {
     NavigationStack {
         AlbumPhotoPickerView(
             viewModel: AlbumPhotoPickerViewModel(
-                onComplete: { _ in }
+                onComplete: { _ in true }
             )
         )
     }

@@ -149,7 +149,9 @@ struct AlbumDetailView<Content: View>: View {
                 onDismiss: { sheetDismiss() },
                 excludedAlbumIDs: [album.id],
                 onOpenShareAlbum: onOpenShareAlbum,
-                onComplete: viewModel.completePhotoMove
+                onComplete: { destinations in
+                    Task { await viewModel.completePhotoMove(to: destinations) }
+                }
             )
         }
         .bottomSheetAlert(
@@ -158,9 +160,18 @@ struct AlbumDetailView<Content: View>: View {
             message: deleteAlertContent.message,
             secondaryTitle: deleteAlertContent.secondaryTitle,
             primaryTitle: deleteAlertContent.primaryTitle,
-            onSecondaryTap: viewModel.deleteSelectedPhotosPermanently,
-            onPrimaryTap: viewModel.removeSelectedPhotosFromAlbum
+            onSecondaryTap: {
+                Task { await viewModel.deleteSelectedPhotosPermanently() }
+            },
+            onPrimaryTap: {
+                Task { await viewModel.removeSelectedPhotosFromAlbum() }
+            }
         )
+        .alert("요청을 완료하지 못했어요.", isPresented: $viewModel.isErrorAlertPresented) {
+            Button("확인", role: .cancel, action: viewModel.dismissErrorAlert)
+        } message: {
+            Text(viewModel.errorAlertMessage)
+        }
         .navigationBarBackButtonHidden(true)
         .toolbarVisibility(.hidden, for: .navigationBar)
     }

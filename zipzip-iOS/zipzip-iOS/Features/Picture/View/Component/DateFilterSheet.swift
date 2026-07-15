@@ -6,9 +6,12 @@
 //
 
 import SwiftUI
+import UIKit
 
 struct DateFilterSheet: View {
     @Binding var date: Date?
+    @State private var photos: [Photo] = []
+    @State private var isLoadErrorPresented = false
     let onReset: () -> Void
     let onDone: () -> Void
 
@@ -32,6 +35,15 @@ struct DateFilterSheet: View {
                 photosBlock
             }
             .padding(.horizontal, 16)
+        }
+        .task(id: date) {
+            await loadPhotos()
+        }
+        .alert("사진을 불러오지 못했어요.", isPresented: $isLoadErrorPresented) {
+            Button("다시 시도") {
+                Task { await loadPhotos() }
+            }
+            Button("확인", role: .cancel) {}
         }
     }
 
@@ -67,16 +79,53 @@ struct DateFilterSheet: View {
                 .font(.b2_md)
                 .foregroundStyle(.white00)
 
-            // TODO: 실제 선택 날짜의 사진으로 교체 (현재 더미 플레이스홀더)
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 4) {
-                    ForEach(0 ..< 6, id: \.self) { _ in
-                        Color.grey200
-                            .frame(width: 88, height: 88)
+                    ForEach(0 ..< 6, id: \.self) { index in
+                        if photos.indices.contains(index) {
+                            DateFilterPhoto(localIdentifier: photos[index].localIdentifier)
+                                .frame(width: 88, height: 88)
+                        } else {
+                            Color.grey200
+                                .frame(width: 88, height: 88)
+                        }
                     }
                 }
             }
         }
+    }
+
+    private func loadPhotos() async {
+        guard let date else {
+            photos = []
+            isLoadErrorPresented = false
+            return
+        }
+        do {
+            let provider = PhotoSectionsProvider()
+            let library = try await provider.loadLibrary()
+            let filter = AppliedFilter(kind: .date, value: AppliedFilter.dateText(date))
+            photos = await provider.sections(from: library, filters: [filter]).flatMap(\.photos)
+            isLoadErrorPresented = false
+        } catch {
+            photos = []
+            isLoadErrorPresented = true
+        }
+    }
+}
+
+private struct DateFilterPhoto: View {
+    let localIdentifier: String
+    @State private var image: UIImage?
+
+    var body: some View {
+        PhotoThumbnail(image: image)
+            .task(id: localIdentifier) {
+                image = await PhotoThumbnailLoader.shared.thumbnail(
+                    for: localIdentifier,
+                    targetSize: CGSize(width: 176, height: 176)
+                )
+            }
     }
 }
 

@@ -21,6 +21,7 @@ final class FilterViewModel {
         locations: [],
         etcItems: PhotoFilterOptions.defaultEtcItems
     )
+    var isErrorAlertPresented = false
 
     var selectedDevice: String?
     var selectedLocation: String?
@@ -68,6 +69,7 @@ final class FilterViewModel {
             options = try await provider.load()
         } catch {
             Self.logger.error("failed to load filter options: \(error)")
+            isErrorAlertPresented = true
         }
     }
 }
