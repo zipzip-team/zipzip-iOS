@@ -17,11 +17,11 @@ struct PhotoInfoEditView: View {
 
     init(
         metadata: PhotoMetadata,
-        localIdentifiers: [String],
+        viewModel: PhotoInfoEditViewModel,
         onSuccessfulDismiss: @escaping () -> Void = {}
     ) {
         self.metadata = metadata
-        _viewModel = State(initialValue: PhotoInfoEditViewModel(localIdentifiers: localIdentifiers))
+        _viewModel = State(initialValue: viewModel)
         self.onSuccessfulDismiss = onSuccessfulDismiss
     }
 
@@ -60,5 +60,8 @@ struct PhotoInfoEditView: View {
 }
 
 #Preview {
-    PhotoInfoEditView(metadata: PhotoMetadata.samples[0], localIdentifiers: [])
+    PhotoInfoEditView(
+        metadata: PhotoMetadata.samples[0],
+        viewModel: PhotoInfoEditViewModel()
+    )
 }
