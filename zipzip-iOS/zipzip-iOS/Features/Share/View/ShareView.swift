@@ -35,6 +35,11 @@ struct ShareView: View {
             ) { _ in
                 presentedSheetContent
             }
+            .onChange(of: viewModel.completedJoinNavigationGroupID) { _, groupID in
+                guard let groupID else { return }
+                router.push(.shareGroup(groupID))
+                viewModel.consumeCompletedJoinNavigation()
+            }
     }
 
     private var sheetDetents: [BottomSheetSize] {
@@ -73,13 +78,12 @@ struct ShareView: View {
             )
         case .joinConfirmation:
             ShareJoinConfirmationSheet(
-                group: viewModel.pendingJoinGroup,
+                preview: viewModel.pendingJoinPreview,
                 isConfirming: viewModel.isJoiningGroup,
                 onCancel: viewModel.cancelJoinConfirmation,
                 onConfirm: {
                     Task {
-                        guard let groupID = await viewModel.completeJoin() else { return }
-                        router.push(.shareGroup(groupID))
+                        _ = await viewModel.completeJoin()
                     }
                 }
             )
@@ -406,7 +410,7 @@ private struct ShareEntryFormSheet: View {
 }
 
 private struct ShareJoinConfirmationSheet: View {
-    let group: ShareAlbum?
+    let preview: ShareGroupJoinPreview?
     let isConfirming: Bool
     let onCancel: () -> Void
     let onConfirm: () -> Void
@@ -414,17 +418,17 @@ private struct ShareJoinConfirmationSheet: View {
     var body: some View {
         BottomSheet {
             VStack(spacing: 18) {
-                ShareAssetPlaceholder(width: 160, height: 160)
+                representativeImage
 
                 VStack(spacing: 4) {
-                    Text("\(group?.name ?? "공유 그룹")에 들어갈까요?")
+                    Text("\(preview?.group.name ?? "공유 그룹")에 들어갈까요?")
                         .font(.t3_sb)
                         .foregroundStyle(.white00)
-                    Text("생성자: 김집집")
+                    Text("생성자: \(creatorName)")
                         .font(.b3_md)
                         .foregroundStyle(.grey400)
                     HStack(spacing: -8) {
-                        ForEach(0 ..< 4, id: \.self) { _ in
+                        ForEach(0 ..< visibleMemberCount, id: \.self) { _ in
                             ProfileImage(size: 24)
                         }
                     }
@@ -446,6 +450,41 @@ private struct ShareJoinConfirmationSheet: View {
             .padding(.top, 12)
             .padding(.bottom, 49)
         }
+    }
+
+    @ViewBuilder private var representativeImage: some View {
+        if let url = validRepresentativeImageURL {
+            AsyncImage(url: url) { phase in
+                switch phase {
+                case let .success(image):
+                    image
+                        .resizable()
+                        .scaledToFill()
+                        .frame(width: 160, height: 160)
+                        .clipShape(.rect(cornerRadius: 24))
+                default:
+                    ShareAssetPlaceholder(width: 160, height: 160)
+                }
+            }
+        } else {
+            ShareAssetPlaceholder(width: 160, height: 160)
+        }
+    }
+
+    private var validRepresentativeImageURL: URL? {
+        guard let preview else { return nil }
+        if let expiresAt = preview.representativeImageURLExpiresAt, expiresAt <= .now {
+            return nil
+        }
+        return preview.representativeImageURL
+    }
+
+    private var creatorName: String {
+        preview?.group.createdBy?.displayName ?? "-"
+    }
+
+    private var visibleMemberCount: Int {
+        min(preview?.members.count ?? preview?.group.memberCount ?? 0, 4)
     }
 }
 

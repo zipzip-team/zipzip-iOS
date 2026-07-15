@@ -18,6 +18,9 @@ struct CreatedShareGroup {
 
 struct ShareGroupJoinPreview {
     let group: ShareAlbum
+    let representativeImageURL: URL?
+    let representativeImageURLExpiresAt: Date?
+    let members: [ShareGroupMember]
     let alreadyJoined: Bool
 }
 
@@ -221,6 +224,9 @@ final class DefaultShareGroupRepository: ShareGroupRepository {
                         displayName: response.createdBy.displayName
                     )
                 ),
+                representativeImageURL: response.representativeImageUrl.flatMap(URL.init(string:)),
+                representativeImageURLExpiresAt: Self.date(response.representativeImageUrlExpiresAt),
+                members: response.members.map(Self.makeMember),
                 alreadyJoined: response.alreadyJoined
             )
         } catch let error as NetworkError where error.serverCode == "INVALID_INVITE_CODE" {
@@ -475,6 +481,16 @@ final class DefaultShareGroupRepository: ShareGroupRepository {
             isAuthor: response.isAuthor,
             createdAt: date(response.createdAt) ?? .distantPast,
             updatedAt: date(response.updatedAt) ?? .distantPast
+        )
+    }
+
+    private static func makeMember(_ response: ShareGroupMemberResponse) -> ShareGroupMember {
+        ShareGroupMember(
+            id: response.userId,
+            displayName: response.displayName,
+            role: ShareGroupRole(rawValue: response.role.rawValue) ?? .participant,
+            isMe: response.isMe ?? false,
+            joinedAt: date(response.joinedAt) ?? .distantPast
         )
     }
 

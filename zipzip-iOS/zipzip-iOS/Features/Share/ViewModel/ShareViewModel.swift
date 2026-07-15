@@ -59,13 +59,19 @@ final class ShareViewModel {
     var commentDraft = ""
     var shareGroupNameDraft = ""
 
-    private(set) var pendingJoinGroup: ShareAlbum?
+    private(set) var pendingJoinPreview: ShareGroupJoinPreview?
+    private(set) var completedJoinNavigationGroupID: ShareAlbum.ID?
     private(set) var managedShareGroup: ShareAlbum?
+
+    var pendingJoinGroup: ShareAlbum? {
+        pendingJoinPreview?.group
+    }
 
     private var groupCreationName: String?
     private var groupCreationIdempotencyKey: UUID?
     private var joinRequestInviteCode: String?
     private var joinIdempotencyKey: UUID?
+    private var joinedGroupIDAwaitingSync: ShareAlbum.ID?
     private var pendingJoinAlreadyJoined = false
     private var nextGroupCursor: String?
     private var groupsHaveNextPage = false
@@ -613,6 +619,7 @@ final class ShareViewModel {
 
     func presentJoinSheet() {
         resetJoinState()
+        completedJoinNavigationGroupID = nil
         joinCode = ""
         presentSheet(.joinEntry)
     }
@@ -630,7 +637,7 @@ final class ShareViewModel {
             joinCode = trimmedCode
             joinRequestInviteCode = trimmedCode
             joinIdempotencyKey = preview.alreadyJoined ? nil : UUID()
-            pendingJoinGroup = preview.group
+            pendingJoinPreview = preview
             pendingJoinAlreadyJoined = preview.alreadyJoined
             transitionSheet(to: .joinConfirmation)
         } catch let error as ShareGroupRepositoryError {
@@ -651,17 +658,11 @@ final class ShareViewModel {
     }
 
     func completeJoin() async -> ShareAlbum.ID? {
-        guard let pendingJoinGroup,
+        guard let pendingJoinPreview,
               let joinRequestInviteCode,
               !isJoiningGroup
         else {
             return nil
-        }
-
-        if pendingJoinAlreadyJoined {
-            await prepareJoinedGroup(id: pendingJoinGroup.id)
-            finishJoin()
-            return pendingJoinGroup.id
         }
 
         let idempotencyKey = joinIdempotencyKey ?? UUID()
@@ -671,30 +672,52 @@ final class ShareViewModel {
         defer { isJoiningGroup = false }
 
         do {
-            let groupID = try await repository.join(
-                inviteCode: joinRequestInviteCode,
-                idempotencyKey: idempotencyKey
-            )
-            await prepareJoinedGroup(id: groupID)
+            let groupID: ShareAlbum.ID
+            if let joinedGroupIDAwaitingSync {
+                groupID = joinedGroupIDAwaitingSync
+            } else if pendingJoinAlreadyJoined {
+                groupID = pendingJoinPreview.group.id
+            } else {
+                groupID = try await repository.join(
+                    inviteCode: joinRequestInviteCode,
+                    idempotencyKey: idempotencyKey
+                )
+                joinedGroupIDAwaitingSync = groupID
+            }
+            try await prepareJoinedGroup(id: groupID)
+            joinedGroupIDAwaitingSync = nil
+            completedJoinNavigationGroupID = groupID
             finishJoin()
             return groupID
         } catch ShareGroupRepositoryError.alreadyJoined {
-            await prepareJoinedGroup(id: pendingJoinGroup.id)
-            finishJoin()
-            return pendingJoinGroup.id
+            do {
+                joinedGroupIDAwaitingSync = pendingJoinPreview.group.id
+                try await prepareJoinedGroup(id: pendingJoinPreview.group.id)
+                joinedGroupIDAwaitingSync = nil
+                completedJoinNavigationGroupID = pendingJoinPreview.group.id
+                finishJoin()
+                return pendingJoinPreview.group.id
+            } catch {
+                presentJoinError(error)
+                return nil
+            }
         } catch let error as ShareGroupRepositoryError {
             joinErrorCode = String(describing: error)
-            presentError(error, fallback: "공유 그룹에 입장하지 못했어요.")
+            presentJoinError(error)
             return nil
         } catch let error as NetworkError {
             joinErrorCode = error.serverCode ?? "NETWORK_ERROR"
-            presentError(error, fallback: "공유 그룹에 입장하지 못했어요.")
+            presentJoinError(error)
             return nil
         } catch {
             joinErrorCode = "UNKNOWN_ERROR"
-            presentError(error, fallback: "공유 그룹에 입장하지 못했어요.")
+            presentJoinError(error)
             return nil
         }
+    }
+
+    func consumeCompletedJoinNavigation() {
+        completedJoinNavigationGroupID = nil
     }
 
     func presentCreateSheet() {
@@ -1015,8 +1038,8 @@ final class ShareViewModel {
         presentedSheet = nil
         dismissingSheet = nil
         pendingSheet = nil
+        completedJoinNavigationGroupID = nil
         clearCommentsState()
-        pendingJoinGroup = nil
         clearManagementState()
         resetJoinState()
         sharedAlbumErrorCode = nil
@@ -1101,7 +1124,9 @@ final class ShareViewModel {
         }
     }
 
-    private func prepareJoinedGroup(id: ShareAlbum.ID) async {
+    private func prepareJoinedGroup(id: ShareAlbum.ID) async throws {
+        try await repository.syncGroup(id: id)
+
         if var groupIDs = visibleGroupIDs {
             groupIDs.removeAll { $0 == id }
             groupIDs.insert(id, at: 0)
@@ -1110,10 +1135,26 @@ final class ShareViewModel {
             visibleGroupIDs = [id] + groups.map(\.id).filter { $0 != id }
         }
 
-        try? await repository.syncGroup(id: id)
-        try? await reloadGroups()
+        try await reloadGroups()
         hasLoadedGroups = true
         loadedGroupDetailIDs.insert(id)
+    }
+
+    private func presentJoinError(_ error: Error) {
+        if let repositoryError = error as? ShareGroupRepositoryError {
+            joinErrorCode = String(describing: repositoryError)
+        } else if let networkError = error as? NetworkError {
+            joinErrorCode = networkError.serverCode ?? "NETWORK_ERROR"
+        } else {
+            joinErrorCode = "UNKNOWN_ERROR"
+        }
+        presentError(
+            error,
+            fallback: "공유 그룹 정보를 불러오지 못했어요.",
+            retry: { [weak self] in
+                _ = await self?.completeJoin()
+            }
+        )
     }
 
     private func finishJoin() {
@@ -1155,8 +1196,9 @@ final class ShareViewModel {
         joinErrorCode = nil
         joinRequestInviteCode = nil
         joinIdempotencyKey = nil
+        joinedGroupIDAwaitingSync = nil
         pendingJoinAlreadyJoined = false
-        pendingJoinGroup = nil
+        pendingJoinPreview = nil
     }
 
     private func presentError(

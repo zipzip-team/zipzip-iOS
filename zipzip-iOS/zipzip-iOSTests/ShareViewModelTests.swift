@@ -387,12 +387,19 @@ final class ShareViewModelTests: XCTestCase {
         XCTAssertFalse(viewModel.isJoinSheetPresented)
         XCTAssertTrue(viewModel.isJoinConfirmationPresented)
         XCTAssertEqual(viewModel.pendingJoinGroup?.id, groupID)
+        XCTAssertEqual(
+            viewModel.pendingJoinPreview?.representativeImageURL?.absoluteString,
+            "https://cdn.example.com/group.jpg"
+        )
+        XCTAssertEqual(viewModel.pendingJoinPreview?.group.createdBy?.displayName, "집집이")
+        XCTAssertEqual(viewModel.pendingJoinPreview?.members.map(\.displayName), ["집집이"])
         XCTAssertEqual(api.previewInviteCodes, ["ZZ7K9P2Q"])
 
         let joinedGroupID = await viewModel.completeJoin()
 
         XCTAssertEqual(joinedGroupID, groupID)
         XCTAssertEqual(viewModel.groups.map(\.id), [groupID])
+        XCTAssertEqual(viewModel.completedJoinNavigationGroupID, groupID)
         XCTAssertFalse(viewModel.isJoinConfirmationPresented)
         XCTAssertEqual(api.joinInviteCodes, ["ZZ7K9P2Q"])
         XCTAssertEqual(api.joinIdempotencyKeys.count, 1)
@@ -418,6 +425,76 @@ final class ShareViewModelTests: XCTestCase {
 
         XCTAssertEqual(joinedGroupID, groupID)
         XCTAssertTrue(api.joinInviteCodes.isEmpty)
+        XCTAssertEqual(api.fetchedGroupIDs, [groupID])
+    }
+
+    @MainActor
+    func testJoinConflictSyncsExistingGroupWithoutSecondPost() async throws {
+        let groupID = try XCTUnwrap(UUID(uuidString: "44444444-4444-4444-4444-444444444444"))
+        let api = JoinTrackingShareGroupAPI(
+            previewResponse: makeJoinPreview(groupID: groupID, alreadyJoined: false),
+            joinResponse: nil,
+            joinErrors: [.server(
+                statusCode: 409,
+                code: "ALREADY_JOINED_SHARED_GROUP",
+                message: nil,
+                body: nil
+            )]
+        )
+        let viewModel = ShareViewModel(
+            groups: [],
+            repository: makeRepository(api: api, store: try makeStore())
+        )
+        viewModel.presentJoinSheet()
+        viewModel.joinCode = "ZZ7K9P2Q"
+        await viewModel.confirmJoinCode()
+        viewModel.shareSheetDidDismiss()
+
+        let joinedGroupID = await viewModel.completeJoin()
+
+        XCTAssertEqual(joinedGroupID, groupID)
+        XCTAssertEqual(api.joinInviteCodes.count, 1)
+        XCTAssertEqual(api.fetchedGroupIDs, [groupID])
+        XCTAssertEqual(viewModel.groups.map(\.id), [groupID])
+    }
+
+    @MainActor
+    func testJoinSyncFailureKeepsConfirmationAndRetryDoesNotRepeatPost() async throws {
+        let groupID = try XCTUnwrap(UUID(uuidString: "44444444-4444-4444-4444-444444444444"))
+        let api = JoinTrackingShareGroupAPI(
+            previewResponse: makeJoinPreview(groupID: groupID, alreadyJoined: false),
+            joinResponse: ShareGroupJoinResponse(
+                sharedGroupId: groupID,
+                name: "여행 친구",
+                myRole: .member,
+                joinedAt: "2026-07-15T10:15:30Z"
+            ),
+            groupDetailErrors: [.noResponse, nil]
+        )
+        let viewModel = ShareViewModel(
+            groups: [],
+            repository: makeRepository(api: api, store: try makeStore())
+        )
+        viewModel.presentJoinSheet()
+        viewModel.joinCode = "ZZ7K9P2Q"
+        await viewModel.confirmJoinCode()
+        viewModel.shareSheetDidDismiss()
+
+        let firstResult = await viewModel.completeJoin()
+
+        XCTAssertNil(firstResult)
+        XCTAssertTrue(viewModel.isJoinConfirmationPresented)
+        XCTAssertTrue(viewModel.isErrorAlertPresented)
+        XCTAssertTrue(viewModel.canRetryError)
+        XCTAssertTrue(viewModel.groups.isEmpty)
+        XCTAssertEqual(api.joinInviteCodes.count, 1)
+
+        await viewModel.retryErrorAction()
+
+        XCTAssertEqual(api.joinInviteCodes.count, 1)
+        XCTAssertEqual(viewModel.groups.map(\.id), [groupID])
+        XCTAssertEqual(viewModel.completedJoinNavigationGroupID, groupID)
+        XCTAssertFalse(viewModel.isJoinConfirmationPresented)
     }
 
     @MainActor
@@ -829,11 +906,17 @@ final class ShareViewModelTests: XCTestCase {
         ShareGroupJoinPreviewResponse(
             sharedGroupId: groupID,
             name: "여행 친구",
-            representativeImageUrl: nil,
-            representativeImageUrlExpiresAt: nil,
+            representativeImageUrl: "https://cdn.example.com/group.jpg",
+            representativeImageUrlExpiresAt: "2099-07-15T10:15:30Z",
             createdBy: ShareGroupUserResponse(userId: nil, displayName: "집집이"),
             memberCount: 4,
-            members: [],
+            members: [ShareGroupMemberResponse(
+                userId: UUID(),
+                displayName: "집집이",
+                role: .host,
+                isMe: false,
+                joinedAt: "2026-07-15T10:15:30Z"
+            )],
             alreadyJoined: alreadyJoined
         )
     }
@@ -1044,16 +1127,23 @@ private struct UnavailableShareGroupAPI: ShareGroupAPI {
 private final class JoinTrackingShareGroupAPI: ShareGroupAPI {
     let previewResponse: ShareGroupJoinPreviewResponse
     let joinResponse: ShareGroupJoinResponse?
+    var groupDetailErrors: [NetworkError?]
+    var joinErrors: [NetworkError?]
     private(set) var previewInviteCodes: [String] = []
     private(set) var joinInviteCodes: [String] = []
     private(set) var joinIdempotencyKeys: [UUID] = []
+    private(set) var fetchedGroupIDs: [UUID] = []
 
     init(
         previewResponse: ShareGroupJoinPreviewResponse,
-        joinResponse: ShareGroupJoinResponse?
+        joinResponse: ShareGroupJoinResponse?,
+        groupDetailErrors: [NetworkError?] = [],
+        joinErrors: [NetworkError?] = []
     ) {
         self.previewResponse = previewResponse
         self.joinResponse = joinResponse
+        self.groupDetailErrors = groupDetailErrors
+        self.joinErrors = joinErrors
     }
 
     func fetchGroups(cursor: String?, size: Int) async throws -> ShareGroupListPageResponse {
@@ -1061,7 +1151,21 @@ private final class JoinTrackingShareGroupAPI: ShareGroupAPI {
     }
 
     func fetchGroup(id: UUID) async throws -> ShareGroupDetailResponse {
-        throw URLError(.notConnectedToInternet)
+        fetchedGroupIDs.append(id)
+        if !groupDetailErrors.isEmpty, let error = groupDetailErrors.removeFirst() {
+            throw error
+        }
+        return ShareGroupDetailResponse(
+            id: id,
+            name: previewResponse.name,
+            myRole: .member,
+            createdBy: previewResponse.createdBy,
+            memberCount: previewResponse.memberCount,
+            sharedAlbumCount: 0,
+            photoCount: 0,
+            createdAt: "2026-07-15T10:15:30Z",
+            updatedAt: "2026-07-15T10:15:30Z"
+        )
     }
 
     func fetchMembers(
@@ -1096,6 +1200,9 @@ private final class JoinTrackingShareGroupAPI: ShareGroupAPI {
     func join(inviteCode: String, idempotencyKey: UUID) async throws -> ShareGroupJoinResponse {
         joinInviteCodes.append(inviteCode)
         joinIdempotencyKeys.append(idempotencyKey)
+        if !joinErrors.isEmpty, let error = joinErrors.removeFirst() {
+            throw error
+        }
         return try XCTUnwrap(joinResponse)
     }
 
