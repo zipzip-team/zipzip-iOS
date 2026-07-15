@@ -33,6 +33,7 @@ struct RootView: View {
     var body: some View {
         @Bindable var router = router
         @Bindable var authenticationState = authenticationState
+        @Bindable var shareViewModel = shareViewModel
         NavigationStack(path: $router.path) {
             Group {
                 if authenticationState.isRestoring, hasCompletedOnboarding {
@@ -156,6 +157,11 @@ struct RootView: View {
         .environment(photoSync)
         .fullScreenCover(item: $authenticationState.loginIntent) { _ in
             ShareLoginView()
+        }
+        .alert("요청을 완료하지 못했어요", isPresented: $shareViewModel.isErrorAlertPresented) {
+            Button("확인", role: .cancel, action: shareViewModel.dismissErrorAlert)
+        } message: {
+            Text(shareViewModel.errorAlertMessage)
         }
         .task {
             await authenticationState.restore(

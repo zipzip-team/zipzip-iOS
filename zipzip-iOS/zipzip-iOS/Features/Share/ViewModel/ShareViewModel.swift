@@ -40,6 +40,8 @@ final class ShareViewModel {
     private(set) var isUpdatingSharedAlbum = false
     private(set) var isDeletingSharedAlbums = false
     private(set) var sharedAlbumErrorCode: String?
+    var isErrorAlertPresented = false
+    private(set) var errorAlertMessage = ""
 
     private(set) var hasLoadedGroups = false
     private(set) var isLoadingGroups = false
@@ -173,7 +175,8 @@ final class ShareViewModel {
             groupsHaveNextPage = page.hasNext
             hasLoadedGroups = true
         } catch {
-            hasLoadedGroups = !groups.isEmpty
+            hasLoadedGroups = true
+            presentError(error, fallback: "공유 그룹을 불러오지 못했어요.")
         }
     }
 
@@ -200,7 +203,9 @@ final class ShareViewModel {
             try await reloadGroups()
             self.nextGroupCursor = page.nextCursor
             groupsHaveNextPage = page.hasNext
-        } catch {}
+        } catch {
+            presentError(error, fallback: "다음 공유 그룹을 불러오지 못했어요.")
+        }
     }
 
     func loadGroup(id: ShareAlbum.ID, refresh: Bool = false) async {
@@ -221,7 +226,9 @@ final class ShareViewModel {
             refreshManagedGroupIfNeeded(id: id)
         } catch ShareGroupRepositoryError.groupNotFound {
             await removeMissingGroup(id: id)
-        } catch {}
+        } catch {
+            presentError(error, fallback: "공유 그룹 정보를 불러오지 못했어요.")
+        }
     }
 
     func loadSharedAlbums(
@@ -250,7 +257,9 @@ final class ShareViewModel {
             loadedSharedAlbumGroupIDs.insert(groupID)
         } catch ShareGroupRepositoryError.groupNotFound {
             await removeMissingGroup(id: groupID)
-        } catch {}
+        } catch {
+            presentError(error, fallback: "공유집 목록을 불러오지 못했어요.")
+        }
     }
 
     func loadMoreSharedAlbumsIfNeeded(
@@ -282,7 +291,9 @@ final class ShareViewModel {
             visibleSharedAlbumIDs[groupID] = albumIDs
             try await reloadGroups()
             updateSharedAlbumPageState(page, groupID: groupID)
-        } catch {}
+        } catch {
+            presentError(error, fallback: "다음 공유집을 불러오지 못했어요.")
+        }
     }
 
     func loadInviteCode(groupID: ShareAlbum.ID) async {
@@ -299,7 +310,9 @@ final class ShareViewModel {
             inviteCodes[groupID] = try await repository.inviteCode(groupID: groupID)
         } catch ShareGroupRepositoryError.groupNotFound {
             await removeMissingGroup(id: groupID)
-        } catch {}
+        } catch {
+            presentError(error, fallback: "초대 코드를 불러오지 못했어요.")
+        }
     }
 
     func loadMembers(groupID: ShareAlbum.ID, refresh: Bool = false) async {
@@ -322,7 +335,9 @@ final class ShareViewModel {
             membersByGroupID[groupID] = members
         } catch ShareGroupRepositoryError.groupNotFound {
             await removeMissingGroup(id: groupID)
-        } catch {}
+        } catch {
+            presentError(error, fallback: "참여자 정보를 불러오지 못했어요.")
+        }
     }
 
     func presentComments(groupID: ShareAlbum.ID) {
@@ -388,9 +403,11 @@ final class ShareViewModel {
         } catch let error as NetworkError {
             guard self.chatSessionID == chatSessionID else { return }
             chatErrorCode = error.serverCode ?? "NETWORK_ERROR"
+            presentError(error, fallback: "대화를 불러오지 못했어요.")
         } catch {
             guard self.chatSessionID == chatSessionID else { return }
             chatErrorCode = "UNKNOWN_ERROR"
+            presentError(error, fallback: "대화를 불러오지 못했어요.")
         }
     }
 
@@ -440,9 +457,11 @@ final class ShareViewModel {
         } catch let error as NetworkError {
             guard self.chatSessionID == chatSessionID else { return }
             chatErrorCode = error.serverCode ?? "NETWORK_ERROR"
+            presentError(error, fallback: "메시지를 보내지 못했어요.")
         } catch {
             guard self.chatSessionID == chatSessionID else { return }
             chatErrorCode = "UNKNOWN_ERROR"
+            presentError(error, fallback: "메시지를 보내지 못했어요.")
         }
     }
 
@@ -469,6 +488,7 @@ final class ShareViewModel {
         inviteCode = ""
         dismissComments()
         resetJoinState()
+        dismissErrorAlert()
     }
 
     func enterAddMode() {
@@ -504,10 +524,13 @@ final class ShareViewModel {
             isJoinConfirmationPresented = true
         } catch let error as ShareGroupRepositoryError {
             joinErrorCode = String(describing: error)
+            presentError(error, fallback: "공유 그룹 입장 정보를 확인하지 못했어요.")
         } catch let error as NetworkError {
             joinErrorCode = error.serverCode ?? "NETWORK_ERROR"
+            presentError(error, fallback: "공유 그룹 입장 정보를 확인하지 못했어요.")
         } catch {
             joinErrorCode = "UNKNOWN_ERROR"
+            presentError(error, fallback: "공유 그룹 입장 정보를 확인하지 못했어요.")
         }
     }
 
@@ -553,12 +576,15 @@ final class ShareViewModel {
             return pendingJoinGroup.id
         } catch let error as ShareGroupRepositoryError {
             joinErrorCode = String(describing: error)
+            presentError(error, fallback: "공유 그룹에 입장하지 못했어요.")
             return nil
         } catch let error as NetworkError {
             joinErrorCode = error.serverCode ?? "NETWORK_ERROR"
+            presentError(error, fallback: "공유 그룹에 입장하지 못했어요.")
             return nil
         } catch {
             joinErrorCode = "UNKNOWN_ERROR"
+            presentError(error, fallback: "공유 그룹에 입장하지 못했어요.")
             return nil
         }
     }
@@ -604,7 +630,9 @@ final class ShareViewModel {
             groupCreationIdempotencyKey = nil
             isCreateSheetPresented = false
             isInviteSheetPresented = true
-        } catch {}
+        } catch {
+            presentError(error, fallback: "공유 그룹을 만들지 못했어요.")
+        }
     }
 
     func completeInvitation() {
@@ -655,12 +683,15 @@ final class ShareViewModel {
             return false
         } catch let error as ShareGroupRepositoryError {
             sharedAlbumErrorCode = String(describing: error)
+            presentError(error, fallback: "공유집 이름을 변경하지 못했어요.")
             return false
         } catch let error as NetworkError {
             sharedAlbumErrorCode = error.serverCode ?? "NETWORK_ERROR"
+            presentError(error, fallback: "공유집 이름을 변경하지 못했어요.")
             return false
         } catch {
             sharedAlbumErrorCode = "UNKNOWN_ERROR"
+            presentError(error, fallback: "공유집 이름을 변경하지 못했어요.")
             return false
         }
     }
@@ -691,12 +722,15 @@ final class ShareViewModel {
             return true
         } catch let error as ShareGroupRepositoryError {
             sharedAlbumErrorCode = String(describing: error)
+            presentError(error, fallback: "공유집을 삭제하지 못했어요.")
             return false
         } catch let error as NetworkError {
             sharedAlbumErrorCode = error.serverCode ?? "NETWORK_ERROR"
+            presentError(error, fallback: "공유집을 삭제하지 못했어요.")
             return false
         } catch {
             sharedAlbumErrorCode = "UNKNOWN_ERROR"
+            presentError(error, fallback: "공유집을 삭제하지 못했어요.")
             return false
         }
     }
@@ -735,12 +769,15 @@ final class ShareViewModel {
             return true
         } catch let error as ShareGroupRepositoryError {
             sharedAlbumErrorCode = String(describing: error)
+            presentError(error, fallback: "선택한 공유집을 삭제하지 못했어요.")
             return false
         } catch let error as NetworkError {
             sharedAlbumErrorCode = error.serverCode ?? "NETWORK_ERROR"
+            presentError(error, fallback: "선택한 공유집을 삭제하지 못했어요.")
             return false
         } catch {
             sharedAlbumErrorCode = "UNKNOWN_ERROR"
+            presentError(error, fallback: "선택한 공유집을 삭제하지 못했어요.")
             return false
         }
     }
@@ -776,10 +813,13 @@ final class ShareViewModel {
             dismissShareManagement()
         } catch let error as ShareGroupRepositoryError {
             groupManagementErrorCode = String(describing: error)
+            presentError(error, fallback: "공유 그룹 이름을 변경하지 못했어요.")
         } catch let error as NetworkError {
             groupManagementErrorCode = error.serverCode ?? "NETWORK_ERROR"
+            presentError(error, fallback: "공유 그룹 이름을 변경하지 못했어요.")
         } catch {
             groupManagementErrorCode = "UNKNOWN_ERROR"
+            presentError(error, fallback: "공유 그룹 이름을 변경하지 못했어요.")
         }
     }
 
@@ -808,12 +848,15 @@ final class ShareViewModel {
             return true
         } catch let error as ShareGroupRepositoryError {
             groupManagementErrorCode = String(describing: error)
+            presentError(error, fallback: "공유 그룹에서 나가지 못했어요.")
             return false
         } catch let error as NetworkError {
             groupManagementErrorCode = error.serverCode ?? "NETWORK_ERROR"
+            presentError(error, fallback: "공유 그룹에서 나가지 못했어요.")
             return false
         } catch {
             groupManagementErrorCode = "UNKNOWN_ERROR"
+            presentError(error, fallback: "공유 그룹에서 나가지 못했어요.")
             return false
         }
     }
@@ -824,6 +867,10 @@ final class ShareViewModel {
         groupManagementErrorCode = nil
         isUpdatingGroup = false
         isLeavingGroup = false
+    }
+
+    func dismissErrorAlert() {
+        isErrorAlertPresented = false
     }
 
     func resetTransientUI() {
@@ -948,5 +995,41 @@ final class ShareViewModel {
         pendingJoinAlreadyJoined = false
         pendingJoinGroup = nil
         isJoinConfirmationPresented = false
+    }
+
+    private func presentError(_ error: Error, fallback: String) {
+        errorAlertMessage = userFacingMessage(for: error, fallback: fallback)
+        isErrorAlertPresented = true
+    }
+
+    private func userFacingMessage(for error: Error, fallback: String) -> String {
+        if let repositoryError = error as? ShareGroupRepositoryError {
+            return switch repositoryError {
+            case .groupNotFound:
+                "공유 그룹을 찾을 수 없어요."
+            case .invalidInviteCode:
+                "초대 코드를 다시 확인해 주세요."
+            case .alreadyJoined:
+                "이미 참여 중인 공유 그룹이에요."
+            case .hostRequired:
+                "방장만 변경할 수 있어요."
+            case .memberRequired:
+                "참여자만 이 작업을 할 수 있어요."
+            case .sharedAlbumNotFound:
+                "공유집을 찾을 수 없어요."
+            case .invalidSharedAlbumSelection:
+                "삭제할 공유집을 다시 선택해 주세요."
+            }
+        }
+
+        if let networkError = error as? NetworkError {
+            return networkError.errorDescription ?? fallback
+        }
+
+        if error is URLError {
+            return "네트워크 연결을 확인한 후 다시 시도해 주세요."
+        }
+
+        return fallback
     }
 }

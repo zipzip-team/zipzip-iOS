@@ -328,6 +328,8 @@ final class AlbumViewModel {
 
     /// 사진 목록 화면에서 선택한 사진을 개인 사진집에 영구적으로 추가한다.
     func addPhotos(localIdentifiers: [String], to destinations: [ShareDestination]) async -> Bool {
+        // TODO: 정교은 담당 업로드·attach API가 합쳐지면 `.sharedAlbum` 대상은
+        // upload-urls → object storage PUT → photos/complete 또는 기존 photo attach로 처리합니다.
         let albumIDs = destinations.compactMap { destination -> Album.ID? in
             guard case let .album(albumID) = destination else {
                 return nil
@@ -354,6 +356,8 @@ final class AlbumViewModel {
         from sourceAlbumID: AlbumViewItem.ID,
         to destinations: [ShareDestination]
     ) async -> Bool {
+        // TODO: 정교은 담당 attach/detach API가 합쳐지면 `.sharedAlbum` 대상으로 attach 성공 후
+        // 개인 사진집에서 제거할지 여부를 제품 정책에 맞춰 처리하고 양쪽 목록을 갱신합니다.
         let destinationAlbumIDs = destinations.compactMap { destination -> Album.ID? in
             guard case let .album(albumID) = destination else {
                 return nil

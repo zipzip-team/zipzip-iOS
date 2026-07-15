@@ -58,6 +58,29 @@ final class ShareViewModelTests: XCTestCase {
     }
 
     @MainActor
+    func testCreateGroupFailurePresentsErrorAlertWithoutClosingSheet() async throws {
+        let viewModel = ShareViewModel(
+            groups: [],
+            repository: makeRepository(
+                api: UnavailableShareGroupAPI(),
+                store: try makeStore()
+            )
+        )
+        viewModel.presentCreateSheet()
+        viewModel.groupNameDraft = "우리 가족"
+
+        await viewModel.createGroup()
+
+        XCTAssertTrue(viewModel.isCreateSheetPresented)
+        XCTAssertFalse(viewModel.isInviteSheetPresented)
+        XCTAssertTrue(viewModel.isErrorAlertPresented)
+        XCTAssertEqual(viewModel.errorAlertMessage, "네트워크 연결을 확인한 후 다시 시도해 주세요.")
+
+        viewModel.dismissErrorAlert()
+        XCTAssertFalse(viewModel.isErrorAlertPresented)
+    }
+
+    @MainActor
     func testLoadsGroupDetailInviteCodeAndSharedAlbums() async throws {
         let groupID = try XCTUnwrap(UUID(uuidString: "11111111-1111-1111-1111-111111111111"))
         let albumID = try XCTUnwrap(UUID(uuidString: "33333333-3333-3333-3333-333333333333"))
