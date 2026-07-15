@@ -54,9 +54,6 @@ struct DeviceSelectionView: View {
                 }
             }
         }
-        .task {
-            await viewModel.load()
-        }
     }
 }
 

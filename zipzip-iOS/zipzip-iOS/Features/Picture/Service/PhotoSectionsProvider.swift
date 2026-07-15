@@ -230,6 +230,18 @@ nonisolated struct PhotoSectionsRequest: FetchKeyRequest {
     }
 }
 
+/// 등록된 기기에 귀속된 사진 수를 DB 관찰로 제공한다.
+/// `device.is_registered`/`photo.device_id` 변경 시 자동으로 재실행돼 실시간 갱신된다.
+nonisolated struct RegisteredPhotoCountRequest: FetchKeyRequest {
+    func fetch(_ db: Database) throws -> Int {
+        try PhotoRecord
+            .join(DeviceRecord.all) { photo, device in photo.deviceID.eq(device.id) }
+            .where { _, device in device.isRegistered.eq(true) }
+            .select { photo, _ in photo.id.count() }
+            .fetchOne(db) ?? 0
+    }
+}
+
 private enum PhotoSectionsProviderKey: DependencyKey {
     static let liveValue = PhotoSectionsProvider()
 }

@@ -23,6 +23,15 @@ final class PhotoThumbnailLoader: @unchecked Sendable {
         await requestImage(for: localIdentifier, targetSize: targetSize, contentMode: .aspectFill)
     }
 
+    func fastFullImage(for localIdentifier: String, targetSize: CGSize) async -> UIImage? {
+        await requestImage(
+            for: localIdentifier,
+            targetSize: targetSize,
+            contentMode: .aspectFit,
+            deliveryMode: .fastFormat
+        )
+    }
+
     func fullImage(for localIdentifier: String, targetSize: CGSize) async -> UIImage? {
         await requestImage(for: localIdentifier, targetSize: targetSize, contentMode: .aspectFit)
     }
@@ -30,7 +39,8 @@ final class PhotoThumbnailLoader: @unchecked Sendable {
     private func requestImage(
         for localIdentifier: String,
         targetSize: CGSize,
-        contentMode: PHImageContentMode
+        contentMode: PHImageContentMode,
+        deliveryMode: PHImageRequestOptionsDeliveryMode = .highQualityFormat
     ) async -> UIImage? {
         let cacheKey =
             "\(localIdentifier)|\(Int(targetSize.width))x\(Int(targetSize.height))|\(contentMode.rawValue)" as NSString
@@ -43,7 +53,7 @@ final class PhotoThumbnailLoader: @unchecked Sendable {
         }
 
         let options = PHImageRequestOptions()
-        options.deliveryMode = .highQualityFormat
+        options.deliveryMode = deliveryMode
         options.resizeMode = .fast
         options.isNetworkAccessAllowed = true
 

@@ -185,6 +185,11 @@ struct PhotoDetailView: View {
                         .animation(reduceMotion ? nil : .easeOut(duration: 0.16), value: isPhotoZoomed)
                 }
             }
+            .overlay {
+                if imageViewModel.loadFailed, !isEditingInfo {
+                    photoLoadFailedView
+                }
+            }
         }
         .statusBarHidden(isCommittedPhotoZoomed)
         .task(id: photo.localIdentifier) {
@@ -296,6 +301,35 @@ struct PhotoDetailView: View {
             .init(icon: .delete, title: "삭제") { showDeleteAlert = true }
         ])
         .padding(.bottom, 16)
+    }
+
+    private var photoLoadFailedView: some View {
+        VStack(spacing: 16) {
+            VStack(spacing: 4) {
+                Text("사진을 불러오지 못했어요")
+                    .font(.t3_sb)
+                    .foregroundStyle(.grey1000)
+
+                Text("네트워크 연결을 확인해 주세요")
+                    .font(.b2_md)
+                    .foregroundStyle(.grey500)
+            }
+            .multilineTextAlignment(.center)
+
+            Button {
+                Task { await imageViewModel.loadImage(for: photo.localIdentifier) }
+            } label: {
+                Text("다시 시도")
+                    .font(.b1_sb)
+                    .foregroundStyle(.white00)
+                    .padding(.horizontal, 24)
+                    .padding(.vertical, 12)
+                    .background(.orange500, in: Capsule())
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(24)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     private func toggleFavorite() {

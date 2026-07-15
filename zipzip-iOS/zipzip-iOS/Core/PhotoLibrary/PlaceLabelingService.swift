@@ -18,7 +18,7 @@ nonisolated struct PlaceLabelingService {
     private static let persistBatchSize = 100
 
     @concurrent
-    func labelPendingPhotos() async throws {
+    func labelPendingPhotos(onProgress: @Sendable (SyncProgress) -> Void = { _ in }) async throws {
         let located = try await database.read { db in
             try PhotoRecord
                 .where { $0.placeID.is(nil) && !$0.latitude.is(nil) && !$0.longitude.is(nil) }
@@ -46,6 +46,7 @@ nonisolated struct PlaceLabelingService {
 
         let totalPhotos = located.count
         logger.info("place labeling started: \(totalPhotos) photos, \(clusters.count) clusters")
+        onProgress(SyncProgress(processed: 0, total: totalPhotos))
 
         var labeled: [(label: String, key: ClusterKey, photoIDs: [Int])] = []
         for (key, photos) in clusters {
@@ -68,6 +69,7 @@ nonisolated struct PlaceLabelingService {
             } catch {
                 logger.error("place labeling skipped a batch: \(error)")
             }
+            onProgress(SyncProgress(processed: processedPhotos, total: totalPhotos))
             logger.info("place labeling progress: \(processedPhotos)/\(totalPhotos)")
         }
         logger.info("place labeling finished: \(processedPhotos)/\(totalPhotos)")
