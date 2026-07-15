@@ -11,10 +11,13 @@ struct PhotoInfoEditContent: View {
     @State private var metadata: PhotoMetadata
     @State private var showDeviceSheet = false
     @State private var pickerDevice = ""
+    @State private var deviceBeforeEditing = ""
     @State private var showLocationSheet = false
     @State private var pickerLocation = ""
+    @State private var locationBeforeEditing = ""
     @State private var showDateSheet = false
     @State private var pickerDate = Date()
+    @State private var dateBeforeEditing = Date()
     @State private var viewModel: PhotoInfoEditViewModel
 
     private let showsHeader: Bool
@@ -43,6 +46,7 @@ struct PhotoInfoEditContent: View {
             VStack(alignment: .leading, spacing: 16) {
                 metadataSection(title: "기기", showsTopDivider: showsHeader, onEdit: {
                     pickerDevice = metadata.deviceName
+                    deviceBeforeEditing = pickerDevice
                     showDeviceSheet = true
                 }) {
                     DeviceMetadataChip(
@@ -54,6 +58,7 @@ struct PhotoInfoEditContent: View {
 
                 metadataSection(title: "장소", showsTopDivider: true, onEdit: {
                     pickerLocation = metadata.location
+                    locationBeforeEditing = pickerLocation
                     showLocationSheet = true
                 }) {
                     TextMetadataChip(title: metadata.location, isSelected: false) {}
@@ -61,6 +66,7 @@ struct PhotoInfoEditContent: View {
 
                 metadataSection(title: "날짜", showsTopDivider: true, onEdit: {
                     pickerDate = AppliedFilter.date(from: metadata.dateText) ?? Date()
+                    dateBeforeEditing = pickerDate
                     showDateSheet = true
                 }) {
                     DateMetadataChip(dateText: metadata.dateText)
@@ -146,6 +152,7 @@ struct PhotoInfoEditContent: View {
     }
 
     private func applyDevice(_ name: String) {
+        guard name != deviceBeforeEditing else { return }
         guard let device = viewModel.devices.first(where: { $0.name == name }) else { return }
         metadata = PhotoMetadata(
             deviceName: device.name,
@@ -157,6 +164,7 @@ struct PhotoInfoEditContent: View {
     }
 
     private func applyLocation(_ name: String, latitude: Double?, longitude: Double?) {
+        guard name != locationBeforeEditing else { return }
         metadata = PhotoMetadata(
             deviceName: metadata.deviceName,
             deviceType: metadata.deviceType,
@@ -167,6 +175,7 @@ struct PhotoInfoEditContent: View {
     }
 
     private func applyDate(_ date: Date) {
+        guard date != dateBeforeEditing else { return }
         metadata = PhotoMetadata(
             deviceName: metadata.deviceName,
             deviceType: metadata.deviceType,

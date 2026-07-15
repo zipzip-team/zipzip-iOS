@@ -68,7 +68,7 @@ extension View {
         showsDragIndicator: Visibility = .visible,
         title: String,
         message: String,
-        secondaryTitle: String,
+        secondaryTitle: String? = nil,
         primaryTitle: String,
         onSecondaryTap: @escaping () -> Void = {},
         onPrimaryTap: @escaping () -> Void = {}

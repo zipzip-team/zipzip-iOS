@@ -10,6 +10,7 @@ import SwiftUI
 struct MyPageMenuRow: View {
     let title: String
     var trailingText: String?
+    var showsDivider = true
     let action: () -> Void
 
     var body: some View {
@@ -40,9 +41,11 @@ struct MyPageMenuRow: View {
         }
         .buttonStyle(.plain)
         .overlay(alignment: .bottom) {
-            Rectangle()
-                .fill(.grey70)
-                .frame(height: 1)
+            if showsDivider {
+                Rectangle()
+                    .fill(.grey70)
+                    .frame(height: 1)
+            }
         }
     }
 }

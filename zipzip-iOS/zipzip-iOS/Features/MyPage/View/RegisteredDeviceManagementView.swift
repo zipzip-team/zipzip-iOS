@@ -18,14 +18,14 @@ struct RegisteredDeviceManagementView: View {
     var body: some View {
         @Bindable var viewModel = viewModel
 
-        MyPageContainerView {
+        MyPageContainerView(isContentScrollable: false) {
             floatingButtonBar
         } content: {
             VStack(alignment: .leading, spacing: 32) {
                 titleSection
                 deviceSection
             }
-            .padding(.bottom, viewModel.showsActionBar ? 132 : 0)
+            .frame(maxHeight: .infinity, alignment: .top)
         }
         .safeAreaInset(edge: .bottom) {
             if viewModel.mode == .removing {
@@ -104,29 +104,33 @@ struct RegisteredDeviceManagementView: View {
                 .foregroundStyle(.grey600)
                 .padding(.horizontal, 16)
 
-            if viewModel.showsActionBar {
-                VStack(spacing: 16) {
-                    ForEach(viewModel.displayedDevices) { device in
-                        DeviceSelectionButton(
-                            title: device.name,
-                            subtitle: device.modelName,
-                            deviceType: device.type,
-                            isSelected: viewModel.isSelected(device)
-                        ) {
-                            viewModel.toggleSelection(for: device)
+            ScrollView {
+                if viewModel.showsActionBar {
+                    VStack(spacing: 16) {
+                        ForEach(viewModel.displayedDevices) { device in
+                            DeviceSelectionButton(
+                                title: device.name,
+                                subtitle: device.modelName,
+                                deviceType: device.type,
+                                isSelected: viewModel.isSelected(device)
+                            ) {
+                                viewModel.toggleSelection(for: device)
+                            }
                         }
                     }
-                }
-                .padding(.horizontal, 16)
-            } else {
-                VStack(spacing: 0) {
-                    ForEach(viewModel.registeredDevices) { device in
-                        RegisteredDeviceRow(device: device)
+                    .padding(.horizontal, 16)
+                } else {
+                    VStack(spacing: 0) {
+                        ForEach(viewModel.registeredDevices) { device in
+                            RegisteredDeviceRow(device: device)
+                        }
                     }
+                    .padding(.horizontal, 16)
                 }
-                .padding(.horizontal, 16)
             }
+            .frame(maxHeight: .infinity)
         }
+        .frame(maxHeight: .infinity)
     }
 
     private var deleteActionBar: some View {

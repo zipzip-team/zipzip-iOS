@@ -71,15 +71,16 @@ struct RootTabView: View {
                 ) { showShareSheet = true },
                 .init(icon: .metadata, title: "정보 수정") {
                     if let metadata = pictureViewModel.firstSelectedMetadata {
-                        router.push(.photoInfoEdit(
+                        router.push(.photoInfoEdit(PhotoInfoEditDestination(
                             metadata: metadata,
-                            localIdentifiers: pictureViewModel.selectedPhotoLocalIdentifiers
-                        ))
+                            localIdentifiers: pictureViewModel.selectedPhotoLocalIdentifiers,
+                            onSuccessfulDismiss: pictureViewModel.cancelSelection
+                        )))
                     }
                 },
                 .init(icon: .delete, title: "삭제") { pictureViewModel.requestDelete() }
             ])
-            .padding(.bottom, 28)
+            .padding(.bottom, 26.5)
             .ignoresSafeArea(.container, edges: .bottom)
         } else if showsNavbar {
             Navbar(selection: selection, onSelect: selectTab)
@@ -105,7 +106,8 @@ struct RootTabView: View {
 
     @ViewBuilder private func page(for tab: NavbarTab) -> some View {
         switch tab {
-        case .main: MainView()
+        case .main:
+            MainView(organizedPhotoCount: pictureViewModel.organizedPhotoCount)
         case .picture:
             PictureView(
                 viewModel: pictureViewModel,

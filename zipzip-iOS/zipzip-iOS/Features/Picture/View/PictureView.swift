@@ -8,6 +8,9 @@
 import SwiftUI
 
 struct PictureView: View {
+    @AppStorage("hasSeenPictureIntroduction") private var hasSeenPictureIntroduction = false
+    @State private var showPictureIntroduction = false
+
     let viewModel: PictureViewModel
     let onOpenFilter: () -> Void
     let onOpenPhoto: (Photo) -> Void
@@ -26,17 +29,7 @@ struct PictureView: View {
         @Bindable var viewModel = viewModel
         return ScrollView {
             VStack(alignment: .leading, spacing: 8) {
-                Text("사진")
-                    .font(.t1_sb)
-                    .foregroundStyle(.grey900)
-                    .frame(height: 44)
-                    .padding(.vertical, 4)
-                    .padding(.horizontal, 16)
-                    .opacity(viewModel.isSelectionMode ? 0 : 1)
-
-                if !viewModel.isSelectionMode {
-                    PhotoRecommendationPlaceholder()
-                }
+                ScrollableHeaderTitle("사진", isVisible: !viewModel.isSelectionMode)
 
                 PhotoGallery(
                     sections: viewModel.sections,
@@ -49,11 +42,14 @@ struct PictureView: View {
                 .padding(.horizontal, 16)
             }
         }
+        .ignoresSafeArea(edges: .top)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .background(Color.orange30.ignoresSafeArea())
-        .overlay(alignment: .topTrailing) {
-            if !viewModel.isSelectionMode {
-                floatingButton
+        .overlay(alignment: .topLeading) {
+            FloatingHeader(.trailing) {
+                if !viewModel.isSelectionMode {
+                    floatingButton
+                }
             }
         }
         .overlay(alignment: .topLeading) {
@@ -73,6 +69,18 @@ struct PictureView: View {
                 Task { await viewModel.deleteSelectedPhotos() }
             }
         )
+        .bottomSheetAlert(
+            isPresented: $showPictureIntroduction,
+            title: "세컨폰·디카 사진만 모아봤어요.",
+            message: "날짜와 장소가 어긋난 사진을 바로잡고,\n필요한 사진을 쉽게 찾아 앨범을 정리할 수 있어요.",
+            primaryTitle: "사진 정리하기",
+            onPrimaryTap: { showPictureIntroduction = false }
+        )
+        .onAppear {
+            guard !hasSeenPictureIntroduction else { return }
+            hasSeenPictureIntroduction = true
+            showPictureIntroduction = true
+        }
     }
 
     private var floatingButton: some View {
@@ -82,8 +90,6 @@ struct PictureView: View {
                 viewModel.enterSelectionMode()
             }
         ])
-        .padding(.horizontal, 16)
-        .padding(.vertical, 4)
     }
 
     private var cancelButton: some View {
@@ -92,14 +98,6 @@ struct PictureView: View {
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 4)
-    }
-}
-
-private struct PhotoRecommendationPlaceholder: View {
-    var body: some View {
-        Color.grey100
-            .frame(height: 207)
-            .accessibilityHidden(true)
     }
 }
 

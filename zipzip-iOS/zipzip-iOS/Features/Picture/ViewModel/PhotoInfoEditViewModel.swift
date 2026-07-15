@@ -22,6 +22,7 @@ final class PhotoInfoEditViewModel {
     private static let logger = Logger(subsystem: "com.zipzip.zipzip-iOS", category: "PhotoInfoEdit")
 
     private(set) var devices: [FilterDevice]
+    private(set) var hasSuccessfulChanges = false
 
     @ObservationIgnored private var deviceRecords: [DeviceRecord] = []
     @ObservationIgnored private var localIdentifiers: [String]
@@ -76,6 +77,11 @@ final class PhotoInfoEditViewModel {
         }
     }
 
+    func waitForPendingSaves() async -> Bool {
+        await saveTask?.value
+        return hasSuccessfulChanges
+    }
+
     private func runSaveDevice(name: String) async {
         guard !localIdentifiers.isEmpty else { return }
         guard let record = deviceRecords.first(where: {
@@ -94,6 +100,7 @@ final class PhotoInfoEditViewModel {
             if !mapping.isEmpty {
                 localIdentifiers = localIdentifiers.map { mapping[$0] ?? $0 }
                 onIdentifiersChanged(localIdentifiers)
+                hasSuccessfulChanges = true
             }
         } catch {
             Self.logger.error("failed to update device: \(error)")
@@ -103,12 +110,15 @@ final class PhotoInfoEditViewModel {
     private func runSaveLocation(name: String, latitude: Double?, longitude: Double?) async {
         guard !localIdentifiers.isEmpty else { return }
         do {
-            try await metadataEdit.updateLocation(
+            let didUpdate = try await metadataEdit.updateLocation(
                 localIdentifiers: localIdentifiers,
                 name: name,
                 latitude: latitude,
                 longitude: longitude
             )
+            if didUpdate {
+                hasSuccessfulChanges = true
+            }
         } catch {
             Self.logger.error("failed to update location: \(error)")
         }
@@ -117,7 +127,13 @@ final class PhotoInfoEditViewModel {
     private func runSaveDate(_ date: Date) async {
         guard !localIdentifiers.isEmpty else { return }
         do {
-            try await metadataEdit.updateDate(localIdentifiers: localIdentifiers, date: date)
+            let didUpdate = try await metadataEdit.updateDate(
+                localIdentifiers: localIdentifiers,
+                date: date
+            )
+            if didUpdate {
+                hasSuccessfulChanges = true
+            }
         } catch {
             Self.logger.error("failed to update date: \(error)")
         }

@@ -8,23 +8,20 @@
 import SwiftUI
 
 struct HomePhotoCardButton: View {
-    let action: () -> Void
+    let backgroundColor: Color
 
     var body: some View {
-        Button(action: action) {
-            Image(.chevronRight)
-                .renderingMode(.template)
-                .foregroundStyle(.grey1000)
-                .frame(width: 24, height: 24)
-        }
-        .frame(width: 32, height: 32)
-        .background(.white00, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-        .buttonStyle(.plain)
+        Image(.shortcut)
+            .renderingMode(.template)
+            .foregroundStyle(.grey1000)
+            .frame(width: 24, height: 24)
+            .frame(width: 32, height: 32)
+            .background(backgroundColor, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
     }
 }
 
 #Preview {
-    HomePhotoCardButton {}
+    HomePhotoCardButton(backgroundColor: .white00)
         .padding()
         .background(.orange30)
 }

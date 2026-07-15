@@ -32,7 +32,9 @@ struct FilteredPictureView: View {
         @Bindable var viewModel = viewModel
 
         return VStack(spacing: 8) {
-            topBar
+            Color.clear
+                .frame(height: FloatingHeaderLayout.buttonHeight + 8)
+
             ScrollView {
                 PhotoGallery(
                     sections: pictureViewModel.sections,
@@ -126,6 +128,11 @@ struct FilteredPictureView: View {
             onSecondaryTap: { pictureViewModel.showDeleteAlert = false },
             onPrimaryTap: { pictureViewModel.showDeleteAlert = false } // TODO: 삭제 실행 연결
         )
+        .overlay(alignment: .topLeading) {
+            FloatingHeaderBar {
+                topBar
+            }
+        }
         .overlay(alignment: .bottom) {
             if pictureViewModel.isSelectionMode {
                 actionBar
@@ -159,8 +166,6 @@ struct FilteredPictureView: View {
                 ])
             }
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 4)
     }
 
     private var actionBar: some View {
@@ -168,10 +173,11 @@ struct FilteredPictureView: View {
             .init(icon: .moveToAlbum, title: "집으로") { showShareSheet = true },
             .init(icon: .metadata, title: "정보 수정") {
                 if let metadata = pictureViewModel.firstSelectedMetadata {
-                    router.push(.photoInfoEdit(
+                    router.push(.photoInfoEdit(PhotoInfoEditDestination(
                         metadata: metadata,
-                        localIdentifiers: pictureViewModel.selectedPhotoLocalIdentifiers
-                    ))
+                        localIdentifiers: pictureViewModel.selectedPhotoLocalIdentifiers,
+                        onSuccessfulDismiss: pictureViewModel.cancelSelection
+                    )))
                 }
             },
             .init(icon: .delete, title: "삭제") { pictureViewModel.requestDelete() }

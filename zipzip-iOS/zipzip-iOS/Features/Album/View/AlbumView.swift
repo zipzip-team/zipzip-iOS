@@ -37,9 +37,13 @@ struct AlbumView: View {
 
             ScrollView(showsIndicators: false) {
                 AlbumTitleHeader(isVisible: !viewModel.isSelectionMode)
-                    .frame(height: 54, alignment: .bottom)
 
-                if !viewModel.albums.isEmpty {
+                if viewModel.albums.isEmpty {
+                    AlbumCollectionEmptyView(onStartTap: viewModel.presentCreateAlbumSheet)
+                        .containerRelativeFrame(.vertical) { length, _ in
+                            max(length - FloatingHeaderLayout.scrollableTitleLayoutHeight, 0)
+                        }
+                } else {
                     LazyVGrid(
                         columns: columns,
                         alignment: .center,
@@ -63,22 +67,18 @@ struct AlbumView: View {
                     }
                 }
             }
-
-            if viewModel.albums.isEmpty {
-                AlbumCollectionEmptyView(onStartTap: viewModel.presentCreateAlbumSheet)
-                    .padding(.bottom, 80)
-            }
+            .ignoresSafeArea(edges: .top)
         }
-        .overlay(alignment: .topTrailing) {
-            AlbumHeaderActionButton(
-                onSelectionTap: viewModel.enterSelectionMode,
-                onAddTap: viewModel.presentCreateAlbumSheet
-            )
-            .padding(.top, 14)
-            .padding(.trailing, 16)
-            .opacity(viewModel.isSelectionMode ? 0 : 1)
-            .allowsHitTesting(!viewModel.isSelectionMode)
-            .accessibilityHidden(viewModel.isSelectionMode)
+        .overlay(alignment: .topLeading) {
+            FloatingHeader(.trailing) {
+                AlbumHeaderActionButton(
+                    onSelectionTap: viewModel.enterSelectionMode,
+                    onAddTap: viewModel.presentCreateAlbumSheet
+                )
+                .opacity(viewModel.isSelectionMode ? 0 : 1)
+                .allowsHitTesting(!viewModel.isSelectionMode)
+                .accessibilityHidden(viewModel.isSelectionMode)
+            }
         }
         .overlay(alignment: .topLeading) {
             RoundedTextButton(title: "취소", style: .cancel, action: viewModel.exitSelectionMode)
@@ -221,25 +221,22 @@ private struct AlbumCollectionEmptyView: View {
     let onStartTap: () -> Void
 
     var body: some View {
-        VStack(spacing: 32) {
-            VStack(spacing: 10) {
-                Image(.albumCollectionEmptyArtwork)
-                    .resizable()
-                    .scaledToFit()
-                    .frame(width: 96, height: 86)
-                    .accessibilityHidden(true)
-
-                Image(.albumCollectionEmptyDescription)
-                    .resizable()
-                    .scaledToFit()
-                    .frame(width: 257, height: 20)
-                    .accessibilityLabel("집을 만들어 사진을 보관해보세요!")
-            }
-
+        CenteredStateContent(messageSpacing: 10) {
+            Image(.albumCollectionEmptyArtwork)
+                .resizable()
+                .scaledToFit()
+                .frame(width: 96, height: 86)
+                .accessibilityHidden(true)
+        } message: {
+            Image(.albumCollectionEmptyDescription)
+                .resizable()
+                .scaledToFit()
+                .frame(width: 257, height: 20)
+                .accessibilityLabel("집을 만들어 사진을 보관해보세요!")
+        } action: {
             CommonButton(title: "시작하기", action: onStartTap)
                 .frame(width: 171)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
 
@@ -414,13 +411,7 @@ private struct AlbumTitleHeader: View {
     let isVisible: Bool
 
     var body: some View {
-        Text("사진집")
-            .font(.t1_sb)
-            .foregroundStyle(.grey900)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, 16)
-            .opacity(isVisible ? 1 : 0)
-            .accessibilityHidden(!isVisible)
+        ScrollableHeaderTitle("사진집", isVisible: isVisible)
     }
 }
 
@@ -438,7 +429,7 @@ struct AlbumHeaderActionButton: View {
             ),
             .init(
                 id: "add",
-                icon: .plus,
+                icon: .createStroke,
                 accessibilityLabel: "사진집 추가",
                 action: onAddTap
             )

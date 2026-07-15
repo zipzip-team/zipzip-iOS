@@ -18,11 +18,16 @@ struct RootView: View {
     @State private var albumViewModel = AlbumViewModel()
     @State private var pictureViewModel = PictureViewModel()
     @State private var shareViewModel: ShareViewModel
+    private let makePhotoInfoEditViewModel: ([String]) -> PhotoInfoEditViewModel
 
-    init(shareGroupRepository: ShareGroupRepository) {
+    init(
+        shareGroupRepository: ShareGroupRepository,
+        makePhotoInfoEditViewModel: @escaping ([String]) -> PhotoInfoEditViewModel
+    ) {
         _shareViewModel = State(
             initialValue: ShareViewModel(repository: shareGroupRepository)
         )
+        self.makePhotoInfoEditViewModel = makePhotoInfoEditViewModel
     }
 
     var body: some View {
@@ -74,8 +79,12 @@ struct RootView: View {
                         albumViewModel: albumViewModel,
                         shareViewModel: shareViewModel
                     )
-                case let .photoInfoEdit(metadata, localIdentifiers):
-                    PhotoInfoEditView(metadata: metadata, localIdentifiers: localIdentifiers)
+                case let .photoInfoEdit(destination):
+                    PhotoInfoEditView(
+                        metadata: destination.metadata,
+                        viewModel: makePhotoInfoEditViewModel(destination.localIdentifiers),
+                        onSuccessfulDismiss: destination.completeSuccessfulEdit
+                    )
                 case let .photoDetail(photo):
                     PhotoDetailView(
                         photo: photo,

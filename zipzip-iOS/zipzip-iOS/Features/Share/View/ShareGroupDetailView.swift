@@ -70,25 +70,25 @@ struct ShareGroupDetailView: View {
             }
         }
         .overlay(alignment: .topLeading) {
-            leadingButton
-                .padding(.top, 14)
-                .padding(.leading, 16)
+            FloatingHeader(.leading) {
+                leadingButton
+            }
         }
-        .overlay(alignment: .topTrailing) {
-            if !isSelectionMode {
-                RoundedIconButton(items: [
-                    .init(id: "select-shared-albums", icon: .select, accessibilityLabel: "사진집 선택") {
-                        enterSelectionMode()
-                    },
-                    .init(id: "import-shared-content", icon: .createStroke, accessibilityLabel: "사진 불러오기") {
-                        router.push(.shareImport(groupID))
-                    },
-                    .init(id: "open-comments", icon: .chatStroke, accessibilityLabel: "댓글") {
-                        viewModel.isCommentsPresented = true
-                    }
-                ])
-                .padding(.top, 14)
-                .padding(.trailing, 16)
+        .overlay(alignment: .topLeading) {
+            FloatingHeader(.trailing) {
+                if !isSelectionMode {
+                    RoundedIconButton(items: [
+                        .init(id: "select-shared-albums", icon: .select, accessibilityLabel: "사진집 선택") {
+                            enterSelectionMode()
+                        },
+                        .init(id: "import-shared-content", icon: .createStroke, accessibilityLabel: "사진 불러오기") {
+                            router.push(.shareImport(groupID))
+                        },
+                        .init(id: "open-comments", icon: .chatStroke, accessibilityLabel: "댓글") {
+                            viewModel.isCommentsPresented = true
+                        }
+                    ])
+                }
             }
         }
         .overlay(alignment: .bottom) {

@@ -21,14 +21,13 @@ struct Navbar: View {
         .padding(4)
         .background(.white00, in: .capsule)
         .shadow(color: .black.opacity(0.05), radius: 6, y: 1)
+        .animation(.spring(response: 0.3, dampingFraction: 0.8), value: selection)
     }
 
     private func item(for tab: NavbarTab) -> some View {
         let isSelected = selection == tab
         return Button {
-            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                onSelect(tab)
-            }
+            onSelect(tab)
         } label: {
             EmptyView()
         }

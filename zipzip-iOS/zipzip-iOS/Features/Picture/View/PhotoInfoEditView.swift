@@ -9,34 +9,59 @@ import SwiftUI
 
 struct PhotoInfoEditView: View {
     @Environment(\.dismiss) private var dismiss
+    @State private var viewModel: PhotoInfoEditViewModel
+    @State private var isDismissing = false
 
     let metadata: PhotoMetadata
-    let localIdentifiers: [String]
+    private let onSuccessfulDismiss: () -> Void
+
+    init(
+        metadata: PhotoMetadata,
+        viewModel: PhotoInfoEditViewModel,
+        onSuccessfulDismiss: @escaping () -> Void = {}
+    ) {
+        self.metadata = metadata
+        _viewModel = State(initialValue: viewModel)
+        self.onSuccessfulDismiss = onSuccessfulDismiss
+    }
 
     var body: some View {
         ScrollView {
-            PhotoInfoEditContent(metadata: metadata, localIdentifiers: localIdentifiers)
+            PhotoInfoEditContent(metadata: metadata, viewModel: viewModel)
                 .padding(.horizontal, 16)
-                .padding(.top, 78)
+                .padding(.top, FloatingHeaderLayout.buttonHeight + 30)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .background(Color.orange30.ignoresSafeArea())
         .navigationBarBackButtonHidden(true)
         .overlay(alignment: .topLeading) {
-            backButton
+            FloatingHeader(.leading) {
+                backButton
+            }
         }
     }
 
     private var backButton: some View {
         RoundedIconButton(items: [
-            .init(id: "back", icon: .chevronLeft, accessibilityLabel: "뒤로가기") { dismiss() }
+            .init(id: "back", icon: .chevronLeft, accessibilityLabel: "뒤로가기") {
+                guard !isDismissing else { return }
+                isDismissing = true
+                Task {
+                    if await viewModel.waitForPendingSaves() {
+                        onSuccessfulDismiss()
+                    }
+                    dismiss()
+                }
+            }
         ])
         .opacity(0.9)
-        .padding(.horizontal, 16)
-        .padding(.vertical, 4)
+        .allowsHitTesting(!isDismissing)
     }
 }
 
 #Preview {
-    PhotoInfoEditView(metadata: PhotoMetadata.samples[0], localIdentifiers: [])
+    PhotoInfoEditView(
+        metadata: PhotoMetadata.samples[0],
+        viewModel: PhotoInfoEditViewModel()
+    )
 }

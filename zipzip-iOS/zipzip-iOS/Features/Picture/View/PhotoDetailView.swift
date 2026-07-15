@@ -167,13 +167,15 @@ struct PhotoDetailView: View {
             }
             .navigationBarBackButtonHidden(true)
             .overlay(alignment: .topLeading) {
-                backButton {
-                    setInfoEditing(false, scrollProxy: proxy)
+                FloatingHeader(.leading) {
+                    backButton {
+                        setInfoEditing(false, scrollProxy: proxy)
+                    }
+                    .opacity(isPhotoZoomed ? 0 : 1)
+                    .allowsHitTesting(!isPhotoZoomed)
+                    .accessibilityHidden(isPhotoZoomed)
+                    .animation(reduceMotion ? nil : .easeOut(duration: 0.16), value: isPhotoZoomed)
                 }
-                .opacity(isPhotoZoomed ? 0 : 1)
-                .allowsHitTesting(!isPhotoZoomed)
-                .accessibilityHidden(isPhotoZoomed)
-                .animation(reduceMotion ? nil : .easeOut(duration: 0.16), value: isPhotoZoomed)
             }
             .overlay(alignment: .bottom) {
                 if !isEditingInfo {
@@ -279,8 +281,6 @@ struct PhotoDetailView: View {
             }
         ])
         .opacity(0.9)
-        .padding(.horizontal, 16)
-        .padding(.vertical, 4)
     }
 
     private var actionBar: some View {

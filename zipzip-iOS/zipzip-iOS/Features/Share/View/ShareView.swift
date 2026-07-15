@@ -180,13 +180,13 @@ struct ShareAlbumDetailDestinationView: View {
                 .navigationBarBackButtonHidden(true)
                 .toolbarVisibility(.hidden, for: .navigationBar)
                 .overlay(alignment: .topLeading) {
-                    RoundedIconButton(items: [
-                        .init(id: "missing-share-album-back", icon: .iconChevronLeft, accessibilityLabel: "뒤로가기") {
-                            router.pop()
-                        }
-                    ])
-                    .padding(.top, 14)
-                    .padding(.leading, 16)
+                    FloatingHeader(.leading) {
+                        RoundedIconButton(items: [
+                            .init(id: "missing-share-album-back", icon: .iconChevronLeft, accessibilityLabel: "뒤로가기") {
+                                router.pop()
+                            }
+                        ])
+                    }
                 }
         }
     }
@@ -196,42 +196,61 @@ private struct ShareGroupListView: View {
     let viewModel: ShareViewModel
     let onOpenGroup: (ShareAlbum.ID) -> Void
 
+    private var showsEmptyState: Bool {
+        viewModel.groups.isEmpty && viewModel.hasLoadedGroups && !viewModel.isAddMode
+    }
+
     var body: some View {
         ZStack {
             Color.orange30
                 .ignoresSafeArea()
 
-            if viewModel.groups.isEmpty, viewModel.hasLoadedGroups, !viewModel.isAddMode {
-                ShareCollectionEmptyView(onCreate: viewModel.presentCreateSheet)
-            } else {
-                ScrollView(showsIndicators: false) {
-                    LazyVStack(spacing: 12) {
-                        ForEach(viewModel.groups) { group in
-                            Button {
-                                onOpenGroup(group.id)
-                            } label: {
-                                ShareAlbumCard(
-                                    thumbnail: nil,
-                                    title: group.name,
-                                    date: group.date,
-                                    profileImages: Array(repeating: nil, count: min(group.memberCount, 4)),
-                                    memberCount: group.memberCount
-                                )
+            ScrollView(showsIndicators: false) {
+                VStack(spacing: 0) {
+                    if !viewModel.isAddMode {
+                        ScrollableHeaderTitle("공유")
+                    }
+
+                    if showsEmptyState {
+                        ShareCollectionEmptyView(onCreate: viewModel.presentCreateSheet)
+                            .containerRelativeFrame(.vertical) { length, _ in
+                                max(length - FloatingHeaderLayout.scrollableTitleLayoutHeight, 0)
                             }
-                            .buttonStyle(StaticButtonStyle())
-                            .accessibilityLabel("\(group.name), \(group.memberCount)명")
-                            .task {
-                                await viewModel.loadMoreGroupsIfNeeded(currentGroupID: group.id)
+                    } else {
+                        LazyVStack(spacing: 12) {
+                            ForEach(viewModel.groups) { group in
+                                Button {
+                                    onOpenGroup(group.id)
+                                } label: {
+                                    ShareAlbumCard(
+                                        thumbnail: nil,
+                                        title: group.name,
+                                        date: group.date,
+                                        profileImages: Array(repeating: nil, count: min(group.memberCount, 4)),
+                                        memberCount: group.memberCount
+                                    )
+                                }
+                                .buttonStyle(StaticButtonStyle())
+                                .accessibilityLabel("\(group.name), \(group.memberCount)명")
+                                .task {
+                                    await viewModel.loadMoreGroupsIfNeeded(currentGroupID: group.id)
+                                }
                             }
                         }
+                        .padding(.horizontal, 16)
+                        .padding(
+                            .top,
+                            viewModel.isAddMode
+                                ? FloatingHeaderLayout.roundedIconButtonTop + FloatingHeaderLayout.buttonHeight + 16
+                                : FloatingHeaderLayout.scrollableTitleContentSpacing
+                        )
+                        .padding(.bottom, viewModel.isAddMode ? 130 : 24)
                     }
-                    .padding(.horizontal, 16)
-                    .padding(.top, 69)
-                    .padding(.bottom, viewModel.isAddMode ? 130 : 24)
                 }
-                .refreshable {
-                    await viewModel.loadGroups(refresh: true)
-                }
+            }
+            .ignoresSafeArea(edges: .top)
+            .refreshable {
+                await viewModel.loadGroups(refresh: true)
             }
         }
         .overlay(alignment: .topLeading) {
@@ -239,24 +258,17 @@ private struct ShareGroupListView: View {
                 RoundedTextButton(title: "취소", style: .cancel, action: viewModel.exitAddMode)
                     .padding(.top, 14)
                     .padding(.leading, 16)
-            } else {
-                Text("공유")
-                    .font(.t1_sb)
-                    .foregroundStyle(.grey900)
-                    .frame(height: 44)
-                    .padding(.top, 14)
-                    .padding(.leading, 16)
             }
         }
-        .overlay(alignment: .topTrailing) {
-            if !viewModel.isAddMode {
-                RoundedIconButton(items: [
-                    .init(id: "add-share-group", icon: .plus, accessibilityLabel: "공유 그룹 추가") {
-                        viewModel.enterAddMode()
-                    }
-                ])
-                .padding(.top, 14)
-                .padding(.trailing, 16)
+        .overlay(alignment: .topLeading) {
+            FloatingHeader(.trailing) {
+                if !viewModel.isAddMode {
+                    RoundedIconButton(items: [
+                        .init(id: "add-share-group", icon: .plus, accessibilityLabel: "공유 그룹 추가") {
+                            viewModel.enterAddMode()
+                        }
+                    ])
+                }
             }
         }
         .overlay(alignment: .bottom) {
@@ -278,25 +290,22 @@ private struct ShareRootLoginView: View {
 
     var body: some View {
         ShareRootStateContainer(title: "공유") {
-            VStack(spacing: 32) {
-                VStack(spacing: 8) {
-                    Image(.shareLoginRequiredArtwork)
-                        .resizable()
-                        .scaledToFit()
-                        .frame(width: 92, height: 80)
-                        .accessibilityHidden(true)
-                    Image(.shareLoginRequiredText)
-                        .resizable()
-                        .scaledToFit()
-                        .frame(width: 146, height: 53)
-                        .accessibilityLabel("공유는 로그인이 필요해요")
-                }
-
+            CenteredStateContent {
+                Image(.shareLoginRequiredArtwork)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 92, height: 80)
+                    .accessibilityHidden(true)
+            } message: {
+                Image(.shareLoginRequiredText)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 146, height: 53)
+                    .accessibilityLabel("공유는 로그인이 필요해요")
+            } action: {
                 CommonButton(title: "로그인", property1: .cta, action: onLogin)
                     .frame(width: 171)
             }
-            .padding(.top, 252)
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         }
     }
 }
@@ -305,25 +314,22 @@ private struct ShareCollectionEmptyView: View {
     let onCreate: () -> Void
 
     var body: some View {
-        VStack(spacing: 32) {
-            VStack(spacing: 8) {
-                Image(.shareCollectionEmptyArtwork)
-                    .resizable()
-                    .scaledToFit()
-                    .frame(width: 79, height: 105)
-                    .accessibilityHidden(true)
-                Image(.shareCollectionEmptyText)
-                    .resizable()
-                    .scaledToFit()
-                    .frame(width: 141, height: 54)
-                    .accessibilityLabel("공유 공간에서 추억을 기록하세요")
-            }
-
+        CenteredStateContent {
+            Image(.shareCollectionEmptyArtwork)
+                .resizable()
+                .scaledToFit()
+                .frame(width: 79, height: 105)
+                .accessibilityHidden(true)
+        } message: {
+            Image(.shareCollectionEmptyText)
+                .resizable()
+                .scaledToFit()
+                .frame(width: 141, height: 54)
+                .accessibilityLabel("공유 공간에서 추억을 기록하세요")
+        } action: {
             CommonButton(title: "그룹 만들기", action: onCreate)
                 .frame(width: 171)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .padding(.bottom, 16)
     }
 }
 
@@ -335,14 +341,18 @@ private struct ShareRootStateContainer<Content: View>: View {
         ZStack {
             Color.orange30
                 .ignoresSafeArea()
-            content()
-        }
-        .overlay(alignment: .topLeading) {
-            Text(title)
-                .font(.t1_sb)
-                .foregroundStyle(.grey900)
-                .padding(.top, 19)
-                .padding(.leading, 16)
+
+            ScrollView(showsIndicators: false) {
+                VStack(spacing: 0) {
+                    ScrollableHeaderTitle(title)
+
+                    content()
+                        .containerRelativeFrame(.vertical) { length, _ in
+                            max(length - FloatingHeaderLayout.scrollableTitleLayoutHeight, 0)
+                        }
+                }
+            }
+            .ignoresSafeArea(edges: .top)
         }
     }
 }

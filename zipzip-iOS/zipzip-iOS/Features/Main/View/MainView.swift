@@ -14,15 +14,22 @@ struct MainView: View {
 
     @Fetch(RegisteredPhotoCountRequest()) private var registeredPhotoCount = 0
 
+    private let organizedPhotoCount: Int
+
     private enum Layout {
-        static let heroHeight: CGFloat = 402
-        static let sectionSpacing: CGFloat = 32
+        static let heroHeight: CGFloat = 420
+        static let sectionSpacing: CGFloat = 28
         static let horizontalPadding: CGFloat = 16
+        static let organizedPhotoCountTopPadding: CGFloat = 134
+    }
+
+    init(organizedPhotoCount: Int = 0) {
+        self.organizedPhotoCount = organizedPhotoCount
     }
 
     var body: some View {
         ZStack(alignment: .top) {
-            Color.orange30
+            Color.white00
                 .ignoresSafeArea()
 
             ScrollView(showsIndicators: false) {
@@ -36,16 +43,51 @@ struct MainView: View {
             floatingHeader
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .overlay(alignment: .topLeading) {
+            FloatingHeader(.trailing) {
+                ProfileButton {
+                    router.push(.myPage)
+                }
+            }
+        }
     }
 
     private var heroSection: some View {
-        Rectangle()
-            .fill(.grey70)
-            .frame(height: Layout.heroHeight)
+        ZStack(alignment: .bottomTrailing) {
+            Rectangle()
+                .fill(.orange30)
+                .frame(height: Layout.heroHeight)
+
+            Image(.zip01)
+
+            organizedPhotoCountView
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                .padding(.top, Layout.organizedPhotoCountTopPadding)
+                .padding(.horizontal, Layout.horizontalPadding)
+        }
+    }
+
+    private var organizedPhotoCountView: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text("집집에서 정리한 사진")
+                .font(.t3_md)
+
+            HStack(alignment: .bottom, spacing: 2) {
+                Text("\(organizedPhotoCount)")
+                    .font(.h1_sb)
+
+                Text("장")
+                    .font(.b1_md)
+                    .padding(.bottom, 6)
+            }
+        }
+        .foregroundStyle(.grey1000)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("집집에 모인 사진 \(organizedPhotoCount)장")
     }
 
     private var unresolvedPhotosSection: some View {
-        VStack(alignment: .leading, spacing: 24) {
+        VStack(alignment: .leading, spacing: 16) {
             VStack(alignment: .leading, spacing: 4) {
                 Text("아직 머물 곳을 찾는 사진들")
                     .font(.t2_sb)
@@ -61,22 +103,44 @@ struct MainView: View {
                     HomePhotoCard(
                         eyebrow: "어딜 다녀왔더라?",
                         title: "장소를 모르는 사진",
-                        backgroundColor: .orange400,
-                        imageWidth: 112
+                        backgroundColor: .orange200,
+                        buttonBackgroundColor: .orange100,
+                        image: .homeCard01,
+                        action: {
+                            router.push(.filterResult([
+                                AppliedFilter(
+                                    kind: .etc,
+                                    value: PhotoFilterOptions.EtcItem.noLocation
+                                )
+                            ]))
+                        }
                     )
 
                     HomePhotoCard(
                         eyebrow: "어떤 사진을 찍었지?",
                         title: "최근 저장된 사진",
-                        backgroundColor: Color(red: 0.74, green: 0.87, blue: 0.94),
-                        imageWidth: 112
+                        backgroundColor: .skyblue500,
+                        buttonBackgroundColor: .skyblue100,
+                        image: .homeCard02,
+                        action: {
+                            router.push(.filterResult([
+                                AppliedFilter(
+                                    kind: .etc,
+                                    value: PhotoFilterOptions.EtcItem.recentlyAdded
+                                )
+                            ]))
+                        }
                     )
 
                     HomePhotoCard(
                         eyebrow: "어떤 걸로 찍었지?",
                         title: "등록된 기기 확인",
-                        backgroundColor: .yellow500,
-                        imageWidth: 112
+                        backgroundColor: .yellow400,
+                        buttonBackgroundColor: .white00,
+                        image: .homeCard03,
+                        action: {
+                            router.push(.registeredDeviceManagement)
+                        }
                     )
                 }
             }
@@ -85,41 +149,32 @@ struct MainView: View {
     }
 
     private var floatingHeader: some View {
-        HStack {
-            Button {} label: {
-                Text("logo")
-                    .font(.b2_md)
-                    .foregroundStyle(.grey1000)
+        FloatingHeaderBar {
+            HStack(spacing: 0) {
+                Image(.badgeLogo)
                     .frame(width: 44, height: 44)
-                    .background(.grey200, in: RoundedRectangle(cornerRadius: 6.67, style: .continuous))
-            }
-            .buttonStyle(.plain)
-
-            Spacer()
-
-            if photoSync.isProcessing {
-                MoveInIndicator(
-                    remainingMinutes: photoSync.remainingMinutes,
-                    tooltipText: registeredPhotoCount > 0
-                        ? "\(registeredPhotoCount)장의 사진이 입주했어요!"
-                        : nil
-                )
-                .transition(.opacity)
 
                 Spacer()
-            }
 
-            ProfileButton {
-                router.push(.myPage)
+                if photoSync.isProcessing {
+                    MoveInIndicator(
+                        remainingMinutes: photoSync.remainingMinutes,
+                        tooltipText: registeredPhotoCount > 0
+                            ? "\(registeredPhotoCount)장의 사진이 입주했어요!"
+                            : nil
+                    )
+                    .transition(.opacity)
+
+                    Spacer()
+                }
             }
         }
-        .padding(.horizontal, Layout.horizontalPadding)
         .animation(.easeInOut(duration: 0.2), value: photoSync.isProcessing)
     }
 }
 
 #Preview {
-    MainView()
+    MainView(organizedPhotoCount: 7018)
         .environment(Router())
         .environment(PhotoSyncCoordinator())
 }

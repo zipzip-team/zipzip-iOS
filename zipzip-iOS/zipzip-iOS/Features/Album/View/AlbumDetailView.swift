@@ -20,6 +20,7 @@ struct AlbumDetailView<Content: View>: View {
 
     let album: AlbumDetailItem
     private let contentTopSpacing: CGFloat
+    private let centersDetailContent: Bool
     private let detailContent: (AlbumDetailViewModel) -> Content
     private let moveAlbums: [Album]
     private let shareAlbums: [ShareAlbum]
@@ -29,6 +30,7 @@ struct AlbumDetailView<Content: View>: View {
         album: AlbumDetailItem,
         viewModel: AlbumDetailViewModel,
         contentTopSpacing: CGFloat = 30,
+        centersDetailContent: Bool = false,
         moveAlbums: [Album] = [],
         shareAlbums: [ShareAlbum] = [],
         onOpenShareAlbum: @escaping (ShareAlbum.ID) async -> Void = { _ in },
@@ -37,6 +39,7 @@ struct AlbumDetailView<Content: View>: View {
         self.album = album
         _viewModel = State(initialValue: viewModel)
         self.contentTopSpacing = contentTopSpacing
+        self.centersDetailContent = centersDetailContent
         self.detailContent = content
         self.moveAlbums = moveAlbums
         self.shareAlbums = shareAlbums
@@ -52,20 +55,20 @@ struct AlbumDetailView<Content: View>: View {
                 .ignoresSafeArea(edges: .top)
         }
         .overlay(alignment: .topLeading) {
-            leadingActionButton
-                .padding(.top, 14)
-                .padding(.leading, 16)
+            FloatingHeader(.leading) {
+                leadingActionButton
+            }
         }
-        .overlay(alignment: .topTrailing) {
-            AlbumHeaderActionButton(
-                onSelectionTap: { viewModel.enterSelectionMode(photoCount: album.photoCount) },
-                onAddTap: viewModel.presentPhotoPicker
-            )
-            .padding(.top, 14)
-            .padding(.trailing, 16)
-            .opacity(viewModel.isSelectionMode ? 0 : 1)
-            .allowsHitTesting(!viewModel.isSelectionMode)
-            .accessibilityHidden(viewModel.isSelectionMode)
+        .overlay(alignment: .topLeading) {
+            FloatingHeader(.trailing) {
+                AlbumHeaderActionButton(
+                    onSelectionTap: { viewModel.enterSelectionMode(photoCount: album.photoCount) },
+                    onAddTap: viewModel.presentPhotoPicker
+                )
+                .opacity(viewModel.isSelectionMode ? 0 : 1)
+                .allowsHitTesting(!viewModel.isSelectionMode)
+                .accessibilityHidden(viewModel.isSelectionMode)
+            }
         }
         .overlay(alignment: .bottom) {
             if viewModel.isSelectionMode {
@@ -136,17 +139,32 @@ struct AlbumDetailView<Content: View>: View {
 
     private var scrollContent: some View {
         ScrollView(showsIndicators: false) {
-            VStack(spacing: contentTopSpacing) {
-                titleSection
+            if centersDetailContent {
+                ZStack(alignment: .top) {
+                    titleSection
+                        .padding(.top, 166)
 
-                detailContent(viewModel)
-            }
-            .padding(.top, 166)
-            .padding(.bottom, viewModel.isSelectionMode ? 140 : 40)
-            .frame(maxWidth: .infinity, alignment: .top)
-            .background(alignment: .top) {
-                AlbumDetailFolderBackground()
-                    .ignoresSafeArea()
+                    detailContent(viewModel)
+                }
+                .containerRelativeFrame(.vertical)
+                .frame(maxWidth: .infinity)
+                .padding(.bottom, viewModel.isSelectionMode ? 140 : 40)
+                .background(alignment: .top) {
+                    AlbumDetailFolderBackground()
+                        .ignoresSafeArea()
+                }
+            } else {
+                VStack(spacing: contentTopSpacing) {
+                    titleSection
+                    detailContent(viewModel)
+                }
+                .padding(.top, 166)
+                .padding(.bottom, viewModel.isSelectionMode ? 140 : 40)
+                .frame(maxWidth: .infinity, alignment: .top)
+                .background(alignment: .top) {
+                    AlbumDetailFolderBackground()
+                        .ignoresSafeArea()
+                }
             }
         }
     }
@@ -213,7 +231,7 @@ struct AlbumDetailEmptyView: View {
         AlbumDetailView(
             album: album,
             viewModel: viewModel,
-            contentTopSpacing: 125,
+            centersDetailContent: true,
             moveAlbums: moveAlbums,
             shareAlbums: shareAlbums,
             onOpenShareAlbum: onOpenShareAlbum
@@ -315,21 +333,19 @@ private struct AlbumDetailEmptyContent: View {
     let onLoadPhotos: () -> Void
 
     var body: some View {
-        VStack(spacing: 32) {
-            VStack(spacing: 8) {
-                Image(.albumDetailEmptyArtwork)
-                    .resizable()
-                    .scaledToFit()
-                    .frame(width: 80, height: 80)
-                    .accessibilityHidden(true)
-
-                Image(.albumEmptyDescription)
-                    .resizable()
-                    .scaledToFit()
-                    .frame(width: 246, height: 20)
-                    .accessibilityLabel("사진집에 사진을 넣어볼까요?")
-            }
-
+        CenteredStateContent {
+            Image(.albumDetailEmptyArtwork)
+                .resizable()
+                .scaledToFit()
+                .frame(width: 80, height: 80)
+                .accessibilityHidden(true)
+        } message: {
+            Image(.albumEmptyDescription)
+                .resizable()
+                .scaledToFit()
+                .frame(width: 246, height: 20)
+                .accessibilityLabel("사진집에 사진을 넣어볼까요?")
+        } action: {
             CommonButton(
                 title: "사진 불러오기",
                 property1: .default,
