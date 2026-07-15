@@ -18,6 +18,8 @@ struct RootView: View {
     @State private var albumViewModel = AlbumViewModel()
     @State private var pictureViewModel = PictureViewModel()
     @State private var shareViewModel: ShareViewModel
+    @State private var selection: NavbarTab = .main
+    @State private var showShareSheet = false
     private let makePhotoInfoEditViewModel: ([String]) -> PhotoInfoEditViewModel
 
     init(
@@ -40,9 +42,10 @@ struct RootView: View {
                     SplashView(continuesOnboarding: false)
                 } else if hasCompletedOnboarding {
                     RootTabView(
-                        albumViewModel: albumViewModel,
                         pictureViewModel: pictureViewModel,
-                        shareViewModel: shareViewModel
+                        albumViewModel: albumViewModel,
+                        shareViewModel: shareViewModel,
+                        selection: selection
                     )
                 } else {
                     SplashView()
@@ -154,6 +157,36 @@ struct RootView: View {
                 }
             }
         }
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            bottomBar
+        }
+        .bottomSheet(isPresented: $showShareSheet, detents: [.full]) { dismiss in
+            ShareSheet(
+                albums: albumViewModel.shareDestinations,
+                shareAlbums: shareViewModel.groups,
+                onDismiss: { dismiss() },
+                onOpenShareAlbum: loadSharedAlbums,
+                onComplete: { destinations in
+                    let localIdentifiers = pictureViewModel.selectedPhotoLocalIdentifiers
+                    Task {
+                        guard await albumViewModel.addPhotos(
+                            localIdentifiers: localIdentifiers,
+                            to: destinations
+                        ) else {
+                            return
+                        }
+
+                        dismiss()
+                        pictureViewModel.cancelSelection()
+                        guard let albumID = destinations.firstPersonalAlbumID else {
+                            return
+                        }
+
+                        selectTab(.album, path: [.albumDetail(albumID)])
+                    }
+                }
+            )
+        }
         .environment(photoSync)
         .fullScreenCover(item: $authenticationState.loginIntent) { _ in
             ShareLoginView()
@@ -209,6 +242,83 @@ struct RootView: View {
         ) { _ in
             Task { await authenticationState.handleAppleCredentialRevocation() }
         }
+    }
+
+    @ViewBuilder private var bottomBar: some View {
+        if showsRootTab, router.path.isEmpty {
+            if selection == .picture, pictureViewModel.isSelectionMode {
+                ActionBar(items: [
+                    .init(
+                        icon: .moveToAlbum,
+                        title: "집으로",
+                        isDisabled: pictureViewModel.selectedPhotoIDs.isEmpty
+                    ) { showShareSheet = true },
+                    .init(
+                        icon: .metadata,
+                        title: "정보 수정",
+                        isDisabled: pictureViewModel.selectedPhotoIDs.isEmpty
+                    ) {
+                        if let metadata = pictureViewModel.firstSelectedMetadata {
+                            router.push(.photoInfoEdit(PhotoInfoEditDestination(
+                                metadata: metadata,
+                                localIdentifiers: pictureViewModel.selectedPhotoLocalIdentifiers,
+                                onSuccessfulDismiss: pictureViewModel.cancelSelection
+                            )))
+                        }
+                    },
+                    .init(
+                        icon: .delete,
+                        title: "삭제",
+                        isDisabled: pictureViewModel.selectedPhotoIDs.isEmpty
+                    ) { pictureViewModel.requestDelete() }
+                ])
+                .padding(.bottom, 26.5)
+                .ignoresSafeArea(.container, edges: .bottom)
+            } else if showsNavbar {
+                Navbar(selection: selection, onSelect: { selectTab($0) })
+                    .padding(.bottom, 28)
+                    .ignoresSafeArea(.container, edges: .bottom)
+            }
+        }
+    }
+
+    private var showsRootTab: Bool {
+        hasCompletedOnboarding && !authenticationState.isRestoring
+    }
+
+    private var showsNavbar: Bool {
+        switch selection {
+        case .album:
+            !albumViewModel.isSelectionMode
+        case .share:
+            !shareViewModel.isAddMode
+        default:
+            true
+        }
+    }
+
+    private func loadSharedAlbums(groupID: ShareAlbum.ID) async {
+        await shareViewModel.loadSharedAlbums(groupID: groupID)
+    }
+
+    private func selectTab(_ newSelection: NavbarTab) {
+        selectTab(newSelection, path: [])
+    }
+
+    private func selectTab(_ newSelection: NavbarTab, path: [Route]) {
+        guard selection != newSelection || router.path != path else {
+            return
+        }
+
+        if newSelection != .album {
+            albumViewModel.resetForTabChange()
+        }
+        if newSelection != .share {
+            shareViewModel.resetTransientUI()
+        }
+
+        router.replacePath(with: path)
+        selection = newSelection
     }
 
     private func addPhotosToAlbums(
