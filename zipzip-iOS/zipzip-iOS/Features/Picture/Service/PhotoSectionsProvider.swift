@@ -107,20 +107,28 @@ nonisolated struct PhotoSectionsProvider {
             }
         }
 
-        let sorted = filtered.sorted { lhs, rhs in
-            switch (lhs.takenAt, rhs.takenAt) {
-            case let (l?, r?): return l > r
-            case (_?, nil): return true
-            case (nil, _?): return false
-            case (nil, nil): return lhs.addedAt > rhs.addedAt
+        // "최근 저장된 사진" 필터가 켜지면 촬영일이 아니라 저장일(added) 기준으로 정렬·섹션한다.
+        let sortsByAddedDate = filters.contains {
+            $0.kind == .etc && $0.value == PhotoFilterOptions.EtcItem.recentlyAdded
+        }
+
+        let sorted: [FilterablePhoto]
+        if sortsByAddedDate {
+            sorted = filtered.sorted { $0.addedAt > $1.addedAt }
+        } else {
+            sorted = filtered.sorted { lhs, rhs in
+                switch (lhs.takenAt, rhs.takenAt) {
+                case let (l?, r?): return l > r
+                case (_?, nil): return true
+                case (nil, _?): return false
+                case (nil, nil): return lhs.addedAt > rhs.addedAt
+                }
             }
         }
 
-        let items = sorted.map { (date: $0.takenAt, photo: $0.photo) }
+        let items = sorted.map { (date: sortsByAddedDate ? $0.addedAt : $0.takenAt, photo: $0.photo) }
         return PhotoSectionGrouping.sections(from: items)
     }
-
-    private static let recentPhotoLimit = 50
 
     static func makeFilterablePhotos(
         records: [PhotoRecord],
@@ -211,9 +219,6 @@ nonisolated struct PhotoSectionsProvider {
                 return photos.filter { $0.takenAt == nil }
             case PhotoFilterOptions.EtcItem.recentlyAdded:
                 return photos
-                    .sorted { $0.addedDate > $1.addedDate }
-                    .prefix(recentPhotoLimit)
-                    .map { $0 }
             default:
                 return photos
             }
