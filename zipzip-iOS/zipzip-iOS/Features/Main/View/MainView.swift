@@ -151,11 +151,13 @@ struct MainView: View {
 
     private var floatingHeader: some View {
         FloatingHeaderBar {
-            HStack(spacing: 0) {
-                Image(.badgeLogo)
-                    .frame(width: 44, height: 44)
+            ZStack {
+                HStack(spacing: 0) {
+                    Image(.badgeLogo)
+                        .frame(width: 44, height: 44)
 
-                Spacer()
+                    Spacer()
+                }
 
                 if photoSync.isProcessing {
                     MoveInIndicator(
@@ -165,8 +167,6 @@ struct MainView: View {
                             : nil
                     )
                     .transition(.opacity)
-
-                    Spacer()
                 }
             }
         }
