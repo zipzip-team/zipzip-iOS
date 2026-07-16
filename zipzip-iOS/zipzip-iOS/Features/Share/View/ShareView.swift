@@ -165,7 +165,14 @@ struct ShareAlbumDetailDestinationView: View {
                     groupID: groupID,
                     albumID: albumID,
                     onDelete: router.pop
-                )
+                ),
+                onOpenPhoto: { photoID in
+                    router.push(.sharePhotoDetail(
+                        groupID: groupID,
+                        albumID: albumID,
+                        photoID: photoID
+                    ))
+                }
             )
         } else {
             ContentUnavailableView("사진집을 찾을 수 없어요", systemImage: "photo.on.rectangle")

@@ -294,6 +294,55 @@ final class ShareViewModel {
         )
     }
 
+    func makeSharedPhotoDetailViewModel(
+        groupID: ShareAlbum.ID,
+        albumID: SharedAlbum.ID,
+        photoID: SharedAlbumPhoto.ID,
+        onDelete: @escaping () -> Void
+    ) -> SharedPhotoDetailViewModel {
+        let adapter = SharedPhotoDetailRepositoryAdapter(
+            onPhoto: { [weak self] photoID in
+                guard let repository = self?.sharedPhotoRepository else {
+                    throw SharedPhotoRepositoryError.cacheNotPrepared
+                }
+                return try await repository.photo(id: photoID)
+            },
+            onComments: { [weak self] photoID, cursor, size in
+                guard let repository = self?.sharedPhotoRepository else {
+                    throw SharedPhotoRepositoryError.cacheNotPrepared
+                }
+                return try await repository.comments(
+                    photoID: photoID,
+                    cursor: cursor,
+                    size: size
+                )
+            },
+            onSetLike: { [weak self] photoID, isLiked in
+                guard let repository = self?.sharedPhotoRepository else {
+                    throw SharedPhotoRepositoryError.cacheNotPrepared
+                }
+                return try await repository.setLike(photoID: photoID, isLiked: isLiked)
+            },
+            onDeletePhoto: { [weak self] photoID, albumID in
+                guard let self, let repository = self.sharedPhotoRepository else {
+                    throw SharedPhotoRepositoryError.cacheNotPrepared
+                }
+                let result = try await repository.detachPhotos(
+                    photoIDs: [photoID],
+                    from: albumID
+                )
+                await self.refreshSharedAlbumsAfterPhotoMutation(groupID: groupID)
+                return result.succeededCount == 1
+            }
+        )
+        return SharedPhotoDetailViewModel(
+            photoID: photoID,
+            albumID: albumID,
+            repository: adapter,
+            onPhotoDeleted: onDelete
+        )
+    }
+
     func loadGroups(for userID: UUID, refresh: Bool = false) async {
         if cacheOwnerID != userID {
             resetRemoteData()

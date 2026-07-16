@@ -11,14 +11,17 @@ struct SharedAlbumDetailView: View {
 
     let album: SharedAlbum
     let destinationAlbums: [SharedAlbum]
+    let onOpenPhoto: (SharedAlbumPhoto.ID) -> Void
 
     init(
         album: SharedAlbum,
         destinationAlbums: [SharedAlbum],
-        viewModel: SharedAlbumDetailViewModel
+        viewModel: SharedAlbumDetailViewModel,
+        onOpenPhoto: @escaping (SharedAlbumPhoto.ID) -> Void = { _ in }
     ) {
         self.album = album
         self.destinationAlbums = destinationAlbums.filter { $0.id != album.id }
+        self.onOpenPhoto = onOpenPhoto
         _viewModel = State(initialValue: viewModel)
     }
 
@@ -179,6 +182,7 @@ struct SharedAlbumDetailView: View {
                 selectedPhotoIDs: viewModel.selectedPhotoIDs,
                 onSelectPhoto: viewModel.togglePhotoSelection,
                 onBeginSelection: viewModel.beginSelection,
+                onOpenPhoto: onOpenPhoto,
                 onNeedsURLRefresh: viewModel.refreshExpiredURLsIfNeeded
             )
             .padding(.horizontal, 16)
