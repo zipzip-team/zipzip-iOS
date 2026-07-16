@@ -265,6 +265,8 @@ private struct ShareGroupNameField: View {
                 .foregroundStyle(.grey1000)
                 .tint(.orange500)
                 .focused($isFocused)
+                .submitLabel(.done)
+                .onSubmit { isFocused = false }
 
             Button {
                 isFocused = true
