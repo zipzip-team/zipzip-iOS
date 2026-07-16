@@ -29,12 +29,6 @@ final class PictureViewModel {
         response
     }
 
-    var organizedPhotoCount: Int {
-        sections.reduce(0) { count, section in
-            count + section.photos.count
-        }
-    }
-
     init(
         filters: [AppliedFilter] = [],
         deleteOperation: @escaping ([String]) async throws -> Void = {

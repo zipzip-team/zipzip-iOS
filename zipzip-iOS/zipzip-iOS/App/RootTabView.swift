@@ -22,7 +22,7 @@ struct RootTabView: View {
     @ViewBuilder private func page(for tab: NavbarTab) -> some View {
         switch tab {
         case .main:
-            MainView(organizedPhotoCount: pictureViewModel.organizedPhotoCount)
+            MainView()
         case .picture:
             PictureView(
                 viewModel: pictureViewModel,
