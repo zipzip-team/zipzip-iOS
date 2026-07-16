@@ -5,6 +5,14 @@ import XCTest
 private let testCacheOwnerID = UUID()
 
 extension ShareGroupAPI {
+    func createSharedAlbum(
+        groupID: UUID,
+        name: String,
+        idempotencyKey: UUID
+    ) async throws -> SharedAlbumResponse {
+        throw URLError(.unsupportedURL)
+    }
+
     func renameSharedAlbum(id: UUID, name: String) async throws -> SharedAlbumRenameResponse {
         throw URLError(.unsupportedURL)
     }
