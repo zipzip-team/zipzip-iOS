@@ -42,6 +42,7 @@ final class DeviceSelectionViewModel {
     /// 선택한 기기를 등록 세트로 저장한다.
     func saveSelection() async -> Bool {
         guard !isSavingSelection else { return false }
+        guard !selectedDeviceIDs.isEmpty else { return false }
 
         isSavingSelection = true
         isErrorAlertPresented = false

@@ -10,6 +10,7 @@ import SwiftUI
 struct PhotoPermissionView: View {
     @Environment(Router.self) private var router
     @Environment(PhotoSyncCoordinator.self) private var photoSync
+    @Environment(\.scenePhase) private var scenePhase
 
     @State private var viewModel: PhotoPermissionViewModel
 
@@ -59,6 +60,10 @@ struct PhotoPermissionView: View {
             guard didAuthorizePhotoAccess else { return }
             viewModel.handlePhotoAccessGranted(using: photoSync)
             router.push(.serviceIntro)
+        }
+        .onChange(of: scenePhase) { _, newPhase in
+            guard newPhase == .active else { return }
+            viewModel.refreshAuthorizationStatusOnForeground()
         }
     }
 }
