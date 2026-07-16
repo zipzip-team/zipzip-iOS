@@ -139,12 +139,13 @@ struct AlbumView: View {
         .bottomSheet(isPresented: $viewModel.isShareAlbumSheetPresented, detents: [.full]) { _ in
             AlbumShareDestinationSheet(
                 shareAlbums: shareViewModel.groups,
+                selectedShareAlbumID: viewModel.selectedShareGroupID,
                 isBusy: viewModel.isMovingAlbumsToShare,
                 onCancel: viewModel.dismissShareAlbumSheet,
+                onSelect: viewModel.selectShareGroup,
                 onComplete: { group in
-                    Task {
-                        await viewModel.completeShareAlbumMove(to: group)
-                    }
+                    viewModel.dismissShareAlbumSheet()
+                    router.push(.albumShareMoveLoading(group.id))
                 }
             )
         }
@@ -364,11 +365,11 @@ private struct AlbumShareDestinationSheet: View {
     @Environment(AuthenticationState.self) private var authenticationState
 
     let shareAlbums: [ShareAlbum]
+    let selectedShareAlbumID: ShareAlbum.ID?
     let isBusy: Bool
     let onCancel: () -> Void
+    let onSelect: (ShareAlbum.ID) -> Void
     let onComplete: (ShareAlbum) -> Void
-
-    @State private var selectedShareAlbumID: ShareAlbum.ID?
 
     var body: some View {
         BottomSheet(
@@ -401,7 +402,7 @@ private struct AlbumShareDestinationSheet: View {
     }
 
     private func selectShareAlbum(_ album: ShareAlbum) {
-        selectedShareAlbumID = album.id
+        onSelect(album.id)
     }
 
     private func completeSelection() {

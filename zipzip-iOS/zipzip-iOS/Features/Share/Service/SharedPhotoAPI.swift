@@ -247,7 +247,28 @@ nonisolated struct SharedPhotoUploadCompletionFileRequest: Equatable {
 }
 
 nonisolated struct SharedPhotoUploadCompleteResponse: Decodable {
-    let items: [SharedPhotoListItemResponse]
+    let items: [SharedPhotoUploadItemResponse]
+}
+
+/// 업로드 완료 응답은 목록 조회 응답과 달리 업로더/반응/표시 시각을 포함하지 않는다.
+nonisolated struct SharedPhotoUploadItemResponse: Decodable {
+    let id: UUID
+    let sharedGroupId: UUID
+    let sharedAlbumId: UUID
+    let originalUrl: String
+    let originalUrlExpiresAt: String
+    let thumbnailUrl: String?
+    let thumbnailUrlExpiresAt: String?
+    let thumbnailStatus: String
+    let deviceModel: String?
+    let takenAt: String?
+    let latitude: Double?
+    let longitude: Double?
+    let locationName: String?
+    let isInferred: Bool
+    let width: Int
+    let height: Int
+    let createdAt: String
 }
 
 nonisolated struct SharedPhotoAttachResponse: Decodable {

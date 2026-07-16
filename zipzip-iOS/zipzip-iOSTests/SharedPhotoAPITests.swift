@@ -321,7 +321,29 @@ final class SharedPhotoAPITests: XCTestCase {
 
     private static var uploadCompleteJSON: String {
         """
-        { "data": { "items": [\(photoListItemJSON)] } }
+        {
+          "data": {
+            "items": [{
+              "id": "11111111-1111-1111-1111-111111111111",
+              "sharedGroupId": "22222222-2222-2222-2222-222222222222",
+              "sharedAlbumId": "33333333-3333-3333-3333-333333333333",
+              "originalUrl": "https://object.example/original.jpg?signature=secret",
+              "originalUrlExpiresAt": "2026-07-15T10:15:30Z",
+              "thumbnailUrl": null,
+              "thumbnailUrlExpiresAt": null,
+              "thumbnailStatus": "PENDING",
+              "deviceModel": "iPhone 15",
+              "takenAt": "2026-07-15T09:00:00Z",
+              "latitude": 37.5,
+              "longitude": 127.0,
+              "locationName": "서울",
+              "isInferred": false,
+              "width": 4032,
+              "height": 3024,
+              "createdAt": "2026-07-15T10:15:30Z"
+            }]
+          }
+        }
         """
     }
 

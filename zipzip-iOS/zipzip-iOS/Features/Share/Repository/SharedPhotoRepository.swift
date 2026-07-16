@@ -1087,6 +1087,45 @@ final class DefaultSharedPhotoRepository: SharedPhotoRepository {
         )
     }
 
+    private static func makeStoreInput(
+        _ response: SharedPhotoUploadItemResponse,
+        localPhotoID: Int?
+    ) throws -> SharedPhotoStoreInput {
+        guard let originalURLExpiresAt = date(response.originalUrlExpiresAt),
+              let createdAt = date(response.createdAt)
+        else {
+            throw SharedPhotoRepositoryError.invalidDate
+        }
+        let takenAt = response.takenAt.flatMap(date)
+        return SharedPhotoStoreInput(
+            id: response.id,
+            sharedGroupID: response.sharedGroupId,
+            localPhotoID: localPhotoID,
+            originalURL: response.originalUrl,
+            originalURLExpiresAt: originalURLExpiresAt,
+            thumbnailURL: response.thumbnailUrl,
+            thumbnailURLExpiresAt: response.thumbnailUrlExpiresAt.flatMap(date),
+            thumbnailStatus: response.thumbnailStatus,
+            deviceModel: response.deviceModel,
+            takenAt: takenAt,
+            displayAt: takenAt ?? createdAt,
+            latitude: response.latitude,
+            longitude: response.longitude,
+            locationName: response.locationName,
+            isInferred: response.isInferred,
+            width: response.width,
+            height: response.height,
+            uploadedByUserID: nil,
+            uploadedByDisplayName: nil,
+            isUploader: true,
+            likeCount: 0,
+            commentCount: 0,
+            isLikedByMe: false,
+            createdAt: createdAt,
+            updatedAt: createdAt
+        )
+    }
+
     private static func makeStoreInput(_ response: SharedPhotoDetailResponse) throws -> SharedPhotoStoreInput {
         guard let originalURLExpiresAt = date(response.originalUrlExpiresAt),
               let displayAt = date(response.displayAt),

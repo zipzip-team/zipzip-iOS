@@ -67,6 +67,8 @@ nonisolated struct SharedPhotoAssetPreparer {
     static let maximumUploadBytes = 20 * 1024 * 1024
     static let minimumJPEGQuality = 0.7
 
+    /// PhotoKit 원본 조회와 JPEG 인코딩이 호출자의 actor(MainActor)를 점유하지 않도록 한다.
+    @concurrent
     func prepare(localIdentifier: String) async throws -> PreparedSharedPhotoAsset {
         try Task.checkCancellation()
         let fetchResult = PHAsset.fetchAssets(withLocalIdentifiers: [localIdentifier], options: nil)

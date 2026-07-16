@@ -122,10 +122,6 @@ private struct SharedAlbumPhotoThumbnail: View {
         } else if photo.hasLocalCopy, !didAttemptLocalLoad {
             ProgressView()
                 .tint(.grey500)
-        } else if photo.thumbnailStatus == .pending {
-            ProgressView()
-                .tint(.grey500)
-                .accessibilityLabel("썸네일 처리 중")
         } else if let remoteURL {
             AsyncImage(url: remoteURL) { phase in
                 switch phase {
@@ -138,17 +134,19 @@ private struct SharedAlbumPhotoThumbnail: View {
                     Color.grey200
                 }
             }
+        } else if photo.thumbnailStatus == .pending {
+            ProgressView()
+                .tint(.grey500)
+                .accessibilityLabel("썸네일 처리 중")
         }
     }
 
     private var remoteURL: URL? {
         switch photo.thumbnailStatus {
         case .ready:
-            photo.validThumbnailURL()
-        case .failed, .unknown:
+            photo.validThumbnailURL() ?? photo.validOriginalURL()
+        case .pending, .failed, .unknown:
             photo.validOriginalURL()
-        case .pending:
-            nil
         }
     }
 

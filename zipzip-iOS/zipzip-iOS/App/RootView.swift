@@ -62,7 +62,6 @@ struct RootView: View {
                 }
             }
             .task {
-                KeyboardPrewarmer.prewarm()
                 guard hasCompletedOnboarding else { return }
                 photoSync.startIfNeeded()
                 await albumViewModel.loadAlbums()
@@ -140,6 +139,12 @@ struct RootView: View {
                         },
                         loadIsFavorite: { await albumViewModel.isPhotoFavorited(localIdentifier: $0) },
                         onToggleFavorite: togglePhotoFavorite
+                    )
+                case let .albumShareMoveLoading(groupID):
+                    AlbumShareMoveLoadingView(
+                        groupID: groupID,
+                        albumViewModel: albumViewModel,
+                        shareViewModel: shareViewModel
                     )
                 case let .shareGroup(groupID):
                     ShareGroupDetailView(

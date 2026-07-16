@@ -25,6 +25,7 @@ final class AlbumViewModel {
     var createAlbumName = ""
     private(set) var isCreatingAlbum = false
     private(set) var isMovingAlbumsToShare = false
+    private(set) var selectedShareGroupID: ShareAlbum.ID?
 
     private(set) var selectedAlbumIDs: [AlbumViewItem.ID] = []
     private(set) var albums: [AlbumViewItem]
@@ -67,9 +68,7 @@ final class AlbumViewModel {
                 .map(AlbumViewItem.init)
                 .filter { !$0.isFavorite || $0.hasPhotos }
         } catch {
-            presentError("사진집을 불러오지 못했어요.") { [weak self] in
-                await self?.loadAlbums()
-            }
+            return
         }
     }
 
@@ -79,6 +78,7 @@ final class AlbumViewModel {
 
     func exitSelectionMode() {
         selectedAlbumIDs.removeAll()
+        selectedShareGroupID = nil
         isDeleteAlertPresented = false
         isShareAlbumSheetPresented = false
         isSelectionMode = false
@@ -183,22 +183,29 @@ final class AlbumViewModel {
             return
         }
 
+        selectedShareGroupID = nil
         isShareAlbumSheetPresented = true
     }
 
     func dismissShareAlbumSheet() {
+        selectedShareGroupID = nil
         isShareAlbumSheetPresented = false
     }
 
-    func completeShareAlbumMove(to group: ShareAlbum) async {
+    func selectShareGroup(_ groupID: ShareAlbum.ID) {
+        selectedShareGroupID = groupID
+    }
+
+    @discardableResult
+    func completeShareAlbumMove(to group: ShareAlbum) async -> Bool {
         guard !isMovingAlbumsToShare,
               let sharedPhotoRepository,
               let shareGroupRepository
-        else { return }
+        else { return false }
 
         let selectedIDs = Set(selectedAlbumIDs)
         let sourceAlbums = albums.filter { selectedIDs.contains($0.id) && !$0.isFavorite }
-        guard !sourceAlbums.isEmpty else { return }
+        guard !sourceAlbums.isEmpty else { return false }
 
         isMovingAlbumsToShare = true
         defer { isMovingAlbumsToShare = false }
@@ -225,7 +232,7 @@ final class AlbumViewModel {
                     albumMoveDestinations[requestIdentity] = destinationAlbum
                     createdAnyAlbum = true
                 } catch is CancellationError {
-                    return
+                    return false
                 } catch {
                     failedPhotoCount += sourceAlbum.count
                     continue
@@ -268,7 +275,7 @@ final class AlbumViewModel {
                     albumMoveDestinations.removeValue(forKey: requestIdentity)
                 }
             } catch is CancellationError {
-                return
+                return false
             } catch {
                 failedPhotoCount += sourceAlbum.count
             }
@@ -288,11 +295,13 @@ final class AlbumViewModel {
                 fallback: "사진집을 공유그룹으로 옮기지 못했어요."
             )
         }
+        return completedAnyWork
     }
 
     func resetSharedAlbumMoveState() {
         albumMoveIdempotencyKeys = [:]
         albumMoveDestinations = [:]
+        selectedShareGroupID = nil
         isMovingAlbumsToShare = false
         isShareAlbumSheetPresented = false
     }

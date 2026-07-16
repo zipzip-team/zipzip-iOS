@@ -52,6 +52,7 @@ enum Route: Hashable {
     case photoDetail(Photo)
     case albumDetail(Int)
     case albumPhotoDetail(albumID: Int, photo: Photo)
+    case albumShareMoveLoading(UUID)
     case shareGroup(UUID)
     case shareAlbum(groupID: UUID, albumID: UUID)
     case shareImport(UUID)
@@ -60,7 +61,7 @@ enum Route: Hashable {
 
     var isAlbumRoute: Bool {
         switch self {
-        case .albumDetail, .albumPhotoDetail:
+        case .albumDetail, .albumPhotoDetail, .albumShareMoveLoading:
             true
         default:
             false
