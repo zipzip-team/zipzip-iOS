@@ -57,7 +57,10 @@ final class AlbumViewModel {
             albums = try await albumStore.fetchAlbums()
                 .map(AlbumViewItem.init)
                 .filter { !$0.isFavorite || $0.hasPhotos }
+        } catch is CancellationError {
+            return
         } catch {
+            guard !Task.isCancelled else { return }
             presentError("사진집을 불러오지 못했어요.") { [weak self] in
                 await self?.loadAlbums()
             }
