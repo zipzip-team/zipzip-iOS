@@ -73,8 +73,6 @@ final class AlbumViewModel {
             albums = try await albumStore.fetchAlbums()
                 .map(AlbumViewItem.init)
                 .filter { !$0.isFavorite || $0.hasPhotos }
-        } catch is CancellationError {
-            return
         } catch {
             return
         }

@@ -5,10 +5,13 @@
 //  Created by 성환 on 7/5/26.
 //
 
+import SQLiteData
 import SwiftUI
 
 struct MainView: View {
     @Environment(Router.self) private var router
+
+    @Fetch(RegisteredPhotoCountRequest()) private var registeredPhotoCount = 0
 
     private enum Layout {
         static let heroHeight: CGFloat = 420
