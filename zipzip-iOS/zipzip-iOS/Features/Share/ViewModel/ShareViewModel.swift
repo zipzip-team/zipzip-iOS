@@ -20,11 +20,27 @@ enum ShareSheetPresentation: Equatable {
     case management
 }
 
+struct ShareImportOutcome: Equatable {
+    let createdAlbumCount: Int
+    let failedAlbumCount: Int
+    let uploadedPhotoCount: Int
+    let failedPhotoCount: Int
+
+    var completedAnyWork: Bool {
+        createdAlbumCount > 0 || uploadedPhotoCount > 0
+    }
+
+    var hasFailures: Bool {
+        failedAlbumCount > 0 || failedPhotoCount > 0
+    }
+}
+
 @Observable
 @MainActor
 final class ShareViewModel {
     private(set) var groups: [ShareAlbum]
     private let repository: ShareGroupRepository
+    private let sharedPhotoRepository: (any SharedPhotoRepository)?
 
     var isAddMode = false
     private(set) var presentedSheet: ShareSheetPresentation?
@@ -98,6 +114,8 @@ final class ShareViewModel {
     private var requestedChatCursors: Set<String> = []
     private var bulkDeleteAlbumIDs: Set<SharedAlbum.ID>?
     private var bulkDeleteIdempotencyKey: UUID?
+    private var personalAlbumImportIdempotencyKeys: [String: UUID] = [:]
+    private var personalAlbumImportCreatedAlbums: [String: SharedAlbum] = [:]
     private var cacheOwnerID: UUID?
     private var remoteDataSessionID = UUID()
     private var errorRetryAction: (() async -> Void)?
@@ -151,14 +169,23 @@ final class ShareViewModel {
         errorRetryAction != nil
     }
 
-    init(repository: ShareGroupRepository) {
+    init(
+        repository: ShareGroupRepository,
+        sharedPhotoRepository: (any SharedPhotoRepository)? = nil
+    ) {
         self.groups = []
         self.repository = repository
+        self.sharedPhotoRepository = sharedPhotoRepository
     }
 
-    init(groups: [ShareAlbum], repository: ShareGroupRepository) {
+    init(
+        groups: [ShareAlbum],
+        repository: ShareGroupRepository,
+        sharedPhotoRepository: (any SharedPhotoRepository)? = nil
+    ) {
         self.groups = groups
         self.repository = repository
+        self.sharedPhotoRepository = sharedPhotoRepository
         self.hasLoadedGroups = true
     }
 
@@ -190,40 +217,78 @@ final class ShareViewModel {
         groupID: ShareAlbum.ID,
         albumID: SharedAlbum.ID,
         onDelete: @escaping () -> Void
-    ) -> AlbumDetailViewModel {
-        AlbumDetailViewModel(
-            actions: AlbumDetailActions(
-                onRename: { [weak self] name in
-                    guard let self else { return false }
-                    return await self.renameSharedAlbum(
-                        id: albumID,
-                        in: groupID,
-                        name: name
-                    )
-                },
-                onDelete: { [weak self] in
-                    guard let self,
-                          await self.deleteSharedAlbum(id: albumID, from: groupID)
-                    else { return false }
-                    onDelete()
-                    return true
-                },
-                onAddPhotos: { _ in
-                    // TODO: 정교은 담당 API가 합쳐지면 upload-urls 요청, object storage PUT,
-                    // photos/complete 호출 순서로 업로드한 뒤 공유집 사진 목록을 다시 조회합니다.
-                    false
-                },
-                onDeletePhotos: { _, _ in
-                    // TODO: 정교은 담당 detach API가 합쳐지면 선택한 server photo id를
-                    // POST /api/v1/shared-albums/{sharedAlbumId}/photos/detach로 제거하고 목록을 갱신합니다.
-                    false
-                },
-                onMovePhotos: { _, _ in
-                    // TODO: 정교은 담당 attach/detach API가 합쳐지면 대상 공유집에 먼저 attach하고,
-                    // 이동인 경우 원본 공유집에서 detach한 뒤 양쪽 사진 목록을 갱신합니다.
-                    false
+    ) -> SharedAlbumDetailViewModel {
+        let adapter = SharedAlbumDetailRepositoryAdapter(
+            onCachedPhotos: { [weak self] albumID in
+                guard let repository = self?.sharedPhotoRepository else {
+                    throw SharedPhotoRepositoryError.cacheNotPrepared
                 }
-            )
+                return try await repository.cachedPhotos(in: albumID)
+            },
+            onSynchronizePhotos: { [weak self] albumID in
+                guard let repository = self?.sharedPhotoRepository else {
+                    throw SharedPhotoRepositoryError.cacheNotPrepared
+                }
+                return try await repository.synchronizePhotos(in: albumID)
+            },
+            onRenameAlbum: { [weak self] groupID, albumID, name in
+                guard let self else { return false }
+                return await self.renameSharedAlbum(id: albumID, in: groupID, name: name)
+            },
+            onDeleteAlbum: { [weak self] groupID, albumID in
+                guard let self else { return false }
+                return await self.deleteSharedAlbum(id: albumID, from: groupID)
+            },
+            onUploadPhotos: { [weak self] localIdentifiers, albumID in
+                guard let self, let repository = self.sharedPhotoRepository else {
+                    throw SharedPhotoRepositoryError.cacheNotPrepared
+                }
+                let result = try await repository.addLocalPhotos(
+                    localIdentifiers: localIdentifiers,
+                    to: [albumID],
+                    in: groupID
+                )
+                await self.refreshSharedAlbumsAfterPhotoMutation(groupID: groupID)
+                return result
+            },
+            onSavePhotosToLibrary: { [weak self] photoIDs, albumID in
+                guard let repository = self?.sharedPhotoRepository else {
+                    throw SharedPhotoRepositoryError.cacheNotPrepared
+                }
+                return try await repository.savePhotosToLibrary(photoIDs: photoIDs, in: albumID)
+            },
+            onCopyPhotos: { [weak self] photoIDs, sourceAlbumID, destinationAlbumIDs in
+                guard let self, let repository = self.sharedPhotoRepository else {
+                    throw SharedPhotoRepositoryError.cacheNotPrepared
+                }
+                let result = try await repository.copyPhotos(
+                    photoIDs: photoIDs,
+                    from: sourceAlbumID,
+                    to: destinationAlbumIDs
+                )
+                await self.refreshSharedAlbumsAfterPhotoMutation(groupID: groupID)
+                return result
+            },
+            onDeleteLocalCopies: { [weak self] photoIDs in
+                guard let repository = self?.sharedPhotoRepository else {
+                    throw SharedPhotoRepositoryError.cacheNotPrepared
+                }
+                return try await repository.deleteLocalCopies(photoIDs: photoIDs)
+            },
+            onDetachPhotos: { [weak self] photoIDs, albumID in
+                guard let self, let repository = self.sharedPhotoRepository else {
+                    throw SharedPhotoRepositoryError.cacheNotPrepared
+                }
+                let result = try await repository.detachPhotos(photoIDs: photoIDs, from: albumID)
+                await self.refreshSharedAlbumsAfterPhotoMutation(groupID: groupID)
+                return result
+            }
+        )
+        return SharedAlbumDetailViewModel(
+            groupID: groupID,
+            albumID: albumID,
+            repository: adapter,
+            onAlbumDeleted: onDelete
         )
     }
 
@@ -245,6 +310,7 @@ final class ShareViewModel {
         if cacheOwnerID != userID {
             do {
                 try await repository.prepareCache(for: userID)
+                try await sharedPhotoRepository?.prepareCache(for: userID)
                 guard remoteDataSessionID == sessionID else { return }
                 cacheOwnerID = userID
             } catch {
@@ -707,6 +773,7 @@ final class ShareViewModel {
 
     func resetRemoteData() {
         repository.invalidateCacheSession()
+        sharedPhotoRepository?.invalidateCacheSession()
         remoteDataSessionID = UUID()
         groups = []
         cacheOwnerID = nil
@@ -730,6 +797,8 @@ final class ShareViewModel {
         loadingMemberGroupIDs = []
         visibleGroupIDs = nil
         visibleSharedAlbumIDs = [:]
+        personalAlbumImportIdempotencyKeys = [:]
+        personalAlbumImportCreatedAlbums = [:]
         inviteCode = ""
         resetTransientUI()
         dismissErrorAlert()
@@ -963,6 +1032,107 @@ final class ShareViewModel {
         let existingIDs = Set(groups[groupIndex].albums.map(\.id))
         groups[groupIndex].albums.append(contentsOf: albums.filter { !existingIDs.contains($0.id) })
         return true
+    }
+
+    func importPhotos(
+        localIdentifiers: [String],
+        into albumID: SharedAlbum.ID,
+        groupID: ShareAlbum.ID
+    ) async -> SharedAlbumPhotoMutationResult? {
+        guard let sharedPhotoRepository, !localIdentifiers.isEmpty else { return nil }
+        do {
+            let result = try await sharedPhotoRepository.addLocalPhotos(
+                localIdentifiers: localIdentifiers,
+                to: [albumID],
+                in: groupID
+            )
+            await refreshSharedAlbumsAfterPhotoMutation(groupID: groupID)
+            return result
+        } catch {
+            presentError(error, fallback: "사진을 공유집으로 가져오지 못했어요.")
+            return nil
+        }
+    }
+
+    func importPersonalAlbums(
+        _ personalAlbums: [Album],
+        into groupID: ShareAlbum.ID
+    ) async -> ShareImportOutcome? {
+        guard let sharedPhotoRepository, !personalAlbums.isEmpty else { return nil }
+
+        var createdAlbumCount = 0
+        var failedAlbumCount = 0
+        var uploadedPhotoCount = 0
+        var failedPhotoCount = 0
+
+        for personalAlbum in personalAlbums {
+            let createdAlbum: SharedAlbum
+            let requestIdentity = "\(groupID.uuidString):\(personalAlbum.id):\(personalAlbum.name)"
+            let idempotencyKey = personalAlbumImportIdempotencyKeys[requestIdentity] ?? UUID()
+            personalAlbumImportIdempotencyKeys[requestIdentity] = idempotencyKey
+            if let existingAlbum = personalAlbumImportCreatedAlbums[requestIdentity] {
+                createdAlbum = existingAlbum
+            } else {
+                do {
+                    createdAlbum = try await repository.createSharedAlbum(
+                        groupID: groupID,
+                        name: personalAlbum.name,
+                        idempotencyKey: idempotencyKey
+                    )
+                    personalAlbumImportCreatedAlbums[requestIdentity] = createdAlbum
+                    createdAlbumCount += 1
+                } catch is CancellationError {
+                    return nil
+                } catch {
+                    failedAlbumCount += 1
+                    failedPhotoCount += personalAlbum.count
+                    continue
+                }
+            }
+
+            do {
+                let identifiers = try await sharedPhotoRepository.localIdentifiers(
+                    inPersonalAlbum: personalAlbum.id
+                )
+                guard !identifiers.isEmpty else {
+                    personalAlbumImportIdempotencyKeys.removeValue(forKey: requestIdentity)
+                    personalAlbumImportCreatedAlbums.removeValue(forKey: requestIdentity)
+                    continue
+                }
+                let result = try await sharedPhotoRepository.addLocalPhotos(
+                    localIdentifiers: identifiers,
+                    to: [createdAlbum.id],
+                    in: groupID
+                )
+                uploadedPhotoCount += result.succeededCount
+                failedPhotoCount += result.failedCount
+                if result.failedCount == 0,
+                   Set(result.succeededLocalIdentifiers) == Set(identifiers) {
+                    personalAlbumImportIdempotencyKeys.removeValue(forKey: requestIdentity)
+                    personalAlbumImportCreatedAlbums.removeValue(forKey: requestIdentity)
+                }
+            } catch is CancellationError {
+                return nil
+            } catch {
+                // 생성된 공유집은 유지하고 이 사진들만 다음 가져오기에서 재시도한다.
+                failedPhotoCount += personalAlbum.count
+            }
+        }
+
+        await refreshSharedAlbumsAfterPhotoMutation(groupID: groupID)
+        let outcome = ShareImportOutcome(
+            createdAlbumCount: createdAlbumCount,
+            failedAlbumCount: failedAlbumCount,
+            uploadedPhotoCount: uploadedPhotoCount,
+            failedPhotoCount: failedPhotoCount
+        )
+        if !outcome.completedAnyWork, outcome.hasFailures {
+            presentError(
+                URLError(.cannotLoadFromNetwork),
+                fallback: "선택한 사진집을 가져오지 못했어요."
+            )
+        }
+        return outcome
     }
 
     func removeAlbums(_ albumIDs: Set<SharedAlbum.ID>, from groupID: ShareAlbum.ID) {
@@ -1395,6 +1565,42 @@ final class ShareViewModel {
             await removeMissingGroup(id: groupID)
         } catch {
             presentError(error, fallback: "삭제는 완료됐지만 최신 정보를 불러오지 못했어요.")
+        }
+    }
+
+    private func refreshSharedAlbumsAfterPhotoMutation(groupID: ShareAlbum.ID) async {
+        do {
+            var cursor: String?
+            var requestedCursors: Set<String> = []
+            var visibleIDs: [SharedAlbum.ID] = []
+            repeat {
+                if let cursor, !requestedCursors.insert(cursor).inserted {
+                    throw ShareGroupRepositoryError.invalidPagination
+                }
+                let page = try await repository.syncSharedAlbums(
+                    groupID: groupID,
+                    cursor: cursor,
+                    size: 100
+                )
+                visibleIDs.append(contentsOf: page.itemIDs.filter { !visibleIDs.contains($0) })
+                if page.hasNext {
+                    guard let nextCursor = page.nextCursor, nextCursor != cursor else {
+                        throw ShareGroupRepositoryError.invalidPagination
+                    }
+                    cursor = nextCursor
+                } else {
+                    cursor = nil
+                }
+            } while cursor != nil
+
+            visibleSharedAlbumIDs[groupID] = visibleIDs
+            loadedSharedAlbumGroupIDs.insert(groupID)
+            try await repository.syncGroup(id: groupID)
+            try await reloadGroups()
+        } catch ShareGroupRepositoryError.groupNotFound {
+            await removeMissingGroup(id: groupID)
+        } catch {
+            // 서버 작업은 완료됐다. 다음 화면 진입/새로고침에서 캐시를 서버 상태로 복구한다.
         }
     }
 

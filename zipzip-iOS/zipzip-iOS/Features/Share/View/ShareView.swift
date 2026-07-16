@@ -155,25 +155,15 @@ struct ShareAlbumDetailDestinationView: View {
 
     var body: some View {
         if let album = viewModel.album(groupID: groupID, albumID: albumID) {
-            AlbumDetailView(
-                album: .init(
-                    id: 0,
-                    title: album.name,
-                    createdAt: album.createdAt,
-                    photoCount: album.count
-                ),
+            SharedAlbumDetailView(
+                album: album,
+                destinationAlbums: viewModel.group(withID: groupID)?.albums ?? [],
                 viewModel: viewModel.makeSharedAlbumDetailViewModel(
                     groupID: groupID,
                     albumID: albumID,
                     onDelete: router.pop
-                ),
-                moveAlbums: [],
-                albumDeletionAlertContent: .shared
-            ) { _ in
-                // TODO: 정교은 담당 GET 공유집 상세·사진 목록 API가 합쳐지면 응답을
-                // PhotoGallery에 전달하고 cursor 기반 다음 페이지 로딩을 연결합니다.
-                EmptyView()
-            }
+                )
+            )
         } else {
             ContentUnavailableView("사진집을 찾을 수 없어요", systemImage: "photo.on.rectangle")
                 .navigationBarBackButtonHidden(true)

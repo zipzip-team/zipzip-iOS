@@ -139,8 +139,13 @@ struct AlbumView: View {
         .bottomSheet(isPresented: $viewModel.isShareAlbumSheetPresented, detents: [.full]) { _ in
             AlbumShareDestinationSheet(
                 shareAlbums: shareViewModel.groups,
+                isBusy: viewModel.isMovingAlbumsToShare,
                 onCancel: viewModel.dismissShareAlbumSheet,
-                onComplete: viewModel.completeShareAlbumMove
+                onComplete: { group in
+                    Task {
+                        await viewModel.completeShareAlbumMove(to: group)
+                    }
+                }
             )
         }
     }
@@ -359,6 +364,7 @@ private struct AlbumShareDestinationSheet: View {
     @Environment(AuthenticationState.self) private var authenticationState
 
     let shareAlbums: [ShareAlbum]
+    let isBusy: Bool
     let onCancel: () -> Void
     let onComplete: (ShareAlbum) -> Void
 
@@ -373,7 +379,7 @@ private struct AlbumShareDestinationSheet: View {
                 if authenticationState.isLoggedIn {
                     AlbumSheetTextButton(
                         title: "완료",
-                        isDisabled: true,
+                        isDisabled: selectedShareAlbumID == nil || isBusy,
                         action: completeSelection
                     )
                 }
@@ -399,7 +405,9 @@ private struct AlbumShareDestinationSheet: View {
     }
 
     private func completeSelection() {
-        guard let selectedShareAlbum = shareAlbums.first(where: { $0.id == selectedShareAlbumID }) else {
+        guard !isBusy,
+              let selectedShareAlbum = shareAlbums.first(where: { $0.id == selectedShareAlbumID })
+        else {
             return
         }
 

@@ -15,7 +15,7 @@ struct RootView: View {
     @Environment(\.scenePhase) private var scenePhase
     @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
     @State private var photoSync = PhotoSyncCoordinator()
-    @State private var albumViewModel = AlbumViewModel()
+    @State private var albumViewModel: AlbumViewModel
     @State private var pictureViewModel = PictureViewModel()
     @State private var shareViewModel: ShareViewModel
     @State private var selection: NavbarTab = .main
@@ -24,10 +24,20 @@ struct RootView: View {
 
     init(
         shareGroupRepository: ShareGroupRepository,
+        sharedPhotoRepository: any SharedPhotoRepository,
         makePhotoInfoEditViewModel: @escaping ([String]) -> PhotoInfoEditViewModel
     ) {
+        _albumViewModel = State(
+            initialValue: AlbumViewModel(
+                sharedPhotoRepository: sharedPhotoRepository,
+                shareGroupRepository: shareGroupRepository
+            )
+        )
         _shareViewModel = State(
-            initialValue: ShareViewModel(repository: shareGroupRepository)
+            initialValue: ShareViewModel(
+                repository: shareGroupRepository,
+                sharedPhotoRepository: sharedPhotoRepository
+            )
         )
         self.makePhotoInfoEditViewModel = makePhotoInfoEditViewModel
     }
@@ -218,6 +228,7 @@ struct RootView: View {
             await authenticationState.checkAppleCredentialState()
         }
         .task(id: authenticationState.currentUser?.id) {
+            albumViewModel.resetSharedAlbumMoveState()
             if let userID = authenticationState.currentUser?.id {
                 await shareViewModel.loadGroups(for: userID)
             } else {

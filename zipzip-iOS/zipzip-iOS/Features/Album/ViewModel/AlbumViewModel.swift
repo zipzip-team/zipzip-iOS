@@ -24,25 +24,34 @@ final class AlbumViewModel {
     private(set) var errorAlertMessage = ""
     var createAlbumName = ""
     private(set) var isCreatingAlbum = false
+    private(set) var isMovingAlbumsToShare = false
 
     private(set) var selectedAlbumIDs: [AlbumViewItem.ID] = []
     private(set) var albums: [AlbumViewItem]
     @ObservationIgnored private let albumStore: AlbumStore
     @ObservationIgnored private let photoSectionsProvider: PhotoSectionsProvider
     @ObservationIgnored private let photoDeletion: PhotoDeletionService
+    @ObservationIgnored private let sharedPhotoRepository: (any SharedPhotoRepository)?
+    @ObservationIgnored private let shareGroupRepository: (any ShareGroupRepository)?
     @ObservationIgnored private let loadsAlbumsFromDatabase: Bool
     @ObservationIgnored private var errorRetryAction: (() async -> Void)?
+    @ObservationIgnored private var albumMoveIdempotencyKeys: [String: UUID] = [:]
+    @ObservationIgnored private var albumMoveDestinations: [String: SharedAlbum] = [:]
 
     init(
         albums: [AlbumViewItem]? = nil,
         albumStore: AlbumStore = AlbumStore(),
         photoSectionsProvider: PhotoSectionsProvider = PhotoSectionsProvider(),
-        photoDeletion: PhotoDeletionService = PhotoDeletionService()
+        photoDeletion: PhotoDeletionService = PhotoDeletionService(),
+        sharedPhotoRepository: (any SharedPhotoRepository)? = nil,
+        shareGroupRepository: (any ShareGroupRepository)? = nil
     ) {
         self.albums = albums ?? []
         self.albumStore = albumStore
         self.photoSectionsProvider = photoSectionsProvider
         self.photoDeletion = photoDeletion
+        self.sharedPhotoRepository = sharedPhotoRepository
+        self.shareGroupRepository = shareGroupRepository
         self.loadsAlbumsFromDatabase = albums == nil
     }
 
@@ -181,8 +190,111 @@ final class AlbumViewModel {
         isShareAlbumSheetPresented = false
     }
 
-    func completeShareAlbumMove(to _: ShareAlbum) {
-        dismissShareAlbumSheet()
+    func completeShareAlbumMove(to group: ShareAlbum) async {
+        guard !isMovingAlbumsToShare,
+              let sharedPhotoRepository,
+              let shareGroupRepository
+        else { return }
+
+        let selectedIDs = Set(selectedAlbumIDs)
+        let sourceAlbums = albums.filter { selectedIDs.contains($0.id) && !$0.isFavorite }
+        guard !sourceAlbums.isEmpty else { return }
+
+        isMovingAlbumsToShare = true
+        defer { isMovingAlbumsToShare = false }
+
+        var createdAnyAlbum = false
+        var succeededPhotoCount = 0
+        var failedPhotoCount = 0
+
+        for sourceAlbum in sourceAlbums {
+            let requestIdentity = "\(group.id.uuidString):\(sourceAlbum.id):\(sourceAlbum.name)"
+            let idempotencyKey = albumMoveIdempotencyKeys[requestIdentity] ?? UUID()
+            albumMoveIdempotencyKeys[requestIdentity] = idempotencyKey
+
+            let destinationAlbum: SharedAlbum
+            if let existingDestination = albumMoveDestinations[requestIdentity] {
+                destinationAlbum = existingDestination
+            } else {
+                do {
+                    destinationAlbum = try await shareGroupRepository.createSharedAlbum(
+                        groupID: group.id,
+                        name: sourceAlbum.name,
+                        idempotencyKey: idempotencyKey
+                    )
+                    albumMoveDestinations[requestIdentity] = destinationAlbum
+                    createdAnyAlbum = true
+                } catch is CancellationError {
+                    return
+                } catch {
+                    failedPhotoCount += sourceAlbum.count
+                    continue
+                }
+            }
+
+            do {
+                let sections = try await photoSectionsProvider.loadAlbumSections(albumID: sourceAlbum.id)
+                let memberships = sections.flatMap(\.photos).compactMap { photo -> (Int, String)? in
+                    guard let membershipID = photo.albumPhotoID,
+                          !photo.localIdentifier.isEmpty
+                    else { return nil }
+                    return (membershipID, photo.localIdentifier)
+                }
+                guard !memberships.isEmpty else {
+                    albumMoveIdempotencyKeys.removeValue(forKey: requestIdentity)
+                    albumMoveDestinations.removeValue(forKey: requestIdentity)
+                    continue
+                }
+
+                let localIdentifiers = memberships.map { $0.1 }
+                let result = try await sharedPhotoRepository.addLocalPhotos(
+                    localIdentifiers: localIdentifiers,
+                    to: [destinationAlbum.id],
+                    in: group.id
+                )
+                let succeededIdentifiers = Set(result.succeededLocalIdentifiers)
+                let succeededMembershipIDs = memberships.compactMap { membershipID, localIdentifier in
+                    succeededIdentifiers.contains(localIdentifier) ? membershipID : nil
+                }
+                if !succeededMembershipIDs.isEmpty {
+                    try await albumStore.removeAlbumPhotos(ids: succeededMembershipIDs)
+                }
+
+                succeededPhotoCount += succeededIdentifiers.count
+                let unresolvedCount = max(0, localIdentifiers.count - succeededIdentifiers.count)
+                failedPhotoCount += max(result.failedCount, unresolvedCount)
+                if unresolvedCount == 0, result.failedCount == 0 {
+                    albumMoveIdempotencyKeys.removeValue(forKey: requestIdentity)
+                    albumMoveDestinations.removeValue(forKey: requestIdentity)
+                }
+            } catch is CancellationError {
+                return
+            } catch {
+                failedPhotoCount += sourceAlbum.count
+            }
+        }
+
+        await loadAlbums()
+        let completedAnyWork = createdAnyAlbum || succeededPhotoCount > 0
+        if completedAnyWork {
+            exitSelectionMode()
+        } else {
+            dismissShareAlbumSheet()
+        }
+        if failedPhotoCount > 0 {
+            presentMutationNotice(
+                succeededCount: succeededPhotoCount,
+                failedCount: failedPhotoCount,
+                fallback: "사진집을 공유그룹으로 옮기지 못했어요."
+            )
+        }
+    }
+
+    func resetSharedAlbumMoveState() {
+        albumMoveIdempotencyKeys = [:]
+        albumMoveDestinations = [:]
+        isMovingAlbumsToShare = false
+        isShareAlbumSheetPresented = false
     }
 
     func deleteSelectedAlbums() {
@@ -361,27 +473,61 @@ final class AlbumViewModel {
 
     /// 사진 목록 화면에서 선택한 사진을 개인 사진집에 영구적으로 추가한다.
     func addPhotos(localIdentifiers: [String], to destinations: [ShareDestination]) async -> Bool {
-        // TODO: 정교은 담당 업로드·attach API가 합쳐지면 `.sharedAlbum` 대상은
-        // upload-urls → object storage PUT → photos/complete 또는 기존 photo attach로 처리합니다.
+        let uniqueLocalIdentifiers = Array(Set(localIdentifiers.filter { !$0.isEmpty }))
         let albumIDs = destinations.compactMap { destination -> Album.ID? in
             guard case let .album(albumID) = destination else {
                 return nil
             }
             return albumID
         }
+        let sharedDestinationPairs: [(ShareAlbum.ID, SharedAlbum.ID)] = destinations.compactMap { destination in
+            guard case let .sharedAlbum(groupID, albumID) = destination else { return nil }
+            return (groupID, albumID)
+        }
+        let sharedDestinations = Dictionary(grouping: sharedDestinationPairs) { $0.0 }
 
-        guard !albumIDs.isEmpty, !localIdentifiers.isEmpty else {
+        guard !destinations.isEmpty, !uniqueLocalIdentifiers.isEmpty else {
             return false
         }
 
-        do {
-            try await albumStore.addPhotos(localIdentifiers: localIdentifiers, to: albumIDs)
-        } catch {
-            return false
+        var completedAnyWork = false
+        if !albumIDs.isEmpty {
+            do {
+                try await albumStore.addPhotos(localIdentifiers: uniqueLocalIdentifiers, to: albumIDs)
+                completedAnyWork = true
+            } catch {
+                // 공유 대상이 함께 있으면 성공한 원격 작업은 그대로 유지한다.
+            }
+        }
+
+        if let sharedPhotoRepository {
+            for (groupID, values) in sharedDestinations {
+                do {
+                    let result = try await sharedPhotoRepository.addLocalPhotos(
+                        localIdentifiers: uniqueLocalIdentifiers,
+                        to: values.map { $0.1 },
+                        in: groupID
+                    )
+                    completedAnyWork = completedAnyWork || result.succeededCount > 0
+                    if result.failedCount > 0 {
+                        presentMutationNotice(
+                            succeededCount: result.succeededCount,
+                            failedCount: result.failedCount,
+                            fallback: "일부 사진을 공유집에 추가하지 못했어요."
+                        )
+                    }
+                } catch {
+                    presentMutationNotice(
+                        succeededCount: completedAnyWork ? uniqueLocalIdentifiers.count : 0,
+                        failedCount: uniqueLocalIdentifiers.count,
+                        fallback: "사진을 공유집에 추가하지 못했어요."
+                    )
+                }
+            }
         }
 
         await loadAlbums()
-        return true
+        return completedAnyWork
     }
 
     func moveAlbumPhotos(
@@ -389,31 +535,76 @@ final class AlbumViewModel {
         from sourceAlbumID: AlbumViewItem.ID,
         to destinations: [ShareDestination]
     ) async -> Bool {
-        // TODO: 정교은 담당 attach/detach API가 합쳐지면 `.sharedAlbum` 대상으로 attach 성공 후
-        // 개인 사진집에서 제거할지 여부를 제품 정책에 맞춰 처리하고 양쪽 목록을 갱신합니다.
         let destinationAlbumIDs = destinations.compactMap { destination -> Album.ID? in
             guard case let .album(albumID) = destination else {
                 return nil
             }
             return albumID
         }
+        let sharedDestinationPairs: [(ShareAlbum.ID, SharedAlbum.ID)] = destinations.compactMap { destination in
+            guard case let .sharedAlbum(groupID, albumID) = destination else { return nil }
+            return (groupID, albumID)
+        }
+        let sharedDestinations = Dictionary(grouping: sharedDestinationPairs) { $0.0 }
 
-        guard !ids.isEmpty, !destinationAlbumIDs.isEmpty else {
+        guard !ids.isEmpty, !destinations.isEmpty else {
             return false
         }
 
+        if !destinationAlbumIDs.isEmpty {
+            do {
+                try await albumStore.moveAlbumPhotos(
+                    ids: ids,
+                    from: sourceAlbumID,
+                    to: destinationAlbumIDs
+                )
+                await loadAlbums()
+                return true
+            } catch {
+                return false
+            }
+        }
+
+        guard let sharedPhotoRepository else { return false }
         do {
-            try await albumStore.moveAlbumPhotos(
-                ids: ids,
-                from: sourceAlbumID,
-                to: destinationAlbumIDs
-            )
+            let localIdentifiers = try await sharedPhotoRepository.localIdentifiers(forAlbumPhotoIDs: ids)
+            guard !localIdentifiers.isEmpty else { return false }
+
+            var succeededIdentifiers = Set(localIdentifiers)
+            var failedCount = 0
+            for (groupID, values) in sharedDestinations {
+                let result = try await sharedPhotoRepository.addLocalPhotos(
+                    localIdentifiers: localIdentifiers,
+                    to: values.map { $0.1 },
+                    in: groupID
+                )
+                succeededIdentifiers.formIntersection(result.succeededLocalIdentifiers)
+                failedCount += result.failedCount
+            }
+
+            let succeededAlbumPhotoIDs = zip(ids, localIdentifiers).compactMap { id, identifier in
+                succeededIdentifiers.contains(identifier) ? id : nil
+            }
+            if !succeededAlbumPhotoIDs.isEmpty {
+                try await albumStore.removeAlbumPhotos(ids: succeededAlbumPhotoIDs)
+            }
+            if failedCount > 0 {
+                presentMutationNotice(
+                    succeededCount: succeededIdentifiers.count,
+                    failedCount: failedCount,
+                    fallback: "일부 사진을 공유집으로 옮기지 못했어요."
+                )
+            }
+            await loadAlbums()
+            return !succeededIdentifiers.isEmpty
         } catch {
+            presentMutationNotice(
+                succeededCount: 0,
+                failedCount: ids.count,
+                fallback: "사진을 공유집으로 옮기지 못했어요."
+            )
             return false
         }
-
-        await loadAlbums()
-        return true
     }
 
     private func renameAlbum(_ albumID: AlbumViewItem.ID, to name: String) async -> Bool {
@@ -480,6 +671,18 @@ final class AlbumViewModel {
     ) {
         errorAlertMessage = message
         errorRetryAction = retry
+        isErrorAlertPresented = true
+    }
+
+    private func presentMutationNotice(
+        succeededCount: Int,
+        failedCount: Int,
+        fallback: String
+    ) {
+        errorAlertMessage = failedCount > 0
+            ? "성공 \(succeededCount)장, 실패 \(failedCount)장이에요."
+            : fallback
+        errorRetryAction = nil
         isErrorAlertPresented = true
     }
 }
