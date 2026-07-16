@@ -91,6 +91,7 @@ struct ShareSheet: View {
             if !authenticationState.isLoggedIn {
                 ShareLoginPrompt {
                     authenticationState.requestLogin(.share)
+                    onDismiss()
                 }
             } else if let targetShareAlbum {
                 SharedAlbumSelectionGrid(
