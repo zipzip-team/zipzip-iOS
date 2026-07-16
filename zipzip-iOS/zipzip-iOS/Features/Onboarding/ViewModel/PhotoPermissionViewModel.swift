@@ -49,6 +49,18 @@ final class PhotoPermissionViewModel {
         UIApplication.shared.open(settingsURL)
     }
 
+    /// 설정 앱에서 권한을 변경하고 돌아왔을 때(포그라운드 복귀) 현재 권한을 다시 확인한다.
+    func refreshAuthorizationStatusOnForeground() {
+        let status = PHPhotoLibrary.authorizationStatus(for: .readWrite)
+        switch status {
+        case .authorized, .limited:
+            showsPermissionAlert = false
+            didAuthorizePhotoAccess = true
+        default:
+            break
+        }
+    }
+
     private func requestAuthorization() {
         PHPhotoLibrary.requestAuthorization(for: .readWrite) { [weak self] status in
             Task { @MainActor [weak self, status] in

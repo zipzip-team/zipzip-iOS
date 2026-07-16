@@ -31,7 +31,12 @@ final class AlbumPhotoPickerViewModel {
     func loadPhotos() async {
         do {
             let library = try await photoSectionsProvider.loadLibrary()
-            sections = await photoSectionsProvider.sections(from: library, filters: [])
+            let registeredDeviceIDs = try await photoSectionsProvider.loadRegisteredDeviceIDs()
+            sections = await photoSectionsProvider.sections(
+                from: library,
+                filters: [],
+                registeredDeviceIDs: registeredDeviceIDs
+            )
         } catch {
             sections = []
         }

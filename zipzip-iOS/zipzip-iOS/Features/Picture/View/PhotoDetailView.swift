@@ -78,6 +78,7 @@ struct PhotoDetailView: View {
     private static let doubleTapPhotoScale: CGFloat = 2
     private static let zoomActivationThreshold: CGFloat = 1.01
     private static let infoRevealThreshold: CGFloat = 72
+    private static let infoDismissScrollThreshold: CGFloat = 80
 
     init(
         photo: Photo,
@@ -159,6 +160,16 @@ struct PhotoDetailView: View {
                         .frame(maxWidth: .infinity)
                     }
                     .scrollDisabled(!isEditingInfo)
+                    .onScrollGeometryChange(for: CGFloat.self) { geometry in
+                        geometry.contentOffset.y - geometry.contentInsets.top
+                    } action: { _, distanceBelowTop in
+                        guard isEditingInfo,
+                              distanceBelowTop < -Self.infoDismissScrollThreshold
+                        else {
+                            return
+                        }
+                        setInfoEditing(false, scrollProxy: proxy)
+                    }
                 }
                 .ignoresSafeArea()
             }

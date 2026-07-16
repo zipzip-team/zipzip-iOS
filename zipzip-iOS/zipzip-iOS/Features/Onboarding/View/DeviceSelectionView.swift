@@ -50,7 +50,8 @@ struct DeviceSelectionView: View {
 
                 CommonButton(
                     title: "확인",
-                    property1: viewModel.isSavingSelection ? .disabled : .default
+                    property1: viewModel.isSavingSelection || viewModel.selectedDeviceIDs.isEmpty
+                        ? .disabled : .default
                 ) {
                     Task {
                         if await viewModel.saveSelection() {

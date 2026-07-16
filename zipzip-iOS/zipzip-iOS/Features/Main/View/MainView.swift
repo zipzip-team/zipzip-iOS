@@ -14,6 +14,8 @@ struct MainView: View {
 
     @Fetch(RegisteredPhotoCountRequest()) private var registeredPhotoCount = 0
 
+    @State private var showCancelAlert = false
+
     private let organizedPhotoCount: Int
 
     private enum Layout {
@@ -46,10 +48,38 @@ struct MainView: View {
         .overlay(alignment: .topLeading) {
             FloatingHeader(.trailing) {
                 ProfileButton {
+                    guard router.path.isEmpty else { return }
                     router.push(.myPage)
                 }
             }
         }
+        .bottomSheetAlert(
+            isPresented: $showCancelAlert,
+            title: cancelAlertTitle,
+            message: "업로드 중에 앱을 종료하면 다시 처음부터 해야해요.",
+            secondaryTitle: cancelAlertSecondaryTitle,
+            primaryTitle: "확인",
+            onSecondaryTap: { photoSync.cancelSync() },
+            onPrimaryTap: {}
+        )
+    }
+
+    private var indicatorMode: MoveInIndicator.Mode {
+        photoSync.phase == .uploading ? .uploading : .moveIn
+    }
+
+    private var cancelAlertTitle: String {
+        let durationText = photoSync.remainingMinutes.map(MoveInIndicator.durationText)
+        switch indicatorMode {
+        case .moveIn:
+            return durationText.map { "사진 동기화까지 \($0) 남았어요" } ?? "사진 동기화를 중단할까요?"
+        case .uploading:
+            return durationText.map { "사진 업로드까지 \($0) 남았어요" } ?? "사진 업로드를 중단할까요?"
+        }
+    }
+
+    private var cancelAlertSecondaryTitle: String {
+        indicatorMode == .uploading ? "업로드 취소" : "불러오기 취소"
     }
 
     private var heroSection: some View {
@@ -73,7 +103,7 @@ struct MainView: View {
                 .font(.t3_md)
 
             HStack(alignment: .bottom, spacing: 2) {
-                Text("\(organizedPhotoCount)")
+                Text(organizedPhotoCount, format: .number)
                     .font(.h1_sb)
 
                 Text("장")
@@ -83,7 +113,7 @@ struct MainView: View {
         }
         .foregroundStyle(.grey1000)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("집집에 모인 사진 \(organizedPhotoCount)장")
+        .accessibilityLabel("집집에 모인 사진 \(organizedPhotoCount.formatted(.number))장")
     }
 
     private var unresolvedPhotosSection: some View {
@@ -150,22 +180,24 @@ struct MainView: View {
 
     private var floatingHeader: some View {
         FloatingHeaderBar {
-            HStack(spacing: 0) {
-                Image(.badgeLogo)
-                    .frame(width: 44, height: 44)
+            ZStack {
+                HStack(spacing: 0) {
+                    Image(.badgeLogo)
+                        .frame(width: 44, height: 44)
 
-                Spacer()
+                    Spacer()
+                }
 
                 if photoSync.isProcessing {
                     MoveInIndicator(
+                        mode: indicatorMode,
                         remainingMinutes: photoSync.remainingMinutes,
                         tooltipText: registeredPhotoCount > 0
                             ? "\(registeredPhotoCount)장의 사진이 입주했어요!"
-                            : nil
+                            : nil,
+                        onTap: { showCancelAlert = true }
                     )
                     .transition(.opacity)
-
-                    Spacer()
                 }
             }
         }

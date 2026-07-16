@@ -14,6 +14,7 @@ struct FilteredPictureView: View {
     @State private var pictureViewModel = PictureViewModel()
     @State private var viewModel: FilteredPictureViewModel
     @State private var showShareSheet = false
+    @State private var didLoadResult = false
     private let albumViewModel: AlbumViewModel
     private let shareViewModel: ShareViewModel
 
@@ -35,16 +36,20 @@ struct FilteredPictureView: View {
             Color.clear
                 .frame(height: FloatingHeaderLayout.buttonHeight + 8)
 
-            ScrollView {
-                PhotoGallery(
-                    sections: pictureViewModel.sections,
-                    isSelectionMode: pictureViewModel.isSelectionMode,
-                    selectedPhotoIDs: pictureViewModel.selectedPhotoIDs,
-                    onTapPhoto: pictureViewModel.toggleSelection,
-                    onLongPressPhoto: pictureViewModel.handleLongPress,
-                    onOpenPhoto: { router.push(.photoDetail($0)) }
-                )
-                .padding(.horizontal, 16)
+            if showsEmptyResult {
+                emptyResultView
+            } else {
+                ScrollView {
+                    PhotoGallery(
+                        sections: pictureViewModel.sections,
+                        isSelectionMode: pictureViewModel.isSelectionMode,
+                        selectedPhotoIDs: pictureViewModel.selectedPhotoIDs,
+                        onTapPhoto: pictureViewModel.toggleSelection,
+                        onLongPressPhoto: pictureViewModel.handleLongPress,
+                        onOpenPhoto: { router.push(.photoDetail($0)) }
+                    )
+                    .padding(.horizontal, 16)
+                }
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
@@ -52,7 +57,9 @@ struct FilteredPictureView: View {
         .navigationBarBackButtonHidden(true)
         .task { await viewModel.loadOptions() }
         .task(id: viewModel.appliedFilters) {
+            didLoadResult = false
             await pictureViewModel.applyFilters(viewModel.appliedFilters)
+            didLoadResult = true
         }
         .alert("필터 정보를 불러오지 못했어요.", isPresented: $viewModel.isErrorAlertPresented) {
             Button("다시 시도") {
@@ -158,6 +165,27 @@ struct FilteredPictureView: View {
 
     private func loadSharedAlbums(groupID: ShareAlbum.ID) async {
         await shareViewModel.loadSharedAlbums(groupID: groupID)
+    }
+
+    private var showsEmptyResult: Bool {
+        didLoadResult && pictureViewModel.sections.isEmpty
+    }
+
+    private var emptyResultView: some View {
+        VStack(spacing: 8) {
+            Image(.albumDetailEmptyArtwork)
+                .resizable()
+                .scaledToFit()
+                .frame(width: 80, height: 80)
+                .accessibilityHidden(true)
+
+            Image(.albumEmptyDescription)
+                .resizable()
+                .scaledToFit()
+                .frame(width: 246, height: 20)
+                .accessibilityLabel("사진집에 사진을 넣어볼까요?")
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
     }
 
     private var topBar: some View {

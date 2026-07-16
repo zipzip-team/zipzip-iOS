@@ -34,6 +34,7 @@ struct SplashView: View {
         .task {
             guard continuesOnboarding else { return }
             try? await Task.sleep(for: .seconds(3))
+            guard router.path.isEmpty else { return }
             router.push(.photoPermission)
         }
     }
