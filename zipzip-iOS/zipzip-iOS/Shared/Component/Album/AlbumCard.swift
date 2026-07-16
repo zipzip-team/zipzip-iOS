@@ -13,11 +13,15 @@ struct AlbumCard: View {
     var state: AlbumFolderState = .plain
     var nameColorOverride: Color? = nil
     var thumbnailLocalIdentifiers: [String]? = nil
+    var thumbnailRemoteURLs: [URL]? = nil
 
     var body: some View {
         VStack(spacing: 8) {
             AlbumFolder(state: state) {
-                PhotoGroup(localIdentifiers: thumbnailLocalIdentifiers)
+                PhotoGroup(
+                    localIdentifiers: thumbnailLocalIdentifiers,
+                    remoteURLs: thumbnailRemoteURLs
+                )
             }
 
             VStack(spacing: 0) {

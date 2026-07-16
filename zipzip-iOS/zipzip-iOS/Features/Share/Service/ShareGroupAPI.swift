@@ -239,10 +239,36 @@ nonisolated struct SharedAlbumResponse: Decodable {
     let id: UUID
     let name: String
     let photoCount: Int
+    let thumbnails: [SharedAlbumThumbnailResponse]?
     let createdBy: ShareGroupUserResponse?
     let isCreator: Bool
     let createdAt: String
     let updatedAt: String
+
+    init(
+        id: UUID,
+        name: String,
+        photoCount: Int,
+        thumbnails: [SharedAlbumThumbnailResponse]? = nil,
+        createdBy: ShareGroupUserResponse?,
+        isCreator: Bool,
+        createdAt: String,
+        updatedAt: String
+    ) {
+        self.id = id
+        self.name = name
+        self.photoCount = photoCount
+        self.thumbnails = thumbnails
+        self.createdBy = createdBy
+        self.isCreator = isCreator
+        self.createdAt = createdAt
+        self.updatedAt = updatedAt
+    }
+}
+
+nonisolated struct SharedAlbumThumbnailResponse: Decodable, Equatable {
+    let url: String
+    let urlExpiresAt: String
 }
 
 nonisolated struct ShareGroupUserResponse: Decodable {

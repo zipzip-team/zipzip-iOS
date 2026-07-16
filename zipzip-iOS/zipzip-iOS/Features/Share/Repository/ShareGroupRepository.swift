@@ -131,6 +131,7 @@ final class DefaultShareGroupRepository: ShareGroupRepository {
     private var cacheOwnerID: UUID?
     private var cacheSessionID = UUID()
     private var groupListReconciliation: GroupListReconciliation?
+    private var sharedAlbumThumbnailsByGroupID: [ShareAlbum.ID: [SharedAlbum.ID: [SharedAlbumThumbnail]]] = [:]
 
     init(api: ShareGroupAPI, store: SharedGroupStore = SharedGroupStore()) {
         self.api = api
@@ -142,6 +143,7 @@ final class DefaultShareGroupRepository: ShareGroupRepository {
         cacheSessionID = sessionID
         cacheOwnerID = nil
         groupListReconciliation = nil
+        sharedAlbumThumbnailsByGroupID = [:]
         try await store.prepareCache(for: userID)
         guard cacheSessionID == sessionID else {
             throw CancellationError()
@@ -153,13 +155,19 @@ final class DefaultShareGroupRepository: ShareGroupRepository {
         cacheSessionID = UUID()
         cacheOwnerID = nil
         groupListReconciliation = nil
+        sharedAlbumThumbnailsByGroupID = [:]
     }
 
     func groups() async throws -> [ShareAlbum] {
         let context = try requiredCacheContext()
-        let groups = try await store.fetchGroups().map(Self.makeGroup)
+        let storedGroups = try await store.fetchGroups()
         try validate(context)
-        return groups
+        return storedGroups.map {
+            Self.makeGroup(
+                from: $0,
+                thumbnailsByAlbumID: sharedAlbumThumbnailsByGroupID[$0.id] ?? [:]
+            )
+        }
     }
 
     func syncGroups(cursor: String?, size: Int) async throws -> ShareGroupRepositoryPage {
@@ -255,6 +263,15 @@ final class DefaultShareGroupRepository: ShareGroupRepository {
                 groupID: groupID,
                 cacheOwnerID: context.ownerID
             )
+            try validate(context)
+            let pageThumbnails = Dictionary(uniqueKeysWithValues: page.items.map {
+                ($0.id, Self.makeThumbnails(from: $0.thumbnails ?? []))
+            })
+            if cursor == nil {
+                sharedAlbumThumbnailsByGroupID[groupID] = pageThumbnails
+            } else {
+                sharedAlbumThumbnailsByGroupID[groupID, default: [:]].merge(pageThumbnails) { _, new in new }
+            }
             return ShareGroupRepositoryPage(
                 itemIDs: page.items.map(\.id),
                 nextCursor: page.nextCursor,
@@ -313,15 +330,14 @@ final class DefaultShareGroupRepository: ShareGroupRepository {
             try validate(context)
             let groups = try await store.fetchGroups()
             try validate(context)
-            guard let album = groups
+            guard let storedAlbum = groups
                 .first(where: { $0.id == groupID })?
                 .albums
                 .first(where: { $0.id == response.id })
-                .map(Self.makeSharedAlbum)
             else {
                 throw ShareGroupRepositoryError.sharedAlbumNotFound
             }
-            return album
+            return Self.makeSharedAlbum(from: storedAlbum)
         } catch let error as NetworkError where error.serverCode == "SHARED_GROUP_NOT_FOUND" {
             throw ShareGroupRepositoryError.groupNotFound
         }
@@ -401,6 +417,8 @@ final class DefaultShareGroupRepository: ShareGroupRepository {
         }
         try validate(context)
         try await store.deleteGroup(id: id, cacheOwnerID: context.ownerID)
+        try validate(context)
+        sharedAlbumThumbnailsByGroupID[id] = nil
     }
 
     func leaveGroup(id: ShareAlbum.ID) async throws {
@@ -417,6 +435,8 @@ final class DefaultShareGroupRepository: ShareGroupRepository {
         }
         try validate(context)
         try await store.deleteGroup(id: id, cacheOwnerID: context.ownerID)
+        try validate(context)
+        sharedAlbumThumbnailsByGroupID[id] = nil
     }
 
     func chatTimeline(
@@ -487,6 +507,8 @@ final class DefaultShareGroupRepository: ShareGroupRepository {
         }
         try validate(context)
         try await store.deleteSharedAlbums(ids: [id], cacheOwnerID: context.ownerID)
+        try validate(context)
+        sharedAlbumThumbnailsByGroupID[groupID]?[id] = nil
     }
 
     func deleteSharedAlbums(
@@ -507,6 +529,10 @@ final class DefaultShareGroupRepository: ShareGroupRepository {
             )
             try validate(context)
             try await store.deleteSharedAlbums(ids: uniqueIDs, cacheOwnerID: context.ownerID)
+            try validate(context)
+            for id in uniqueIDs {
+                sharedAlbumThumbnailsByGroupID[groupID]?[id] = nil
+            }
             return SharedAlbumDeletionResult(
                 deletedAlbumCount: response.deletedAlbumCount,
                 deletedPhotoCount: response.deletedPhotoCount
@@ -530,6 +556,8 @@ final class DefaultShareGroupRepository: ShareGroupRepository {
     func removeCachedGroup(id: ShareAlbum.ID) async throws {
         let context = try requiredCacheContext()
         try await store.deleteGroup(id: id, cacheOwnerID: context.ownerID)
+        try validate(context)
+        sharedAlbumThumbnailsByGroupID[id] = nil
     }
 
     private func cachedRole(groupID: ShareAlbum.ID) async throws -> ShareGroupRole? {
@@ -544,6 +572,8 @@ final class DefaultShareGroupRepository: ShareGroupRepository {
         try validate(context)
         try await revalidateMembership(groupID: groupID, context: context)
         try await store.deleteSharedAlbums(ids: [id], cacheOwnerID: context.ownerID)
+        try validate(context)
+        sharedAlbumThumbnailsByGroupID[groupID]?[id] = nil
     }
 
     private func reconcileMissingSharedAlbums(
@@ -591,6 +621,10 @@ final class DefaultShareGroupRepository: ShareGroupRepository {
             ids: Array(missingIDs),
             cacheOwnerID: context.ownerID
         )
+        try validate(context)
+        for id in missingIDs {
+            sharedAlbumThumbnailsByGroupID[groupID]?[id] = nil
+        }
         return missingIDs
     }
 
@@ -646,14 +680,22 @@ final class DefaultShareGroupRepository: ShareGroupRepository {
         }
     }
 
-    private static func makeGroup(from stored: StoredSharedGroup) -> ShareAlbum {
+    private static func makeGroup(
+        from stored: StoredSharedGroup,
+        thumbnailsByAlbumID: [SharedAlbum.ID: [SharedAlbumThumbnail]] = [:]
+    ) -> ShareAlbum {
         ShareAlbum(
             id: stored.id,
             name: stored.name,
             date: stored.date,
             memberCount: stored.memberCount,
             currentUserRole: ShareGroupRole(rawValue: stored.role) ?? .participant,
-            albums: stored.albums.map(makeSharedAlbum),
+            albums: stored.albums.map {
+                makeSharedAlbum(
+                    from: $0,
+                    thumbnails: thumbnailsByAlbumID[$0.id] ?? []
+                )
+            },
             sharedAlbumCount: stored.sharedAlbumCount,
             photoCount: stored.photoCount,
             createdBy: makeUser(
@@ -664,12 +706,16 @@ final class DefaultShareGroupRepository: ShareGroupRepository {
         )
     }
 
-    private static func makeSharedAlbum(from stored: StoredSharedAlbum) -> SharedAlbum {
+    private static func makeSharedAlbum(
+        from stored: StoredSharedAlbum,
+        thumbnails: [SharedAlbumThumbnail] = []
+    ) -> SharedAlbum {
         SharedAlbum(
             id: stored.id,
             sharedGroupID: stored.sharedGroupID,
             name: stored.name,
             count: stored.photoCount,
+            thumbnails: thumbnails,
             createdBy: makeUser(
                 id: stored.createdByUserID,
                 displayName: stored.createdByDisplayName
@@ -678,6 +724,19 @@ final class DefaultShareGroupRepository: ShareGroupRepository {
             createdAt: stored.createdAt,
             updatedAt: stored.updatedAt
         )
+    }
+
+    private static func makeThumbnails(
+        from responses: [SharedAlbumThumbnailResponse]
+    ) -> [SharedAlbumThumbnail] {
+        responses.prefix(3).compactMap { response in
+            guard let url = URL(string: response.url),
+                  let expiresAt = date(response.urlExpiresAt)
+            else {
+                return nil
+            }
+            return SharedAlbumThumbnail(url: url, urlExpiresAt: expiresAt)
+        }
     }
 
     private static func makeUser(id: UUID?, displayName: String?) -> ShareGroupUser? {

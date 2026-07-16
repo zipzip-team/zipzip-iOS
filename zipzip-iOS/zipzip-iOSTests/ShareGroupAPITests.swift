@@ -60,6 +60,19 @@ final class ShareGroupAPITests: XCTestCase {
 
         XCTAssertEqual(response.items.first?.name, "제주도")
         XCTAssertEqual(response.items.first?.photoCount, 42)
+        XCTAssertEqual(
+            response.items.first?.thumbnails,
+            [
+                SharedAlbumThumbnailResponse(
+                    url: "https://cdn.example.com/thumbnail-1.jpg",
+                    urlExpiresAt: "2099-07-11T00:00:00Z"
+                ),
+                SharedAlbumThumbnailResponse(
+                    url: "https://cdn.example.com/thumbnail-2.jpg",
+                    urlExpiresAt: "2099-07-11T00:00:00Z"
+                )
+            ]
+        )
         XCTAssertNil(response.nextCursor)
         XCTAssertFalse(response.hasNext)
         XCTAssertEqual(provider.request?.url?.path, "/api/v1/shared-groups/\(groupID.uuidString)/shared-albums")
@@ -360,6 +373,13 @@ final class ShareGroupAPITests: XCTestCase {
           "id": "33333333-3333-3333-3333-333333333333",
           "name": "제주도",
           "photoCount": 42,
+          "thumbnails": [{
+            "url": "https://cdn.example.com/thumbnail-1.jpg",
+            "urlExpiresAt": "2099-07-11T00:00:00Z"
+          }, {
+            "url": "https://cdn.example.com/thumbnail-2.jpg",
+            "urlExpiresAt": "2099-07-11T00:00:00Z"
+          }],
           "createdBy": {
             "userId": null,
             "displayName": null

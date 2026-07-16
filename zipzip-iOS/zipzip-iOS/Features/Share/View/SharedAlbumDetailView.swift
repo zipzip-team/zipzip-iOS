@@ -401,7 +401,8 @@ private struct SharedAlbumCopyDestinationSheet: View {
                                             name: album.name,
                                             count: album.count,
                                             state: selectedAlbumIDs.contains(album.id) ? .highlighted : .plain,
-                                            nameColorOverride: .white00
+                                            nameColorOverride: .white00,
+                                            thumbnailRemoteURLs: album.validThumbnailURLs()
                                         )
                                     }
                                     .buttonStyle(StaticButtonStyle())

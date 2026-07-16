@@ -167,6 +167,12 @@ final class ShareViewModelTests: XCTestCase {
                     id: albumID,
                     name: "제주도",
                     photoCount: 42,
+                    thumbnails: [
+                        SharedAlbumThumbnailResponse(
+                            url: "https://cdn.example.com/thumbnail.jpg",
+                            urlExpiresAt: "2099-07-11T00:00:00Z"
+                        )
+                    ],
                     createdBy: nil,
                     isCreator: true,
                     createdAt: "2026-07-02T10:15:30Z",
@@ -437,6 +443,12 @@ final class ShareViewModelTests: XCTestCase {
                     id: albumID,
                     name: "제주도",
                     photoCount: 42,
+                    thumbnails: [
+                        SharedAlbumThumbnailResponse(
+                            url: "https://cdn.example.com/thumbnail.jpg",
+                            urlExpiresAt: "2099-07-11T00:00:00Z"
+                        )
+                    ],
                     createdBy: nil,
                     isCreator: true,
                     createdAt: "2026-07-02T10:15:30Z",
@@ -453,6 +465,12 @@ final class ShareViewModelTests: XCTestCase {
         await onlineViewModel.loadGroups(for: testCacheOwnerID)
         await onlineViewModel.loadSharedAlbums(groupID: groupID)
 
+        let thumbnailURL = try XCTUnwrap(URL(string: "https://cdn.example.com/thumbnail.jpg"))
+        XCTAssertEqual(
+            onlineViewModel.group(withID: groupID)?.albums.first?.validThumbnailURLs(),
+            [thumbnailURL]
+        )
+
         let offlineViewModel = ShareViewModel(
             repository: makeRepository(api: UnavailableShareGroupAPI(), store: store)
         )
@@ -461,6 +479,7 @@ final class ShareViewModelTests: XCTestCase {
         XCTAssertEqual(offlineViewModel.groups.map(\.id), [groupID])
         XCTAssertEqual(offlineViewModel.group(withID: groupID)?.albums.map(\.id), [albumID])
         XCTAssertEqual(offlineViewModel.group(withID: groupID)?.albums.map(\.count), [42])
+        XCTAssertTrue(offlineViewModel.group(withID: groupID)?.albums.first?.thumbnails.isEmpty == true)
     }
 
     @MainActor

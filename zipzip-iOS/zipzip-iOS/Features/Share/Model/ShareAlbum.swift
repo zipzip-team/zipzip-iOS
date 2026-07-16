@@ -60,8 +60,18 @@ struct SharedAlbum: Identifiable, Hashable {
     let sharedGroupID: UUID
     var name: String
     var count: Int
+    var thumbnails: [SharedAlbumThumbnail] = []
     let createdBy: ShareGroupUser?
     let isCreator: Bool
     let createdAt: Date
     var updatedAt: Date
+
+    func validThumbnailURLs(at date: Date = .now) -> [URL] {
+        thumbnails.compactMap { $0.urlExpiresAt > date ? $0.url : nil }
+    }
+}
+
+struct SharedAlbumThumbnail: Hashable {
+    let url: URL
+    let urlExpiresAt: Date
 }

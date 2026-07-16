@@ -44,7 +44,8 @@ struct ShareGroupDetailView: View {
                                     AlbumCard(
                                         name: album.name,
                                         count: album.count,
-                                        state: albumState(for: album)
+                                        state: albumState(for: album),
+                                        thumbnailRemoteURLs: album.validThumbnailURLs()
                                     )
                                 }
                                 .buttonStyle(StaticButtonStyle())
@@ -550,7 +551,8 @@ private struct ShareImportDestinationSheet: View {
                                     name: album.name,
                                     count: album.count,
                                     state: selectedAlbumID == album.id ? .highlighted : .plain,
-                                    nameColorOverride: .white00
+                                    nameColorOverride: .white00,
+                                    thumbnailRemoteURLs: album.validThumbnailURLs()
                                 )
                             }
                             .buttonStyle(StaticButtonStyle())
