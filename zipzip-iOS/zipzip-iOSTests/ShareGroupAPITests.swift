@@ -67,6 +67,29 @@ final class ShareGroupAPITests: XCTestCase {
     }
 
     @MainActor
+    func testCreateSharedAlbumRequestMatchesDocumentedContract() async throws {
+        let provider = ShareGroupRecordingNetworkProvider(json: Self.createSharedAlbumJSON)
+        let api = DefaultShareGroupAPI(networkProvider: provider)
+        let groupID = try XCTUnwrap(UUID(uuidString: "11111111-1111-1111-1111-111111111111"))
+        let albumID = try XCTUnwrap(UUID(uuidString: "33333333-3333-3333-3333-333333333333"))
+        let idempotencyKey = UUID()
+
+        let response = try await api.createSharedAlbum(
+            groupID: groupID,
+            name: "제주도",
+            idempotencyKey: idempotencyKey
+        )
+
+        XCTAssertEqual(response.id, albumID)
+        XCTAssertEqual(response.photoCount, 0)
+        let request = try XCTUnwrap(provider.request)
+        XCTAssertEqual(request.url?.path, "/api/v1/shared-groups/\(groupID.uuidString)/shared-albums")
+        XCTAssertEqual(request.httpMethod, "POST")
+        XCTAssertEqual(request.value(forHTTPHeaderField: "Idempotency-Key"), idempotencyKey.uuidString)
+        XCTAssertEqual(try requestBody(request)["name"] as? String, "제주도")
+    }
+
+    @MainActor
     func testCreateGroupRequestMatchesDocumentedContract() async throws {
         let provider = ShareGroupRecordingNetworkProvider(json: Self.createGroupJSON)
         let api = DefaultShareGroupAPI(networkProvider: provider)
@@ -347,6 +370,23 @@ final class ShareGroupAPITests: XCTestCase {
         }],
         "nextCursor": null,
         "hasNext": false
+      }
+    }
+    """
+
+    private static let createSharedAlbumJSON = """
+    {
+      "data": {
+        "id": "33333333-3333-3333-3333-333333333333",
+        "name": "제주도",
+        "photoCount": 0,
+        "createdBy": {
+          "userId": null,
+          "displayName": "집집이"
+        },
+        "isCreator": true,
+        "createdAt": "2026-07-03T10:15:30Z",
+        "updatedAt": "2026-07-03T10:15:30Z"
       }
     }
     """
