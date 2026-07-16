@@ -4,6 +4,7 @@
 //
 
 import Foundation
+import OSLog
 
 struct SharedPhotoAuthor: Equatable {
     let id: UUID?
@@ -108,6 +109,11 @@ protocol SharedPhotoRepository {
 
 @MainActor
 final class DefaultSharedPhotoRepository: SharedPhotoRepository {
+    private static let logger = Logger(
+        subsystem: Bundle.main.bundleIdentifier ?? "zipzip-iOS",
+        category: "SharedPhotoRepository"
+    )
+
     private struct CacheContext {
         let ownerID: UUID
         let sessionID: UUID
@@ -422,7 +428,10 @@ final class DefaultSharedPhotoRepository: SharedPhotoRepository {
                 guard var photo = try await store.fetchPhoto(id: photoID) else {
                     throw SharedPhotoRepositoryError.photoNotFound
                 }
-                // 이미 로컬 사본이 있어도 사용자가 저장을 요청할 때마다 새 사본을 만든다.
+                if try await saveLocalDuplicateIfAvailable(photo, photoID: photoID) {
+                    succeededCount += 1
+                    continue
+                }
 
                 if photo.originalURLExpiresAt <= .now {
                     if !refreshedExpiredURLs {
@@ -474,6 +483,13 @@ final class DefaultSharedPhotoRepository: SharedPhotoRepository {
             } catch is CancellationError {
                 throw CancellationError()
             } catch {
+                Self.logger.error(
+                    """
+                    ❌ [SharedPhotoRepository] failed to save photo to library
+                    Photo ID: \(photoID.uuidString, privacy: .public)
+                    Error: \(String(describing: error), privacy: .public)
+                    """
+                )
                 failedCount += 1
             }
         }
@@ -481,6 +497,42 @@ final class DefaultSharedPhotoRepository: SharedPhotoRepository {
             succeededCount: succeededCount,
             failedCount: failedCount
         )
+    }
+
+    private func saveLocalDuplicateIfAvailable(
+        _ photo: StoredSharedPhoto,
+        photoID: SharedAlbumPhoto.ID
+    ) async throws -> Bool {
+        guard let localIdentifier = photo.localIdentifier,
+              photoLibrary.containsPhoto(localIdentifier: localIdentifier)
+        else {
+            return false
+        }
+
+        let preparedAsset: PreparedSharedPhotoAsset
+        do {
+            preparedAsset = try await assetPreparer.prepare(localIdentifier: localIdentifier)
+        } catch is CancellationError {
+            throw CancellationError()
+        } catch {
+            Self.logger.warning(
+                """
+                ⚠️ [SharedPhotoRepository] failed to prepare local copy; falling back to download
+                Photo ID: \(photoID.uuidString, privacy: .public)
+                Error: \(String(describing: error), privacy: .public)
+                """
+            )
+            return false
+        }
+
+        defer { assetPreparer.removePreparedFile(preparedAsset) }
+        _ = try await photoLibrary.savePhoto(
+            from: preparedAsset.fileURL,
+            creationDate: photo.takenAt ?? preparedAsset.takenAt ?? photo.createdAt,
+            latitude: photo.latitude ?? preparedAsset.latitude,
+            longitude: photo.longitude ?? preparedAsset.longitude
+        )
+        return true
     }
 
     func deleteLocalCopies(photoIDs: [SharedAlbumPhoto.ID]) async throws -> SharedAlbumPhotoMutationResult {
