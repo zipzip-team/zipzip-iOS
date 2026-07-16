@@ -6,8 +6,15 @@
 import SwiftUI
 
 struct MoveInIndicator: View {
+    enum Mode {
+        case moveIn
+        case uploading
+    }
+
+    var mode: Mode = .moveIn
     var remainingMinutes: Int?
     var tooltipText: String?
+    var onTap: (() -> Void)?
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var isAnimating = false
@@ -38,6 +45,8 @@ struct MoveInIndicator: View {
         .padding(.vertical, Layout.verticalPadding)
         .background(.white00, in: Capsule())
         .shadow(color: .black.opacity(0.05), radius: 6, x: 0, y: 4)
+        .contentShape(Capsule())
+        .onTapGesture { onTap?() }
         .background {
             GeometryReader { proxy in
                 Color.clear
@@ -87,26 +96,30 @@ struct MoveInIndicator: View {
             .delay(Double(index) * 0.2)
     }
 
+    private var baseText: String {
+        mode == .uploading ? "사진 업로드 중" : "입주하는 중"
+    }
+
     private var label: String {
-        guard let remainingMinutes else { return "이사 중" }
-        return Self.remainingText(remainingMinutes)
+        guard let remainingMinutes else { return baseText }
+        return "\(baseText) · 약 \(Self.durationText(remainingMinutes))"
     }
 
     private var accessibilityText: String {
-        guard let remainingMinutes else { return "사진을 정리하고 있어요" }
-        return "사진 정리 중, 약 \(Self.remainingText(remainingMinutes))"
+        guard let remainingMinutes else { return baseText }
+        return "\(baseText), 약 \(Self.durationText(remainingMinutes))"
     }
 
-    private static func remainingText(_ minutes: Int) -> String {
+    static func durationText(_ minutes: Int) -> String {
         let hours = minutes / 60
         let mins = minutes % 60
         if hours == 0 {
-            return "\(mins)분 남음"
+            return "\(mins)분"
         }
         if mins == 0 {
-            return "\(hours)시간 남음"
+            return "\(hours)시간"
         }
-        return "\(hours)시간 \(mins)분 남음"
+        return "\(hours)시간 \(mins)분"
     }
 }
 

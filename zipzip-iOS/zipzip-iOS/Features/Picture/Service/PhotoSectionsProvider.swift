@@ -88,8 +88,23 @@ nonisolated struct PhotoSectionsProvider {
         filters: [AppliedFilter]
     ) -> [PhotoSection] {
         var filtered = photos
-        for filter in filters {
-            filtered = apply(filter, to: filtered)
+        // 같은 종류(kind) 내에서는 OR(합집합), 종류 간에는 AND(교집합)로 적용한다.
+        let grouped = Dictionary(grouping: filters, by: \.kind)
+        for kind in [FilterKind.device, .location, .date, .etc] {
+            guard let kindFilters = grouped[kind], !kindFilters.isEmpty else { continue }
+            if kindFilters.count == 1 {
+                filtered = apply(kindFilters[0], to: filtered)
+            } else {
+                var union: [FilterablePhoto] = []
+                var seen = Set<String>()
+                for filter in kindFilters {
+                    for photo in apply(filter, to: filtered)
+                        where seen.insert(photo.photo.localIdentifier).inserted {
+                        union.append(photo)
+                    }
+                }
+                filtered = union
+            }
         }
 
         let sorted = filtered.sorted { lhs, rhs in

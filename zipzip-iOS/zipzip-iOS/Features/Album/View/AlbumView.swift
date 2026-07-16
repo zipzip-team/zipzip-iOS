@@ -341,6 +341,7 @@ private struct AlbumShareDestinationSheet: View {
             if !authenticationState.isLoggedIn {
                 ShareLoginPrompt {
                     authenticationState.requestLogin(.album)
+                    onCancel()
                 }
             } else {
                 ShareAlbumList(

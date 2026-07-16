@@ -26,18 +26,20 @@ final class FilterViewModel {
         etcItems: PhotoFilterOptions.defaultEtcItems
     )
 
-    var selectedDevice: String?
-    var selectedLocation: String?
+    var selectedDevices: Set<String> = []
+    var selectedLocations: Set<String> = []
     var selectedDate: Date?
-    var selectedEtc: String?
+    var selectedEtcItems: Set<String> = []
 
     var appliedFilters: [AppliedFilter] {
-        [
-            selectedDevice.map { AppliedFilter(kind: .device, value: $0) },
-            selectedLocation.map { AppliedFilter(kind: .location, value: $0) },
-            selectedDate.map { AppliedFilter(kind: .date, value: AppliedFilter.dateText($0)) },
-            selectedEtc.map { AppliedFilter(kind: .etc, value: $0) }
-        ].compactMap { $0 }
+        var filters: [AppliedFilter] = []
+        filters += selectedDevices.sorted().map { AppliedFilter(kind: .device, value: $0) }
+        filters += selectedLocations.sorted().map { AppliedFilter(kind: .location, value: $0) }
+        if let selectedDate {
+            filters.append(AppliedFilter(kind: .date, value: AppliedFilter.dateText(selectedDate)))
+        }
+        filters += selectedEtcItems.sorted().map { AppliedFilter(kind: .etc, value: $0) }
+        return filters
     }
 
     var displayDateText: String? {
@@ -45,11 +47,11 @@ final class FilterViewModel {
     }
 
     func selectDevice(_ name: String) {
-        selectedDevice = name
+        toggle(name, in: &selectedDevices)
     }
 
     func selectLocation(_ name: String) {
-        selectedLocation = name
+        toggle(name, in: &selectedLocations)
     }
 
     func selectDate(_ date: Date?) {
@@ -57,14 +59,22 @@ final class FilterViewModel {
     }
 
     func selectEtc(_ name: String) {
-        selectedEtc = name
+        toggle(name, in: &selectedEtcItems)
+    }
+
+    private func toggle(_ value: String, in set: inout Set<String>) {
+        if set.contains(value) {
+            set.remove(value)
+        } else {
+            set.insert(value)
+        }
     }
 
     func reset() {
-        selectedDevice = nil
-        selectedLocation = nil
+        selectedDevices.removeAll()
+        selectedLocations.removeAll()
         selectedDate = nil
-        selectedEtc = nil
+        selectedEtcItems.removeAll()
     }
 
     func loadOptions() async {

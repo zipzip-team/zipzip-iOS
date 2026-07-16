@@ -20,6 +20,7 @@ struct RootView: View {
     @State private var shareViewModel: ShareViewModel
     @State private var selection: NavbarTab = .main
     @State private var showShareSheet = false
+    @State private var splashAnimationFinished = false
     private let makePhotoInfoEditViewModel: ([String]) -> PhotoInfoEditViewModel
 
     init(
@@ -48,9 +49,7 @@ struct RootView: View {
         @Bindable var shareViewModel = shareViewModel
         NavigationStack(path: $router.path) {
             Group {
-                if authenticationState.isRestoring, hasCompletedOnboarding {
-                    SplashView(continuesOnboarding: false)
-                } else if hasCompletedOnboarding {
+                if hasCompletedOnboarding {
                     RootTabView(
                         pictureViewModel: pictureViewModel,
                         albumViewModel: albumViewModel,
@@ -186,6 +185,15 @@ struct RootView: View {
                 }
             }
         }
+        .overlay {
+            if showsRestoreSplash {
+                SplashView(continuesOnboarding: false) {
+                    splashAnimationFinished = true
+                }
+                .transition(.opacity)
+            }
+        }
+        .animation(.easeInOut(duration: 0.4), value: showsRestoreSplash)
         .safeAreaInset(edge: .bottom, spacing: 0) {
             bottomBar
         }
@@ -294,6 +302,10 @@ struct RootView: View {
 
     private var showsRootTab: Bool {
         hasCompletedOnboarding && !authenticationState.isRestoring
+    }
+
+    private var showsRestoreSplash: Bool {
+        hasCompletedOnboarding && (authenticationState.isRestoring || !splashAnimationFinished)
     }
 
     private var showsNavbar: Bool {

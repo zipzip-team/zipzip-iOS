@@ -461,8 +461,8 @@ private struct ShareJoinConfirmationSheet: View {
                     }
 
                     HStack(spacing: -8) {
-                        ForEach(0 ..< visibleMemberCount, id: \.self) { _ in
-                            ProfileImage(size: 24)
+                        ForEach(visibleMembers) { member in
+                            ProfileImage(name: member.displayName, size: 24)
                         }
                     }
                 }
@@ -523,8 +523,8 @@ private struct ShareJoinConfirmationSheet: View {
         preview?.group.createdBy?.displayName ?? "-"
     }
 
-    private var visibleMemberCount: Int {
-        min(preview?.members.count ?? preview?.group.memberCount ?? 0, 4)
+    private var visibleMembers: [ShareGroupMember] {
+        Array((preview?.members ?? []).prefix(4))
     }
 }
 

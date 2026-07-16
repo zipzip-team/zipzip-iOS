@@ -48,6 +48,8 @@ struct ShareSheet: View {
             rightItem: {
                 if showsCompletionButton {
                     headerButton("완료", isDisabled: isCompletionDisabled, action: completeSelection)
+                } else {
+                    Color.clear.frame(width: 72, height: 48)
                 }
             }
         ) {
@@ -89,6 +91,7 @@ struct ShareSheet: View {
             if !authenticationState.isLoggedIn {
                 ShareLoginPrompt {
                     authenticationState.requestLogin(.share)
+                    onDismiss()
                 }
             } else if let targetShareAlbum {
                 SharedAlbumSelectionGrid(

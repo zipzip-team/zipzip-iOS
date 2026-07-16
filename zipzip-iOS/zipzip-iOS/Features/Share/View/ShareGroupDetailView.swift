@@ -30,7 +30,7 @@ struct ShareGroupDetailView: View {
 
             if let group = viewModel.group(withID: groupID) {
                 ScrollView(showsIndicators: false) {
-                    ShareGroupHero(group: group)
+                    ShareGroupHero(group: group, members: viewModel.members(for: groupID))
 
                     if group.albums.isEmpty, viewModel.hasLoadedSharedAlbums(groupID: groupID) {
                         ShareGroupEmptyContent {
@@ -250,6 +250,7 @@ struct ShareGroupDetailView: View {
 
 private struct ShareGroupHero: View {
     let group: ShareAlbum
+    let members: [ShareGroupMember]
 
     var body: some View {
         VStack(spacing: 5) {
@@ -273,8 +274,14 @@ private struct ShareGroupHero: View {
             }
 
             HStack(spacing: -8) {
-                ForEach(0 ..< min(group.memberCount, 4), id: \.self) { _ in
-                    ProfileImage(size: 32)
+                if members.isEmpty {
+                    ForEach(0 ..< min(group.memberCount, 4), id: \.self) { _ in
+                        ProfileImage(size: 32)
+                    }
+                } else {
+                    ForEach(members.prefix(4)) { member in
+                        ProfileImage(name: member.displayName, size: 32)
+                    }
                 }
                 if group.memberCount > 4 {
                     Text("+\(group.memberCount - 4)")
