@@ -18,24 +18,46 @@ struct ProfileImage: View {
         self.isStroke = isStroke
     }
 
+    init(name: String?, size: CGFloat = 24, isStroke: Bool = true) {
+        self.init(image: Self.avatar(for: name), size: size, isStroke: isStroke)
+    }
+
     var body: some View {
         Circle()
             .fill(.grey100)
+            .frame(width: size, height: size)
             .overlay {
                 if let image {
                     image
                         .resizable()
                         .scaledToFill()
+                        .frame(width: size, height: size)
+                        .clipShape(Circle())
                 }
             }
-            .clipShape(Circle())
             .overlay {
                 if isStroke {
                     Circle()
                         .stroke(.grey50, lineWidth: 1)
                 }
             }
-            .frame(width: size, height: size)
+    }
+}
+
+extension ProfileImage {
+    private static let avatars: [ImageResource] = [
+        .profile01, .profile02, .profile03, .profile04, .profile05, .profile06,
+        .profile07, .profile08, .profile09, .profile10, .profile11, .profile12
+    ]
+
+    static func avatar(for name: String?) -> Image? {
+        let trimmed = name?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        guard !trimmed.isEmpty else { return nil }
+        var hash: UInt64 = 5381
+        for byte in trimmed.utf8 {
+            hash = (hash &* 33) &+ UInt64(byte)
+        }
+        return Image(avatars[Int(hash % UInt64(avatars.count))])
     }
 }
 

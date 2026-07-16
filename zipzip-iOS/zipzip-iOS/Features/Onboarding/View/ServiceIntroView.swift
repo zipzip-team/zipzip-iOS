@@ -81,6 +81,7 @@ private struct ServiceIntroArtwork: View {
         if let image {
             Image(image)
                 .resizable()
+                .scaledToFit()
                 .frame(maxWidth: .infinity)
                 .frame(height: 420)
                 .padding(.horizontal, -16)

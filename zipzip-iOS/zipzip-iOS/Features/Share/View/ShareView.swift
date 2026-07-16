@@ -431,8 +431,8 @@ private struct ShareJoinConfirmationSheet: View {
                         .font(.b3_md)
                         .foregroundStyle(.grey400)
                     HStack(spacing: -8) {
-                        ForEach(0 ..< visibleMemberCount, id: \.self) { _ in
-                            ProfileImage(size: 24)
+                        ForEach(visibleMembers) { member in
+                            ProfileImage(name: member.displayName, size: 24)
                         }
                     }
                 }
@@ -486,8 +486,8 @@ private struct ShareJoinConfirmationSheet: View {
         preview?.group.createdBy?.displayName ?? "-"
     }
 
-    private var visibleMemberCount: Int {
-        min(preview?.members.count ?? preview?.group.memberCount ?? 0, 4)
+    private var visibleMembers: [ShareGroupMember] {
+        Array((preview?.members ?? []).prefix(4))
     }
 }
 
@@ -550,7 +550,11 @@ private struct ShareCommentsSheet: View {
                 ScrollView(showsIndicators: false) {
                     LazyVStack(spacing: 16) {
                         ForEach(messages) { message in
-                            ShareCommentBubble(text: message.content, isMine: message.isAuthor)
+                            ShareCommentBubble(
+                                text: message.content,
+                                isMine: message.isAuthor,
+                                authorName: message.author?.displayName
+                            )
                         }
                     }
                     .padding(.horizontal, 16)
@@ -584,13 +588,14 @@ private struct ShareCommentsSheet: View {
 private struct ShareCommentBubble: View {
     let text: String
     let isMine: Bool
+    let authorName: String?
 
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
             if isMine {
                 Spacer(minLength: 44)
             } else {
-                ProfileImage(size: 32, isStroke: false)
+                ProfileImage(name: authorName, size: 32, isStroke: false)
             }
 
             Text(text)
@@ -600,7 +605,7 @@ private struct ShareCommentBubble: View {
                 .background(isMine ? .grey700 : .grey900, in: .rect(cornerRadius: 8))
 
             if isMine {
-                ProfileImage(size: 32, isStroke: false)
+                ProfileImage(name: authorName, size: 32, isStroke: false)
             } else {
                 Spacer(minLength: 44)
             }
