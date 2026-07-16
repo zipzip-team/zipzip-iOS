@@ -167,11 +167,6 @@ struct AlbumDetailView<Content: View>: View {
                 Task { await viewModel.removeSelectedPhotosFromAlbum() }
             }
         )
-        .alert("요청을 완료하지 못했어요.", isPresented: $viewModel.isErrorAlertPresented) {
-            Button("확인", role: .cancel, action: viewModel.dismissErrorAlert)
-        } message: {
-            Text(viewModel.errorAlertMessage)
-        }
         .navigationBarBackButtonHidden(true)
         .toolbarVisibility(.hidden, for: .navigationBar)
     }

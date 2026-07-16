@@ -306,9 +306,6 @@ struct ShareImportView: View {
     @State private var selectedDestinationAlbumID: SharedAlbum.ID?
     @State private var isDestinationPresented = false
     @State private var isImporting = false
-    @State private var noticeMessage = ""
-    @State private var isNoticePresented = false
-    @State private var dismissesAfterNotice = false
 
     private let columns = [
         GridItem(.flexible(), spacing: 17),
@@ -383,15 +380,6 @@ struct ShareImportView: View {
                 onComplete: completePhotoImport
             )
         }
-        .alert("가져오기 결과", isPresented: $isNoticePresented) {
-            Button("확인", role: .cancel) {
-                if dismissesAfterNotice {
-                    router.pop()
-                }
-            }
-        } message: {
-            Text(noticeMessage)
-        }
         .task(id: groupID) {
             await viewModel.loadSharedAlbums(groupID: groupID)
         }
@@ -429,11 +417,7 @@ struct ShareImportView: View {
                     into: groupID
                 ) else { return }
 
-                if outcome.hasFailures {
-                    noticeMessage = "공유집 생성 성공 \(outcome.createdAlbumCount)개, 실패 \(outcome.failedAlbumCount)개\n사진 성공 \(outcome.uploadedPhotoCount)장, 실패 \(outcome.failedPhotoCount)장이에요."
-                    dismissesAfterNotice = outcome.completedAnyWork
-                    isNoticePresented = true
-                } else {
+                if outcome.completedAnyWork {
                     router.pop()
                 }
             }
@@ -460,11 +444,7 @@ struct ShareImportView: View {
             ) else { return }
 
             isDestinationPresented = false
-            if result.failedCount > 0 {
-                noticeMessage = "성공 \(result.succeededCount)장, 실패 \(result.failedCount)장이에요."
-                dismissesAfterNotice = result.succeededCount > 0
-                isNoticePresented = true
-            } else {
+            if result.succeededCount > 0 || result.failedCount == 0 {
                 router.pop()
             }
         }

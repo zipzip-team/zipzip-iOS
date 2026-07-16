@@ -5,6 +5,7 @@
 
 import Foundation
 import Observation
+import OSLog
 
 @MainActor
 protocol SharedAlbumDetailRepository {
@@ -123,6 +124,11 @@ struct SharedAlbumDetailRepositoryAdapter: SharedAlbumDetailRepository {
 @Observable
 @MainActor
 final class SharedAlbumDetailViewModel {
+    private static let logger = Logger(
+        subsystem: Bundle.main.bundleIdentifier ?? "zipzip-iOS",
+        category: "SharedAlbumDetail"
+    )
+
     let groupID: ShareAlbum.ID
     let albumID: SharedAlbum.ID
 
@@ -137,12 +143,8 @@ final class SharedAlbumDetailViewModel {
     var isAlbumDeleteAlertPresented = false
     var isCopySheetPresented = false
     var isDeleteSheetPresented = false
-    var isErrorAlertPresented = false
-    var isOperationNoticePresented = false
     var albumTitleDraft = ""
 
-    private(set) var errorAlertMessage = ""
-    private(set) var operationNoticeMessage = ""
     private(set) var isRefreshing = false
     private(set) var isPerformingPhotoMutation = false
     private(set) var isUpdatingAlbum = false
@@ -202,7 +204,7 @@ final class SharedAlbumDetailViewModel {
         do {
             apply(try await repository.synchronizePhotos(in: albumID))
         } catch {
-            presentError("공유집 사진을 불러오지 못했어요.")
+            logError("failed to load shared album photos", error: error)
         }
     }
 
@@ -282,12 +284,12 @@ final class SharedAlbumDetailViewModel {
         defer { isUpdatingAlbum = false }
         do {
             guard try await repository.renameAlbum(groupID: groupID, albumID: albumID, name: name) else {
-                presentError("공유집 이름을 변경하지 못했어요.")
+                logError("failed to rename shared album")
                 return
             }
             isAlbumManagementPresented = false
         } catch {
-            presentError("공유집 이름을 변경하지 못했어요.")
+            logError("failed to rename shared album", error: error)
         }
     }
 
@@ -313,14 +315,14 @@ final class SharedAlbumDetailViewModel {
         defer { isDeletingAlbum = false }
         do {
             guard try await repository.deleteAlbum(groupID: groupID, albumID: albumID) else {
-                presentError("공유집을 삭제하지 못했어요.")
+                logError("failed to delete shared album")
                 return
             }
             isAlbumDeleteAlertPresented = false
             isAlbumManagementPresented = false
             onAlbumDeleted()
         } catch {
-            presentError("공유집을 삭제하지 못했어요.")
+            logError("failed to delete shared album", error: error)
         }
     }
 
@@ -390,16 +392,6 @@ final class SharedAlbumDetailViewModel {
         }
     }
 
-    func dismissErrorAlert() {
-        isErrorAlertPresented = false
-        errorAlertMessage = ""
-    }
-
-    func dismissOperationNotice() {
-        isOperationNoticePresented = false
-        operationNoticeMessage = ""
-    }
-
     private var selectedPhotos: [SharedAlbumPhoto] {
         let photosByID = Dictionary(uniqueKeysWithValues: photos.map { ($0.id, $0) })
         return selectedPhotoIDs.compactMap { photosByID[$0] }
@@ -418,7 +410,7 @@ final class SharedAlbumDetailViewModel {
             let result = try await operation()
             await loadCachedPhotos(presentsError: true)
             if result.failedCount > 0 {
-                presentPartialFailure(result)
+                logPartialFailure(result)
             }
 
             let didCompleteAnyWork = result.succeededCount > 0 || result.failedCount == 0
@@ -427,7 +419,7 @@ final class SharedAlbumDetailViewModel {
             }
             return didCompleteAnyWork
         } catch {
-            presentError(fallbackError)
+            logError(fallbackError, error: error)
             return false
         }
     }
@@ -437,7 +429,7 @@ final class SharedAlbumDetailViewModel {
             apply(try await repository.cachedPhotos(in: albumID))
         } catch {
             if presentsError {
-                presentError("변경된 사진 목록을 불러오지 못했어요.")
+                logError("failed to load changed shared album photos", error: error)
             }
         }
     }
@@ -455,15 +447,29 @@ final class SharedAlbumDetailViewModel {
         selectedPhotoIDs.removeAll { !availableIDs.contains($0) }
     }
 
-    private func presentError(_ message: String) {
-        errorAlertMessage = message
-        isErrorAlertPresented = true
+    private func logError(_ message: String, error: Error? = nil) {
+        if let error {
+            Self.logger.error(
+                """
+                ❌ [SharedAlbumDetail] \(message, privacy: .public)
+                Error: \(String(describing: error), privacy: .public)
+                """
+            )
+        } else {
+            Self.logger.error("❌ [SharedAlbumDetail] \(message, privacy: .public)")
+        }
     }
 
-    private func presentPartialFailure(_ result: SharedAlbumPhotoMutationResult) {
+    private func logPartialFailure(_ result: SharedAlbumPhotoMutationResult) {
         let totalCount = result.succeededCount + result.failedCount
-        operationNoticeMessage = "\(totalCount)장 중 \(result.failedCount)장을 처리하지 못했어요."
-        isOperationNoticePresented = true
+        Self.logger.error(
+            """
+            ❌ [SharedAlbumDetail] photo mutation partially failed
+            Total: \(totalCount, privacy: .public)
+            Succeeded: \(result.succeededCount, privacy: .public)
+            Failed: \(result.failedCount, privacy: .public)
+            """
+        )
     }
 
     private static func makeSections(from photos: [SharedAlbumPhoto]) -> [SharedAlbumPhotoSection] {

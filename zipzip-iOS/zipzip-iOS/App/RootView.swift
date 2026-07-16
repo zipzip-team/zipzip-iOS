@@ -206,26 +206,6 @@ struct RootView: View {
         .fullScreenCover(item: $authenticationState.loginIntent) { _ in
             ShareLoginView()
         }
-        .alert("요청을 완료하지 못했어요", isPresented: $shareViewModel.isErrorAlertPresented) {
-            if shareViewModel.canRetryError {
-                Button("다시 시도") {
-                    Task { await shareViewModel.retryErrorAction() }
-                }
-            }
-            Button("확인", role: .cancel, action: shareViewModel.dismissErrorAlert)
-        } message: {
-            Text(shareViewModel.errorAlertMessage)
-        }
-        .alert("요청을 완료하지 못했어요", isPresented: $albumViewModel.isErrorAlertPresented) {
-            if albumViewModel.canRetryError {
-                Button("다시 시도") {
-                    Task { await albumViewModel.retryErrorAction() }
-                }
-            }
-            Button("확인", role: .cancel, action: albumViewModel.dismissErrorAlert)
-        } message: {
-            Text(albumViewModel.errorAlertMessage)
-        }
         .task {
             await authenticationState.restore(
                 minimumDuration: hasCompletedOnboarding ? .seconds(2) : .zero

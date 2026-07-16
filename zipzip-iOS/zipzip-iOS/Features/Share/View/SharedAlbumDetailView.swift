@@ -127,16 +127,6 @@ struct SharedAlbumDetailView: View {
                 }
             )
         }
-        .alert("요청을 완료하지 못했어요.", isPresented: $viewModel.isErrorAlertPresented) {
-            Button("확인", role: .cancel, action: viewModel.dismissErrorAlert)
-        } message: {
-            Text(viewModel.errorAlertMessage)
-        }
-        .alert("일부 사진을 처리하지 못했어요.", isPresented: $viewModel.isOperationNoticePresented) {
-            Button("확인", role: .cancel, action: viewModel.dismissOperationNotice)
-        } message: {
-            Text(viewModel.operationNoticeMessage)
-        }
         .navigationBarBackButtonHidden(true)
         .toolbarVisibility(.hidden, for: .navigationBar)
         .task(id: album.id) {

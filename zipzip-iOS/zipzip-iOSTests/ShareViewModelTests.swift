@@ -92,7 +92,7 @@ final class ShareViewModelTests: XCTestCase {
     }
 
     @MainActor
-    func testCreateGroupFailurePresentsErrorAlertWithoutClosingSheet() async throws {
+    func testCreateGroupFailureKeepsSheetOpen() async throws {
         let viewModel = ShareViewModel(
             groups: [],
             repository: try await makePreparedRepository(
@@ -107,15 +107,11 @@ final class ShareViewModelTests: XCTestCase {
 
         XCTAssertTrue(viewModel.isCreateSheetPresented)
         XCTAssertFalse(viewModel.isInviteSheetPresented)
-        XCTAssertTrue(viewModel.isErrorAlertPresented)
-        XCTAssertEqual(viewModel.errorAlertMessage, "네트워크 연결을 확인한 후 다시 시도해 주세요.")
-
-        viewModel.dismissErrorAlert()
-        XCTAssertFalse(viewModel.isErrorAlertPresented)
+        XCTAssertTrue(viewModel.groups.isEmpty)
     }
 
     @MainActor
-    func testGroupListFailureOffersRetryAndRetryLoadsGroups() async throws {
+    func testGroupListCanBeLoadedAfterFailure() async throws {
         let groupID = try XCTUnwrap(UUID(uuidString: "11111111-1111-1111-1111-111111111111"))
         let api = ManagementTrackingShareGroupAPI(
             groupID: groupID,
@@ -128,14 +124,10 @@ final class ShareViewModelTests: XCTestCase {
 
         await viewModel.loadGroups(for: testCacheOwnerID)
 
-        XCTAssertTrue(viewModel.isErrorAlertPresented)
-        XCTAssertTrue(viewModel.canRetryError)
         XCTAssertTrue(viewModel.groups.isEmpty)
 
-        await viewModel.retryErrorAction()
+        await viewModel.loadGroups(for: testCacheOwnerID, refresh: true)
 
-        XCTAssertFalse(viewModel.isErrorAlertPresented)
-        XCTAssertFalse(viewModel.canRetryError)
         XCTAssertEqual(viewModel.groups.map(\.id), [groupID])
     }
 
@@ -246,7 +238,6 @@ final class ShareViewModelTests: XCTestCase {
 
         await viewModel.loadGroups(for: testCacheOwnerID)
 
-        XCTAssertFalse(viewModel.isErrorAlertPresented)
         XCTAssertFalse(viewModel.hasLoadedGroups)
     }
 
@@ -574,7 +565,6 @@ final class ShareViewModelTests: XCTestCase {
         await detailLoad.value
 
         XCTAssertEqual(viewModel.groups.map(\.id), [secondGroupID])
-        XCTAssertFalse(viewModel.isErrorAlertPresented)
         let storedGroups = try await store.fetchGroups()
         XCTAssertEqual(storedGroups.map(\.id), [secondGroupID])
         XCTAssertEqual(storedGroups.map(\.name), ["두 번째 계정"])
@@ -706,12 +696,10 @@ final class ShareViewModelTests: XCTestCase {
 
         XCTAssertNil(firstResult)
         XCTAssertTrue(viewModel.isJoinConfirmationPresented)
-        XCTAssertTrue(viewModel.isErrorAlertPresented)
-        XCTAssertTrue(viewModel.canRetryError)
         XCTAssertTrue(viewModel.groups.isEmpty)
         XCTAssertEqual(api.joinInviteCodes.count, 1)
 
-        await viewModel.retryErrorAction()
+        _ = await viewModel.completeJoin()
 
         XCTAssertEqual(api.joinInviteCodes.count, 1)
         XCTAssertEqual(viewModel.groups.map(\.id), [groupID])
@@ -740,12 +728,10 @@ final class ShareViewModelTests: XCTestCase {
 
         XCTAssertNil(firstResult)
         XCTAssertTrue(viewModel.isJoinConfirmationPresented)
-        XCTAssertTrue(viewModel.isErrorAlertPresented)
-        XCTAssertTrue(viewModel.canRetryError)
         XCTAssertTrue(api.joinInviteCodes.isEmpty)
         XCTAssertEqual(api.fetchedGroupIDs, [groupID])
 
-        await viewModel.retryErrorAction()
+        _ = await viewModel.completeJoin()
 
         XCTAssertTrue(api.joinInviteCodes.isEmpty)
         XCTAssertEqual(api.fetchedGroupIDs, [groupID, groupID])
@@ -1002,9 +988,6 @@ final class ShareViewModelTests: XCTestCase {
 
         XCTAssertTrue(api.updatedNames.isEmpty)
         XCTAssertTrue(viewModel.isShareManagementPresented)
-        XCTAssertTrue(viewModel.isErrorAlertPresented)
-        XCTAssertEqual(viewModel.errorAlertMessage, "방장만 변경할 수 있어요.")
-        viewModel.dismissErrorAlert()
         let didLeave = await viewModel.leaveManagedShareGroup()
 
         XCTAssertTrue(didLeave)
@@ -1157,7 +1140,6 @@ final class ShareViewModelTests: XCTestCase {
 
         XCTAssertEqual(viewModel.commentDraft, "다시 보내기")
         XCTAssertTrue(viewModel.chatItems.isEmpty)
-        viewModel.dismissErrorAlert()
 
         await viewModel.sendChatMessage()
 
@@ -1194,7 +1176,6 @@ final class ShareViewModelTests: XCTestCase {
         XCTAssertFalse(viewModel.isSendingChatMessage)
         XCTAssertFalse(viewModel.isCommentsPresented)
         XCTAssertTrue(viewModel.groups.isEmpty)
-        XCTAssertFalse(viewModel.isErrorAlertPresented)
     }
 
     @MainActor
@@ -1288,8 +1269,6 @@ final class ShareViewModelTests: XCTestCase {
         await detailViewModel.completeAlbumManagement()
 
         XCTAssertTrue(detailViewModel.isAlbumManagementPresented)
-        XCTAssertTrue(viewModel.isErrorAlertPresented)
-        viewModel.dismissErrorAlert()
 
         await detailViewModel.completeAlbumManagement()
 
@@ -1303,8 +1282,6 @@ final class ShareViewModelTests: XCTestCase {
 
         XCTAssertTrue(detailViewModel.isAlbumDeleteAlertPresented)
         XCTAssertFalse(didDelete)
-        XCTAssertTrue(viewModel.isErrorAlertPresented)
-        viewModel.dismissErrorAlert()
 
         await detailViewModel.confirmAlbumDeletion()
 
@@ -1507,7 +1484,6 @@ final class ShareViewModelTests: XCTestCase {
         let storedAlbumIDs = Set(try await store.fetchGroups().first?.albums.map(\.id) ?? [])
 
         XCTAssertFalse(didDelete)
-        XCTAssertTrue(viewModel.isErrorAlertPresented)
         XCTAssertEqual(storedAlbumIDs, Set([firstID, secondID]))
     }
 

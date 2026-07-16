@@ -5,6 +5,7 @@
 
 import Foundation
 import Observation
+import OSLog
 
 enum ShareImportSelection: Hashable {
     case photos
@@ -38,6 +39,11 @@ struct ShareImportOutcome: Equatable {
 @Observable
 @MainActor
 final class ShareViewModel {
+    private static let logger = Logger(
+        subsystem: Bundle.main.bundleIdentifier ?? "zipzip-iOS",
+        category: "Share"
+    )
+
     private(set) var groups: [ShareAlbum]
     private let repository: ShareGroupRepository
     private let sharedPhotoRepository: (any SharedPhotoRepository)?
@@ -63,8 +69,6 @@ final class ShareViewModel {
     private(set) var isUpdatingSharedAlbum = false
     private(set) var isDeletingSharedAlbums = false
     private(set) var sharedAlbumErrorCode: String?
-    var isErrorAlertPresented = false
-    private(set) var errorAlertMessage = ""
 
     private(set) var hasLoadedGroups = false
     private(set) var isLoadingGroups = false
@@ -118,7 +122,6 @@ final class ShareViewModel {
     private var personalAlbumImportCreatedAlbums: [String: SharedAlbum] = [:]
     private var cacheOwnerID: UUID?
     private var remoteDataSessionID = UUID()
-    private var errorRetryAction: (() async -> Void)?
 
     var displayedSheet: ShareSheetPresentation? {
         presentedSheet ?? dismissingSheet
@@ -163,10 +166,6 @@ final class ShareViewModel {
 
     var isShareManagementPresented: Bool {
         presentedSheet == .management
-    }
-
-    var canRetryError: Bool {
-        errorRetryAction != nil
     }
 
     init(
@@ -337,13 +336,7 @@ final class ShareViewModel {
             guard remoteDataSessionID == sessionID else { return }
             guard !(error is CancellationError) else { return }
             hasLoadedGroups = true
-            presentError(
-                error,
-                fallback: "공유 그룹을 불러오지 못했어요.",
-                retry: { [weak self] in
-                    await self?.loadGroups(for: userID, refresh: true)
-                }
-            )
+            presentError(error, fallback: "공유 그룹을 불러오지 못했어요.")
         }
     }
 
@@ -801,7 +794,6 @@ final class ShareViewModel {
         personalAlbumImportCreatedAlbums = [:]
         inviteCode = ""
         resetTransientUI()
-        dismissErrorAlert()
     }
 
     func enterAddMode() {
@@ -1047,6 +1039,13 @@ final class ShareViewModel {
                 in: groupID
             )
             await refreshSharedAlbumsAfterPhotoMutation(groupID: groupID)
+            if result.failedCount > 0 {
+                logMutationFailure(
+                    operation: "import photos to shared album",
+                    succeededCount: result.succeededCount,
+                    failedCount: result.failedCount
+                )
+            }
             return result
         } catch {
             presentError(error, fallback: "사진을 공유집으로 가져오지 못했어요.")
@@ -1084,6 +1083,7 @@ final class ShareViewModel {
                 } catch is CancellationError {
                     return nil
                 } catch {
+                    presentError(error, fallback: "개인 사진집에 대응하는 공유집을 만들지 못했어요.")
                     failedAlbumCount += 1
                     failedPhotoCount += personalAlbum.count
                     continue
@@ -1115,6 +1115,7 @@ final class ShareViewModel {
                 return nil
             } catch {
                 // 생성된 공유집은 유지하고 이 사진들만 다음 가져오기에서 재시도한다.
+                presentError(error, fallback: "개인 사진집의 사진을 공유집으로 가져오지 못했어요.")
                 failedPhotoCount += personalAlbum.count
             }
         }
@@ -1130,6 +1131,12 @@ final class ShareViewModel {
             presentError(
                 URLError(.cannotLoadFromNetwork),
                 fallback: "선택한 사진집을 가져오지 못했어요."
+            )
+        } else if outcome.hasFailures {
+            logMutationFailure(
+                operation: "import personal albums",
+                succeededCount: outcome.uploadedPhotoCount,
+                failedCount: outcome.failedPhotoCount
             )
         }
         return outcome
@@ -1438,18 +1445,6 @@ final class ShareViewModel {
         isLeavingGroup = false
     }
 
-    func dismissErrorAlert() {
-        isErrorAlertPresented = false
-        errorRetryAction = nil
-    }
-
-    func retryErrorAction() async {
-        guard let errorRetryAction else { return }
-        isErrorAlertPresented = false
-        self.errorRetryAction = nil
-        await errorRetryAction()
-    }
-
     func resetTransientUI() {
         isAddMode = false
         presentedSheet = nil
@@ -1630,10 +1625,7 @@ final class ShareViewModel {
         }
         presentError(
             error,
-            fallback: "공유 그룹 정보를 불러오지 못했어요.",
-            retry: { [weak self] in
-                _ = await self?.completeJoin()
-            }
+            fallback: "공유 그룹 정보를 불러오지 못했어요."
         )
     }
 
@@ -1683,45 +1675,28 @@ final class ShareViewModel {
 
     private func presentError(
         _ error: Error,
-        fallback: String,
-        retry: (() async -> Void)? = nil
+        fallback: String
     ) {
         guard !(error is CancellationError) else { return }
-        errorAlertMessage = userFacingMessage(for: error, fallback: fallback)
-        errorRetryAction = retry
-        isErrorAlertPresented = true
+        Self.logger.error(
+            """
+            ❌ [Share] \(fallback, privacy: .public)
+            Error: \(String(describing: error), privacy: .public)
+            """
+        )
     }
 
-    private func userFacingMessage(for error: Error, fallback: String) -> String {
-        if let repositoryError = error as? ShareGroupRepositoryError {
-            return switch repositoryError {
-            case .groupNotFound:
-                "공유 그룹을 찾을 수 없어요."
-            case .invalidInviteCode:
-                "초대 코드를 다시 확인해 주세요."
-            case .alreadyJoined:
-                "이미 참여 중인 공유 그룹이에요."
-            case .hostRequired:
-                "방장만 변경할 수 있어요."
-            case .memberRequired:
-                "참여자만 이 작업을 할 수 있어요."
-            case .sharedAlbumNotFound:
-                "공유집을 찾을 수 없어요."
-            case .invalidSharedAlbumSelection:
-                "삭제할 공유집을 다시 선택해 주세요."
-            case .invalidPagination:
-                "목록을 끝까지 불러오지 못했어요. 잠시 후 다시 시도해 주세요."
-            }
-        }
-
-        if let networkError = error as? NetworkError {
-            return networkError.errorDescription ?? fallback
-        }
-
-        if error is URLError {
-            return "네트워크 연결을 확인한 후 다시 시도해 주세요."
-        }
-
-        return fallback
+    private func logMutationFailure(
+        operation: String,
+        succeededCount: Int,
+        failedCount: Int
+    ) {
+        Self.logger.error(
+            """
+            ❌ [Share] \(operation, privacy: .public)
+            Succeeded: \(succeededCount, privacy: .public)
+            Failed: \(failedCount, privacy: .public)
+            """
+        )
     }
 }

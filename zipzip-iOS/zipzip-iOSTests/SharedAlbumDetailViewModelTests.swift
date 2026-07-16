@@ -124,8 +124,6 @@ final class SharedAlbumDetailViewModelTests: XCTestCase {
 
         await viewModel.saveSelectedPhotos()
 
-        XCTAssertTrue(viewModel.isOperationNoticePresented)
-        XCTAssertEqual(viewModel.operationNoticeMessage, "2장 중 1장을 처리하지 못했어요.")
         XCTAssertFalse(viewModel.isSelectionMode)
     }
 

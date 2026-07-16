@@ -5,10 +5,16 @@
 
 import Foundation
 import Observation
+import OSLog
 
 @Observable
 @MainActor
 final class AlbumViewModel {
+    private static let logger = Logger(
+        subsystem: Bundle.main.bundleIdentifier ?? "zipzip-iOS",
+        category: "Album"
+    )
+
     var isSelectionMode = false
     var isDeleteAlertPresented = false
     var isCreateAlbumSheetPresented = false {
@@ -20,8 +26,6 @@ final class AlbumViewModel {
     }
 
     var isShareAlbumSheetPresented = false
-    var isErrorAlertPresented = false
-    private(set) var errorAlertMessage = ""
     var createAlbumName = ""
     private(set) var isCreatingAlbum = false
     private(set) var isMovingAlbumsToShare = false
@@ -35,7 +39,6 @@ final class AlbumViewModel {
     @ObservationIgnored private let sharedPhotoRepository: (any SharedPhotoRepository)?
     @ObservationIgnored private let shareGroupRepository: (any ShareGroupRepository)?
     @ObservationIgnored private let loadsAlbumsFromDatabase: Bool
-    @ObservationIgnored private var errorRetryAction: (() async -> Void)?
     @ObservationIgnored private var albumMoveIdempotencyKeys: [String: UUID] = [:]
     @ObservationIgnored private var albumMoveDestinations: [String: SharedAlbum] = [:]
 
@@ -111,9 +114,7 @@ final class AlbumViewModel {
         do {
             storedAlbum = try await albumStore.createAlbum(name: trimmedName)
         } catch {
-            presentError("사진집을 만들지 못했어요.") { [weak self] in
-                _ = await self?.createAlbum()
-            }
+            logError("failed to create album", error: error)
             return nil
         }
         let album = AlbumViewItem(storedAlbum: storedAlbum)
@@ -234,6 +235,7 @@ final class AlbumViewModel {
                 } catch is CancellationError {
                     return false
                 } catch {
+                    logError("failed to create shared album", error: error)
                     failedPhotoCount += sourceAlbum.count
                     continue
                 }
@@ -268,6 +270,7 @@ final class AlbumViewModel {
             } catch is CancellationError {
                 return false
             } catch {
+                logError("failed to copy album photos to shared album", error: error)
                 failedPhotoCount += sourceAlbum.count
             }
         }
@@ -280,10 +283,10 @@ final class AlbumViewModel {
             dismissShareAlbumSheet()
         }
         if failedPhotoCount > 0 {
-            presentMutationNotice(
+            logMutationFailure(
                 succeededCount: succeededPhotoCount,
                 failedCount: failedPhotoCount,
-                fallback: "사진집을 공유그룹으로 옮기지 못했어요."
+                operation: "copy albums to share group"
             )
         }
         return completedAnyWork
@@ -313,9 +316,7 @@ final class AlbumViewModel {
         let albumIDs = selectedAlbumIDs
         Task {
             guard await deleteAlbums(ids: albumIDs) else {
-                presentError("사진집을 삭제하지 못했어요.") { [weak self] in
-                    self?.confirmSelectedAlbumDeletion()
-                }
+                logError("failed to delete albums")
                 return
             }
 
@@ -448,27 +449,9 @@ final class AlbumViewModel {
         do {
             return try await photoSectionsProvider.loadAlbumSections(albumID: albumID)
         } catch {
-            presentError("사진을 불러오지 못했어요.") { [weak self] in
-                _ = await self?.photoSections(for: albumID)
-            }
+            logError("failed to load album photos", error: error)
             return []
         }
-    }
-
-    var canRetryError: Bool {
-        errorRetryAction != nil
-    }
-
-    func dismissErrorAlert() {
-        isErrorAlertPresented = false
-        errorAlertMessage = ""
-        errorRetryAction = nil
-    }
-
-    func retryErrorAction() async {
-        let retry = errorRetryAction
-        dismissErrorAlert()
-        await retry?()
     }
 
     /// 사진 목록 화면에서 선택한 사진을 개인 사진집에 영구적으로 추가한다.
@@ -510,17 +493,18 @@ final class AlbumViewModel {
                     )
                     completedAnyWork = completedAnyWork || result.succeededCount > 0
                     if result.failedCount > 0 {
-                        presentMutationNotice(
+                        logMutationFailure(
                             succeededCount: result.succeededCount,
                             failedCount: result.failedCount,
-                            fallback: "일부 사진을 공유집에 추가하지 못했어요."
+                            operation: "add photos to shared album"
                         )
                     }
                 } catch {
-                    presentMutationNotice(
+                    logError("failed to add photos to shared album", error: error)
+                    logMutationFailure(
                         succeededCount: completedAnyWork ? uniqueLocalIdentifiers.count : 0,
                         failedCount: uniqueLocalIdentifiers.count,
-                        fallback: "사진을 공유집에 추가하지 못했어요."
+                        operation: "add photos to shared album"
                     )
                 }
             }
@@ -589,19 +573,20 @@ final class AlbumViewModel {
                 try await albumStore.removeAlbumPhotos(ids: succeededAlbumPhotoIDs)
             }
             if failedCount > 0 {
-                presentMutationNotice(
+                logMutationFailure(
                     succeededCount: succeededIdentifiers.count,
                     failedCount: failedCount,
-                    fallback: "일부 사진을 공유집으로 옮기지 못했어요."
+                    operation: "move photos to shared album"
                 )
             }
             await loadAlbums()
             return !succeededIdentifiers.isEmpty
         } catch {
-            presentMutationNotice(
+            logError("failed to move photos to shared album", error: error)
+            logMutationFailure(
                 succeededCount: 0,
                 failedCount: ids.count,
-                fallback: "사진을 공유집으로 옮기지 못했어요."
+                operation: "move photos to shared album"
             )
             return false
         }
@@ -665,25 +650,31 @@ final class AlbumViewModel {
         )
     }
 
-    private func presentError(
-        _ message: String,
-        retry: @escaping () async -> Void
-    ) {
-        errorAlertMessage = message
-        errorRetryAction = retry
-        isErrorAlertPresented = true
+    private func logError(_ message: String, error: Error? = nil) {
+        if let error {
+            Self.logger.error(
+                """
+                ❌ [Album] \(message, privacy: .public)
+                Error: \(String(describing: error), privacy: .public)
+                """
+            )
+        } else {
+            Self.logger.error("❌ [Album] \(message, privacy: .public)")
+        }
     }
 
-    private func presentMutationNotice(
+    private func logMutationFailure(
         succeededCount: Int,
         failedCount: Int,
-        fallback: String
+        operation: String
     ) {
-        errorAlertMessage = failedCount > 0
-            ? "성공 \(succeededCount)장, 실패 \(failedCount)장이에요."
-            : fallback
-        errorRetryAction = nil
-        isErrorAlertPresented = true
+        Self.logger.error(
+            """
+            ❌ [Album] \(operation, privacy: .public)
+            Succeeded: \(succeededCount, privacy: .public)
+            Failed: \(failedCount, privacy: .public)
+            """
+        )
     }
 }
 
