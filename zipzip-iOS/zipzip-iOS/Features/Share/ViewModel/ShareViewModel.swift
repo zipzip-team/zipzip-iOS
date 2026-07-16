@@ -45,6 +45,7 @@ final class ShareViewModel {
         subsystem: Bundle.main.bundleIdentifier ?? "zipzip-iOS",
         category: "Share"
     )
+    private static let maximumConcurrentChatPhotoLoads = 4
 
     private(set) var groups: [ShareAlbum]
     private let repository: ShareGroupRepository
@@ -65,6 +66,7 @@ final class ShareViewModel {
     private(set) var membersByGroupID: [ShareAlbum.ID: [ShareGroupMember]] = [:]
     private(set) var activeChatGroupID: ShareAlbum.ID?
     private(set) var chatItems: [ShareGroupChatItem] = []
+    private(set) var chatPhotoURLs: [UUID: URL] = [:]
     private(set) var isLoadingChat = false
     private(set) var isLoadingOlderChat = false
     private(set) var isSendingChatMessage = false
@@ -125,6 +127,10 @@ final class ShareViewModel {
     private var chatNextCursor: String?
     private var chatHasNextPage = false
     private var requestedChatCursors: Set<String> = []
+    private var loadingChatPhotoIDs: Set<UUID> = []
+    private var unavailableChatPhotoIDs: Set<UUID> = []
+    private var pendingChatPhotoIDs: [UUID] = []
+    private var chatPhotoLoadWorkerCount = 0
     private var bulkDeleteAlbumIDs: Set<SharedAlbum.ID>?
     private var bulkDeleteIdempotencyKey: UUID?
     private var personalAlbumImportIdempotencyKeys: [String: UUID] = [:]
@@ -705,6 +711,7 @@ final class ShareViewModel {
         chatSessionID = UUID()
         activeChatGroupID = groupID
         chatItems = []
+        chatPhotoURLs = [:]
         commentDraft = ""
         chatErrorCode = nil
         chatMessageContent = nil
@@ -712,6 +719,10 @@ final class ShareViewModel {
         chatNextCursor = nil
         chatHasNextPage = false
         requestedChatCursors = []
+        loadingChatPhotoIDs = []
+        unavailableChatPhotoIDs = []
+        pendingChatPhotoIDs = []
+        chatPhotoLoadWorkerCount = 0
         isLoadingChat = false
         isLoadingOlderChat = false
         isSendingChatMessage = false
@@ -726,6 +737,7 @@ final class ShareViewModel {
     private func clearCommentsState() {
         activeChatGroupID = nil
         chatItems = []
+        chatPhotoURLs = [:]
         commentDraft = ""
         chatErrorCode = nil
         chatMessageContent = nil
@@ -734,6 +746,10 @@ final class ShareViewModel {
         chatNextCursor = nil
         chatHasNextPage = false
         requestedChatCursors = []
+        loadingChatPhotoIDs = []
+        unavailableChatPhotoIDs = []
+        pendingChatPhotoIDs = []
+        chatPhotoLoadWorkerCount = 0
         isLoadingChat = false
         isLoadingOlderChat = false
         isSendingChatMessage = false
@@ -761,6 +777,7 @@ final class ShareViewModel {
                 return
             }
             chatItems = deduplicatedChatItems(page.items.reversed())
+            scheduleChatPhotoLoads(for: chatItems, sessionID: chatSessionID)
             requestedChatCursors = []
             updateChatPageState(page)
         } catch ShareGroupRepositoryError.groupNotFound {
@@ -806,6 +823,7 @@ final class ShareViewModel {
             )
             guard self.chatSessionID == chatSessionID else { return }
             chatItems = deduplicatedChatItems(Array(page.items.reversed()) + chatItems)
+            scheduleChatPhotoLoads(for: page.items, sessionID: chatSessionID)
             updateChatPageState(page)
         } catch ShareGroupRepositoryError.groupNotFound {
             guard self.chatSessionID == chatSessionID else { return }
@@ -896,6 +914,81 @@ final class ShareViewModel {
         where S.Element == ShareGroupChatItem {
         var seenIDs: Set<ShareGroupChatItem.ID> = []
         return items.filter { seenIDs.insert($0.id).inserted }
+    }
+
+    private func scheduleChatPhotoLoads(
+        for items: [ShareGroupChatItem],
+        sessionID: UUID
+    ) {
+        guard sharedPhotoRepository != nil else { return }
+        let photoIDs = Set(items.compactMap { item in
+            item.type == .photoComment ? item.photoID : nil
+        })
+
+        for photoID in photoIDs
+            where chatPhotoURLs[photoID] == nil
+            && !loadingChatPhotoIDs.contains(photoID)
+            && !unavailableChatPhotoIDs.contains(photoID) {
+            loadingChatPhotoIDs.insert(photoID)
+            pendingChatPhotoIDs.append(photoID)
+        }
+        startChatPhotoLoadWorkers(sessionID: sessionID)
+    }
+
+    private func startChatPhotoLoadWorkers(sessionID: UUID) {
+        while chatPhotoLoadWorkerCount < Self.maximumConcurrentChatPhotoLoads,
+              chatPhotoLoadWorkerCount < pendingChatPhotoIDs.count {
+            chatPhotoLoadWorkerCount += 1
+            Task { @MainActor [weak self] in
+                await self?.runChatPhotoLoadWorker(sessionID: sessionID)
+            }
+        }
+    }
+
+    private func runChatPhotoLoadWorker(sessionID: UUID) async {
+        defer {
+            if chatSessionID == sessionID {
+                chatPhotoLoadWorkerCount -= 1
+            }
+        }
+
+        while chatSessionID == sessionID, !pendingChatPhotoIDs.isEmpty {
+            let photoID = pendingChatPhotoIDs.removeFirst()
+            await loadChatPhoto(photoID, sessionID: sessionID)
+        }
+    }
+
+    private func loadChatPhoto(_ photoID: UUID, sessionID: UUID) async {
+        guard let sharedPhotoRepository else { return }
+        defer {
+            if chatSessionID == sessionID {
+                loadingChatPhotoIDs.remove(photoID)
+            }
+        }
+
+        do {
+            let detail = try await sharedPhotoRepository.photo(id: photoID)
+            guard chatSessionID == sessionID else { return }
+            if let url = validChatPhotoURL(for: detail) {
+                chatPhotoURLs[photoID] = url
+            } else {
+                unavailableChatPhotoIDs.insert(photoID)
+            }
+        } catch {
+            guard chatSessionID == sessionID else { return }
+            unavailableChatPhotoIDs.insert(photoID)
+        }
+    }
+
+    private func validChatPhotoURL(for detail: SharedPhotoDetail, now: Date = .now) -> URL? {
+        if let thumbnailURL = detail.thumbnailURL,
+           let expiresAt = detail.thumbnailURLExpiresAt,
+           expiresAt > now,
+           let url = URL(string: thumbnailURL) {
+            return url
+        }
+        guard detail.originalURLExpiresAt > now else { return nil }
+        return URL(string: detail.originalURL)
     }
 
     func resetRemoteData() {

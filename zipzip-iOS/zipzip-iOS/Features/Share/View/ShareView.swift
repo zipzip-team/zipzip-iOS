@@ -49,7 +49,7 @@ struct ShareView: View {
         case .createSharedAlbum:
             [.height(AlbumCreationSheet.preferredHeight)]
         case .comments:
-            [.height(562)]
+            [.full]
         case .management:
             [.full]
         default:
@@ -108,9 +108,10 @@ struct ShareView: View {
         case .invitation:
             ShareInvitationSheet(code: viewModel.inviteCode, onComplete: viewModel.completeInvitation)
         case .comments:
-            CommentsBottomSheet(
+            GroupChatBottomSheet(
                 messages: viewModel.chatItems,
-                comment: $viewModel.commentDraft,
+                photoURLs: viewModel.chatPhotoURLs,
+                messageDraft: $viewModel.commentDraft,
                 isLoading: viewModel.isLoadingChat || viewModel.isLoadingOlderChat,
                 isSending: viewModel.isSendingChatMessage,
                 onClose: viewModel.dismissComments,
