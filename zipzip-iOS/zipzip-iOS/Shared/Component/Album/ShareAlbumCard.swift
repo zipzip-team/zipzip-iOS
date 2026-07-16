@@ -8,7 +8,7 @@
 import SwiftUI
 
 struct ShareAlbumCard: View {
-    let thumbnail: Image?
+    let thumbnailURL: URL?
     let title: String
     let date: Date
     let profileImages: [Image?]
@@ -72,16 +72,7 @@ struct ShareAlbumCard: View {
     }
 
     private var thumbnailView: some View {
-        RoundedRectangle(cornerRadius: 12)
-            .fill(.grey100)
-            .overlay {
-                if let thumbnail {
-                    thumbnail
-                        .resizable()
-                        .scaledToFill()
-                }
-            }
-            .clipShape(RoundedRectangle(cornerRadius: 12))
+        ShareGroupThumbnailImage(url: thumbnailURL, cornerRadius: 12)
             .frame(width: 76, height: 76)
     }
 
@@ -97,7 +88,7 @@ struct ShareAlbumCard: View {
 #Preview {
     VStack(spacing: 16) {
         ShareAlbumCard(
-            thumbnail: nil,
+            thumbnailURL: nil,
             title: "집집팟",
             date: .now,
             profileImages: Array(repeating: Image(systemName: "person.fill"), count: 4),
@@ -105,7 +96,7 @@ struct ShareAlbumCard: View {
         )
 
         ShareAlbumCard(
-            thumbnail: nil,
+            thumbnailURL: nil,
             title: "집집팟",
             date: .now,
             profileImages: Array(repeating: Image(systemName: "person.fill"), count: 4),
@@ -114,7 +105,7 @@ struct ShareAlbumCard: View {
         )
 
         ShareAlbumCard(
-            thumbnail: nil,
+            thumbnailURL: nil,
             title: "아주 긴 앨범 이름이 들어가면 어떻게 될까요 테스트",
             date: .now,
             profileImages: [Image(systemName: "person.fill")],
@@ -122,4 +113,31 @@ struct ShareAlbumCard: View {
         )
     }
     .padding()
+}
+
+struct ShareGroupThumbnailImage: View {
+    let url: URL?
+    let cornerRadius: CGFloat
+
+    var body: some View {
+        Color.grey100
+            .overlay {
+                if let url {
+                    AsyncImage(url: url) { phase in
+                        switch phase {
+                        case let .success(image):
+                            image
+                                .resizable()
+                                .scaledToFill()
+                                .accessibilityHidden(true)
+                        default:
+                            Color.clear
+                        }
+                    }
+                }
+            }
+            .compositingGroup()
+            .clipShape(.rect(cornerRadius: cornerRadius))
+            .accessibilityHidden(true)
+    }
 }

@@ -216,7 +216,7 @@ private struct ShareGroupListView: View {
                                     onOpenGroup(group.id)
                                 } label: {
                                     ShareAlbumCard(
-                                        thumbnail: nil,
+                                        thumbnailURL: group.validRepresentativeImageURL(),
                                         title: group.name,
                                         date: group.date,
                                         profileImages: Array(repeating: nil, count: min(group.memberCount, 4)),
@@ -226,7 +226,11 @@ private struct ShareGroupListView: View {
                                 .buttonStyle(StaticButtonStyle())
                                 .accessibilityLabel("\(group.name), \(group.memberCount)명")
                                 .task {
-                                    await viewModel.loadMoreGroupsIfNeeded(currentGroupID: group.id)
+                                    async let imageRequest: Void = viewModel.loadRepresentativeImage(groupID: group.id)
+                                    async let paginationRequest: Void = viewModel.loadMoreGroupsIfNeeded(
+                                        currentGroupID: group.id
+                                    )
+                                    _ = await(imageRequest, paginationRequest)
                                 }
                             }
                         }
