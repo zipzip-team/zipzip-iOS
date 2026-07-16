@@ -42,6 +42,7 @@ struct PictureView: View {
                 .padding(.horizontal, 16)
             }
         }
+        .contentMargins(.bottom, NavbarLayout.contentBottomPadding, for: .scrollContent)
         .ignoresSafeArea(edges: .top)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .background(Color.orange30.ignoresSafeArea())
