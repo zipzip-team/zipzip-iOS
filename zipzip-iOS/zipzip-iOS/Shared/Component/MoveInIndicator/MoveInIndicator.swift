@@ -97,7 +97,7 @@ struct MoveInIndicator: View {
     }
 
     private var baseText: String {
-        mode == .uploading ? "사진 업로드 중" : "입주하는 중"
+        mode == .uploading ? "업로드 중" : "입주하는 중"
     }
 
     private var label: String {

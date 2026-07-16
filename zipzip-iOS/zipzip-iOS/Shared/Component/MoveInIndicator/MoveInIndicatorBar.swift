@@ -35,8 +35,11 @@ struct MoveInIndicatorBar: View {
             message: "업로드 중에 앱을 종료하면 다시 처음부터 해야해요.",
             secondaryTitle: cancelAlertSecondaryTitle,
             primaryTitle: "확인",
-            onSecondaryTap: { photoSync.cancelSync() },
-            onPrimaryTap: {}
+            onSecondaryTap: {
+                showCancelAlert = false
+                photoSync.cancelSync()
+            },
+            onPrimaryTap: { showCancelAlert = false }
         )
     }
 
