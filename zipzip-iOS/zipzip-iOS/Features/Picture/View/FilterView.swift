@@ -90,7 +90,7 @@ struct FilterView: View {
                     DeviceMetadataChip(
                         name: device.name,
                         type: device.type,
-                        isSelected: viewModel.selectedDevice == device.name
+                        isSelected: viewModel.selectedDevices.contains(device.name)
                     ) {
                         viewModel.selectDevice(device.name)
                     }
@@ -109,7 +109,7 @@ struct FilterView: View {
                 ForEach(viewModel.options.locations.prefix(10), id: \.self) { location in
                     TextMetadataChip(
                         title: location,
-                        isSelected: viewModel.selectedLocation == location
+                        isSelected: viewModel.selectedLocations.contains(location)
                     ) {
                         viewModel.selectLocation(location)
                     }
@@ -140,7 +140,7 @@ struct FilterView: View {
                 ForEach(viewModel.options.etcItems, id: \.self) { item in
                     TextMetadataChip(
                         title: item,
-                        isSelected: viewModel.selectedEtc == item
+                        isSelected: viewModel.selectedEtcItems.contains(item)
                     ) {
                         viewModel.selectEtc(item)
                     }

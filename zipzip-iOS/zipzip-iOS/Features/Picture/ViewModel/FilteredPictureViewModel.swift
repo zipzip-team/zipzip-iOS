@@ -34,6 +34,8 @@ final class FilteredPictureViewModel {
     var pickerEtc = ""
     var isErrorAlertPresented = false
 
+    private var editingFilter: AppliedFilter?
+
     init(appliedFilters: [AppliedFilter]) {
         self.appliedFilters = appliedFilters
     }
@@ -48,6 +50,7 @@ final class FilteredPictureViewModel {
     }
 
     func editFilter(_ filter: AppliedFilter) {
+        editingFilter = filter
         switch filter.kind {
         case .device:
             pickerDevice = filter.value
@@ -65,29 +68,40 @@ final class FilteredPictureViewModel {
     }
 
     func applyDevice(_ name: String) {
-        applyFilter(kind: .device, value: name.isEmpty ? nil : name)
+        replaceEditingFilter(with: name.isEmpty ? nil : name)
     }
 
     func applyLocation(_ name: String) {
-        applyFilter(kind: .location, value: name.isEmpty ? nil : name)
+        replaceEditingFilter(with: name.isEmpty ? nil : name)
     }
 
     func applyDate(_ date: Date?) {
-        applyFilter(kind: .date, value: date.map(AppliedFilter.dateText))
+        replaceEditingFilter(with: date.map(AppliedFilter.dateText))
     }
 
     func applyEtc(_ value: String) {
-        applyFilter(kind: .etc, value: value.isEmpty ? nil : value)
+        replaceEditingFilter(with: value.isEmpty ? nil : value)
     }
 
-    private func applyFilter(kind: FilterKind, value: String?) {
-        guard let index = appliedFilters.firstIndex(where: { $0.kind == kind }) else { return }
+    /// 편집 중인 칩(값 단위)만 교체·삭제한다. 같은 종류 칩이 여러 개여도 정확히 해당 칩만 바뀐다.
+    private func replaceEditingFilter(with value: String?) {
+        defer { editingFilter = nil }
+        guard let editing = editingFilter,
+              let index = appliedFilters.firstIndex(of: editing)
+        else {
+            return
+        }
 
-        guard let value else {
+        guard let value, !value.isEmpty else {
             appliedFilters.remove(at: index)
             return
         }
 
-        appliedFilters[index] = AppliedFilter(kind: kind, value: value)
+        let replacement = AppliedFilter(kind: editing.kind, value: value)
+        if value != editing.value, appliedFilters.contains(replacement) {
+            appliedFilters.remove(at: index)
+        } else {
+            appliedFilters[index] = replacement
+        }
     }
 }
