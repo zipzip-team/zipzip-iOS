@@ -275,21 +275,45 @@ final class DefaultSharedPhotoRepository: SharedPhotoRepository {
         ) { current, _ in current }
 
         if !existingMappings.isEmpty {
-            let outcome = try await attach(
-                photoIDs: existingMappings.map(\.photoID),
-                to: primaryAlbumID,
-                context: context
-            )
-            candidatePhotoIDs.append(contentsOf: outcome.succeededPhotoIDs)
-            succeededCount += outcome.succeededPhotoIDs.count
-            failedCount += outcome.failedPhotoIDs.count
+            do {
+                let outcome = try await attach(
+                    photoIDs: existingMappings.map(\.photoID),
+                    to: primaryAlbumID,
+                    context: context,
+                    throwsWhenAlbumMissing: true,
+                    throwsWhenPhotoMissing: true
+                )
+                candidatePhotoIDs.append(contentsOf: outcome.succeededPhotoIDs)
+                succeededCount += outcome.succeededPhotoIDs.count
+                failedCount += outcome.failedPhotoIDs.count
+            } catch let error as NetworkError where error.serverCode == "PHOTO_NOT_FOUND" {
+                // 로컬 캐시가 서버에서 이미 삭제된 사진을 가리킨다. 캐시를 비우고 원본을 다시 업로드한다.
+                try validate(context)
+                try await store.deletePhotos(
+                    ids: existingMappings.map(\.photoID),
+                    cacheOwnerID: context.ownerID
+                )
+                let reupload = try await uploadBatches(
+                    localIdentifiers: existingMappings.map(\.localIdentifier),
+                    groupID: groupID,
+                    albumID: primaryAlbumID,
+                    context: context
+                )
+                candidatePhotoIDs.append(contentsOf: reupload.photoIDs)
+                succeededCount += reupload.succeededCount
+                failedCount += reupload.failedCount
+                for (photoID, localIdentifier) in zip(reupload.photoIDs, reupload.localIdentifiers) {
+                    identifierByPhotoID[photoID] = localIdentifier
+                }
+            }
         }
 
         for destinationAlbumID in destinations.dropFirst() {
             let outcome = try await attach(
                 photoIDs: candidatePhotoIDs,
                 to: destinationAlbumID,
-                context: context
+                context: context,
+                throwsWhenAlbumMissing: true
             )
             let succeededIDs = Set(outcome.succeededPhotoIDs)
             candidatePhotoIDs.removeAll { !succeededIDs.contains($0) }
@@ -693,6 +717,8 @@ final class DefaultSharedPhotoRepository: SharedPhotoRepository {
             )
         } catch is CancellationError {
             throw CancellationError()
+        } catch let error as NetworkError where error.serverCode == "SHARED_ALBUM_NOT_FOUND" {
+            throw error
         } catch {
             return UploadBatchOutcome(
                 photoIDs: [],
@@ -988,7 +1014,9 @@ final class DefaultSharedPhotoRepository: SharedPhotoRepository {
     private func attach(
         photoIDs: [UUID],
         to albumID: UUID,
-        context: CacheContext
+        context: CacheContext,
+        throwsWhenAlbumMissing: Bool = false,
+        throwsWhenPhotoMissing: Bool = false
     ) async throws -> AttachmentOutcome {
         var succeededPhotoIDs: [UUID] = []
         var failedPhotoIDs: [UUID] = []
@@ -1011,6 +1039,12 @@ final class DefaultSharedPhotoRepository: SharedPhotoRepository {
                 succeededPhotoIDs.append(contentsOf: chunk)
             } catch is CancellationError {
                 throw CancellationError()
+            } catch let error as NetworkError where throwsWhenAlbumMissing
+                && error.serverCode == "SHARED_ALBUM_NOT_FOUND" {
+                throw error
+            } catch let error as NetworkError where throwsWhenPhotoMissing
+                && error.serverCode == "PHOTO_NOT_FOUND" {
+                throw error
             } catch {
                 failedPhotoIDs.append(contentsOf: chunk)
             }
