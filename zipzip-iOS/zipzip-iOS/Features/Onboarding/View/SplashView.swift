@@ -10,6 +10,7 @@ import SwiftUI
 
 struct SplashView: View {
     @Environment(Router.self) private var router
+    @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
     @State private var lottieFinished = false
     private let continuesOnboarding: Bool
     private let onAnimationFinished: (() -> Void)?
@@ -47,7 +48,7 @@ struct SplashView: View {
         .task {
             guard continuesOnboarding else { return }
             try? await Task.sleep(for: .seconds(3))
-            guard router.path.isEmpty else { return }
+            guard router.path.isEmpty, !hasCompletedOnboarding else { return }
             router.push(.photoPermission)
         }
     }
