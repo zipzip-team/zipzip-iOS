@@ -86,6 +86,11 @@ protocol ShareGroupRepository {
     ) async throws -> ShareGroupRepositoryPage
     func inviteCode(groupID: ShareAlbum.ID) async throws -> String?
     func createGroup(name: String, idempotencyKey: UUID) async throws -> CreatedShareGroup
+    func createSharedAlbum(
+        groupID: ShareAlbum.ID,
+        name: String,
+        idempotencyKey: UUID
+    ) async throws -> SharedAlbum
     func previewJoin(inviteCode: String) async throws -> ShareGroupJoinPreview
     func join(inviteCode: String, idempotencyKey: UUID) async throws -> ShareAlbum.ID
     func updateGroupName(id: ShareAlbum.ID, name: String) async throws
@@ -285,6 +290,41 @@ final class DefaultShareGroupRepository: ShareGroupRepository {
         try validate(context)
         try await store.upsertCreatedGroup(response, cacheOwnerID: context.ownerID)
         return CreatedShareGroup(id: response.id, inviteCode: response.inviteCode)
+    }
+
+    func createSharedAlbum(
+        groupID: ShareAlbum.ID,
+        name: String,
+        idempotencyKey: UUID
+    ) async throws -> SharedAlbum {
+        let context = try requiredCacheContext()
+        do {
+            let response = try await api.createSharedAlbum(
+                groupID: groupID,
+                name: name,
+                idempotencyKey: idempotencyKey
+            )
+            try validate(context)
+            try await store.upsertCreatedSharedAlbum(
+                response,
+                groupID: groupID,
+                cacheOwnerID: context.ownerID
+            )
+            try validate(context)
+            let groups = try await store.fetchGroups()
+            try validate(context)
+            guard let album = groups
+                .first(where: { $0.id == groupID })?
+                .albums
+                .first(where: { $0.id == response.id })
+                .map(Self.makeSharedAlbum)
+            else {
+                throw ShareGroupRepositoryError.sharedAlbumNotFound
+            }
+            return album
+        } catch let error as NetworkError where error.serverCode == "SHARED_GROUP_NOT_FOUND" {
+            throw ShareGroupRepositoryError.groupNotFound
+        }
     }
 
     func previewJoin(inviteCode: String) async throws -> ShareGroupJoinPreview {

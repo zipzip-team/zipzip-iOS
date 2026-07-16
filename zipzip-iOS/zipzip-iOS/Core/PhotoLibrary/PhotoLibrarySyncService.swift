@@ -34,6 +34,25 @@ nonisolated struct PhotoLibrarySyncService {
         }
     }
 
+    /// 공유 사진 저장처럼 방금 생성된 일부 asset만 전체 스캔 없이 로컬 DB에 반영한다.
+    func sync(localIdentifiers: [String]) async throws {
+        let uniqueIdentifiers = Array(Set(localIdentifiers.filter { !$0.isEmpty }))
+        guard !uniqueIdentifiers.isEmpty else { return }
+
+        let fetchResult = PHAsset.fetchAssets(withLocalIdentifiers: uniqueIdentifiers, options: nil)
+        var assets: [PHAsset] = []
+        assets.reserveCapacity(fetchResult.count)
+        fetchResult.enumerateObjects { asset, _, _ in
+            guard asset.mediaType == .image else { return }
+            assets.append(asset)
+        }
+        guard !assets.isEmpty else { return }
+
+        let chunk = await Self.loadMetadata(for: assets)
+        var deviceCache: [DeviceKey: Int] = [:]
+        try await persist(chunk, scanDate: .now, deviceCache: &deviceCache)
+    }
+
     @concurrent
     private func run(
         _ continuation: AsyncThrowingStream<SyncProgress, Error>.Continuation
