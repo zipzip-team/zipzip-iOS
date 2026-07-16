@@ -5,6 +5,7 @@
 
 import Foundation
 import Observation
+import OSLog
 
 struct AlbumDetailActions {
     let onRename: (String) async -> Bool
@@ -30,14 +31,17 @@ struct AlbumDetailActions {
 
 @Observable
 final class AlbumDetailViewModel {
+    private static let logger = Logger(
+        subsystem: Bundle.main.bundleIdentifier ?? "zipzip-iOS",
+        category: "AlbumDetail"
+    )
+
     var isSelectionMode: Bool
     var isPhotoPickerPresented = false
     var isAlbumManagementPresented = false
     var isAlbumDeleteAlertPresented = false
     var isMoveSheetPresented = false
     var isDeleteAlertPresented = false
-    var isErrorAlertPresented = false
-    private(set) var errorAlertMessage = ""
     var albumTitleDraft = ""
     private(set) var isUpdatingAlbum = false
     private(set) var isDeletingAlbum = false
@@ -93,7 +97,7 @@ final class AlbumDetailViewModel {
 
     func addPhotos(_ localIdentifiers: [String]) async -> Bool {
         guard await actions.onAddPhotos(localIdentifiers) else {
-            presentError("사진을 추가하지 못했어요.")
+            logError("failed to add photos")
             return false
         }
         return true
@@ -120,7 +124,7 @@ final class AlbumDetailViewModel {
         isUpdatingAlbum = true
         defer { isUpdatingAlbum = false }
         guard await actions.onRename(trimmedTitle) else {
-            presentError("사진집 이름을 변경하지 못했어요.")
+            logError("failed to rename album")
             return
         }
         isAlbumManagementPresented = false
@@ -140,7 +144,7 @@ final class AlbumDetailViewModel {
         isDeletingAlbum = true
         defer { isDeletingAlbum = false }
         guard await actions.onDelete() else {
-            presentError("사진집을 삭제하지 못했어요.")
+            logError("failed to delete album")
             return
         }
         isAlbumDeleteAlertPresented = false
@@ -166,7 +170,7 @@ final class AlbumDetailViewModel {
 
     func completePhotoMove(to destinations: [ShareDestination]) async {
         guard await actions.onMovePhotos(selectedPhotoIDs, destinations) else {
-            presentError("사진을 이동하지 못했어요.")
+            logError("failed to move photos")
             return
         }
         isMoveSheetPresented = false
@@ -199,23 +203,17 @@ final class AlbumDetailViewModel {
         await completeSelectedPhotoDeletion(.removeFromAlbum)
     }
 
-    func dismissErrorAlert() {
-        isErrorAlertPresented = false
-        errorAlertMessage = ""
-    }
-
     private func completeSelectedPhotoDeletion(_ action: PhotoDeletionAction) async {
         guard await actions.onDeletePhotos(selectedPhotoIDs, action) else {
             isDeleteAlertPresented = false
-            presentError("사진을 삭제하지 못했어요.")
+            logError("failed to delete photos")
             return
         }
         isDeleteAlertPresented = false
         exitSelectionMode()
     }
 
-    private func presentError(_ message: String) {
-        errorAlertMessage = message
-        isErrorAlertPresented = true
+    private func logError(_ message: String) {
+        Self.logger.error("❌ [AlbumDetail] \(message, privacy: .public)")
     }
 }

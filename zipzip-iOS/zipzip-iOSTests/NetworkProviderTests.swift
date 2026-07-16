@@ -3,6 +3,26 @@ import XCTest
 @testable import zipzip_iOS
 
 final class NetworkProviderTests: XCTestCase {
+    func testSignedObjectURLsAreRedactedFromJSONLogs() throws {
+        let data = try JSONSerialization.data(withJSONObject: [
+            "uploads": [["uploadUrl": "https://object.example/upload?signature=upload-secret"]],
+            "originalUrl": "https://object.example/original?signature=original-secret",
+            "thumbnailUrl": "https://object.example/thumb?signature=thumbnail-secret",
+            "representativeImageUrl": "https://object.example/representative?signature=representative-secret",
+            "originalUrlExpiresAt": "2026-07-15T10:15:30Z"
+        ])
+
+        let redacted = NetworkSecretRedactor.redactBody(data)
+
+        XCTAssertFalse(redacted.contains("signature="))
+        XCTAssertFalse(redacted.contains("secret"))
+        XCTAssertTrue(redacted.contains("\"uploadUrl\":\"***\""))
+        XCTAssertTrue(redacted.contains("\"originalUrl\":\"***\""))
+        XCTAssertTrue(redacted.contains("\"thumbnailUrl\":\"***\""))
+        XCTAssertTrue(redacted.contains("\"representativeImageUrl\":\"***\""))
+        XCTAssertTrue(redacted.contains("2026-07-15T10:15:30Z"))
+    }
+
     @MainActor
     func testExplicitCancellationIsPreserved() {
         let provider = DefaultNetworkProvider(eventMonitors: [])

@@ -5,16 +5,10 @@
 //  Created by 성환 on 7/5/26.
 //
 
-import SQLiteData
 import SwiftUI
 
 struct MainView: View {
     @Environment(Router.self) private var router
-    @Environment(PhotoSyncCoordinator.self) private var photoSync
-
-    @Fetch(RegisteredPhotoCountRequest()) private var registeredPhotoCount = 0
-
-    @State private var showCancelAlert = false
 
     private enum Layout {
         static let heroHeight: CGFloat = 420
@@ -47,33 +41,6 @@ struct MainView: View {
                 }
             }
         }
-        .bottomSheetAlert(
-            isPresented: $showCancelAlert,
-            title: cancelAlertTitle,
-            message: "업로드 중에 앱을 종료하면 다시 처음부터 해야해요.",
-            secondaryTitle: cancelAlertSecondaryTitle,
-            primaryTitle: "확인",
-            onSecondaryTap: { photoSync.cancelSync() },
-            onPrimaryTap: {}
-        )
-    }
-
-    private var indicatorMode: MoveInIndicator.Mode {
-        photoSync.phase == .uploading ? .uploading : .moveIn
-    }
-
-    private var cancelAlertTitle: String {
-        let durationText = photoSync.remainingMinutes.map(MoveInIndicator.durationText)
-        switch indicatorMode {
-        case .moveIn:
-            return durationText.map { "사진 동기화까지 \($0) 남았어요" } ?? "사진 동기화를 중단할까요?"
-        case .uploading:
-            return durationText.map { "사진 업로드까지 \($0) 남았어요" } ?? "사진 업로드를 중단할까요?"
-        }
-    }
-
-    private var cancelAlertSecondaryTitle: String {
-        indicatorMode == .uploading ? "업로드 취소" : "불러오기 취소"
     }
 
     private var heroSection: some View {
@@ -174,33 +141,17 @@ struct MainView: View {
 
     private var floatingHeader: some View {
         FloatingHeaderBar {
-            ZStack {
-                HStack(spacing: 0) {
-                    Image(.badgeLogo)
-                        .frame(width: 44, height: 44)
+            HStack(spacing: 0) {
+                Image(.badgeLogo)
+                    .frame(width: 44, height: 44)
 
-                    Spacer()
-                }
-
-                if photoSync.isProcessing {
-                    MoveInIndicator(
-                        mode: indicatorMode,
-                        remainingMinutes: photoSync.remainingMinutes,
-                        tooltipText: registeredPhotoCount > 0
-                            ? "\(registeredPhotoCount)장의 사진이 입주했어요!"
-                            : nil,
-                        onTap: { showCancelAlert = true }
-                    )
-                    .transition(.opacity)
-                }
+                Spacer()
             }
         }
-        .animation(.easeInOut(duration: 0.2), value: photoSync.isProcessing)
     }
 }
 
 #Preview {
     MainView()
         .environment(Router())
-        .environment(PhotoSyncCoordinator())
 }

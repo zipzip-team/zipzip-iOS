@@ -17,6 +17,8 @@ nonisolated enum AssetEXIFReader {
     private static let maxStreamedBytes = 2 * 1024 * 1024
     private static let minParseBytes = 128 * 1024
 
+    /// PHAssetResource 조회는 원본 메타데이터를 동기 로드할 수 있으므로 actor 밖에서 수행한다.
+    @concurrent
     static func deviceInfo(for asset: PHAsset, allowsNetwork: Bool) async -> AssetDeviceInfo {
         guard !asset.mediaSubtypes.contains(.photoScreenshot) else { return .resolved(make: nil, model: nil) }
         guard let resource = photoResource(for: asset) else { return .resolved(make: nil, model: nil) }

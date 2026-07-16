@@ -60,10 +60,46 @@ final class ShareGroupAPITests: XCTestCase {
 
         XCTAssertEqual(response.items.first?.name, "제주도")
         XCTAssertEqual(response.items.first?.photoCount, 42)
+        XCTAssertEqual(
+            response.items.first?.thumbnails,
+            [
+                SharedAlbumThumbnailResponse(
+                    url: "https://cdn.example.com/thumbnail-1.jpg",
+                    urlExpiresAt: "2099-07-11T00:00:00Z"
+                ),
+                SharedAlbumThumbnailResponse(
+                    url: "https://cdn.example.com/thumbnail-2.jpg",
+                    urlExpiresAt: "2099-07-11T00:00:00Z"
+                )
+            ]
+        )
         XCTAssertNil(response.nextCursor)
         XCTAssertFalse(response.hasNext)
         XCTAssertEqual(provider.request?.url?.path, "/api/v1/shared-groups/\(groupID.uuidString)/shared-albums")
         XCTAssertEqual(provider.request?.httpMethod, "GET")
+    }
+
+    @MainActor
+    func testCreateSharedAlbumRequestMatchesDocumentedContract() async throws {
+        let provider = ShareGroupRecordingNetworkProvider(json: Self.createSharedAlbumJSON)
+        let api = DefaultShareGroupAPI(networkProvider: provider)
+        let groupID = try XCTUnwrap(UUID(uuidString: "11111111-1111-1111-1111-111111111111"))
+        let albumID = try XCTUnwrap(UUID(uuidString: "33333333-3333-3333-3333-333333333333"))
+        let idempotencyKey = UUID()
+
+        let response = try await api.createSharedAlbum(
+            groupID: groupID,
+            name: "제주도",
+            idempotencyKey: idempotencyKey
+        )
+
+        XCTAssertEqual(response.id, albumID)
+        XCTAssertEqual(response.photoCount, 0)
+        let request = try XCTUnwrap(provider.request)
+        XCTAssertEqual(request.url?.path, "/api/v1/shared-groups/\(groupID.uuidString)/shared-albums")
+        XCTAssertEqual(request.httpMethod, "POST")
+        XCTAssertEqual(request.value(forHTTPHeaderField: "Idempotency-Key"), idempotencyKey.uuidString)
+        XCTAssertEqual(try requestBody(request)["name"] as? String, "제주도")
     }
 
     @MainActor
@@ -337,6 +373,13 @@ final class ShareGroupAPITests: XCTestCase {
           "id": "33333333-3333-3333-3333-333333333333",
           "name": "제주도",
           "photoCount": 42,
+          "thumbnails": [{
+            "url": "https://cdn.example.com/thumbnail-1.jpg",
+            "urlExpiresAt": "2099-07-11T00:00:00Z"
+          }, {
+            "url": "https://cdn.example.com/thumbnail-2.jpg",
+            "urlExpiresAt": "2099-07-11T00:00:00Z"
+          }],
           "createdBy": {
             "userId": null,
             "displayName": null
@@ -347,6 +390,23 @@ final class ShareGroupAPITests: XCTestCase {
         }],
         "nextCursor": null,
         "hasNext": false
+      }
+    }
+    """
+
+    private static let createSharedAlbumJSON = """
+    {
+      "data": {
+        "id": "33333333-3333-3333-3333-333333333333",
+        "name": "제주도",
+        "photoCount": 0,
+        "createdBy": {
+          "userId": null,
+          "displayName": "집집이"
+        },
+        "isCreator": true,
+        "createdAt": "2026-07-03T10:15:30Z",
+        "updatedAt": "2026-07-03T10:15:30Z"
       }
     }
     """

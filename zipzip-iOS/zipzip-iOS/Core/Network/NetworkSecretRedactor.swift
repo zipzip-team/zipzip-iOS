@@ -12,7 +12,11 @@ nonisolated enum NetworkSecretRedactor {
         "accesstoken",
         "identitytoken",
         "nonce",
-        "refreshtoken"
+        "refreshtoken",
+        "uploadurl",
+        "originalurl",
+        "thumbnailurl",
+        "representativeimageurl"
     ]
 
     static func redactBody(_ data: Data?) -> String {

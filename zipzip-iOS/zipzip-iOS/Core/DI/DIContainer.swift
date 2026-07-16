@@ -42,11 +42,16 @@ final class DIContainer {
             }
         )
         self.networkProvider = authenticatedNetworkProvider
+        let shareGroupAPI = DefaultShareGroupAPI(networkProvider: authenticatedNetworkProvider)
+        let sharedGroupStore = SharedGroupStore()
         self.shareGroupRepository = DefaultShareGroupRepository(
-            api: DefaultShareGroupAPI(networkProvider: authenticatedNetworkProvider)
+            api: shareGroupAPI,
+            store: sharedGroupStore
         )
         self.sharedPhotoRepository = DefaultSharedPhotoRepository(
-            api: DefaultSharedPhotoAPI(networkProvider: authenticatedNetworkProvider)
+            api: DefaultSharedPhotoAPI(networkProvider: authenticatedNetworkProvider),
+            groupAPI: shareGroupAPI,
+            groupStore: sharedGroupStore
         )
         self.userProfileState = UserProfileState(
             repository: DefaultUserProfileRepository(

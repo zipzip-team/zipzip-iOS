@@ -70,11 +70,6 @@ struct PictureView: View {
                 Task { await viewModel.deleteSelectedPhotos() }
             }
         )
-        .alert("요청을 완료하지 못했어요.", isPresented: $viewModel.isErrorAlertPresented) {
-            Button("확인", role: .cancel, action: viewModel.dismissErrorAlert)
-        } message: {
-            Text(viewModel.errorAlertMessage)
-        }
         .bottomSheetAlert(
             isPresented: $showPictureIntroduction,
             title: "세컨폰·디카 사진만 모아봤어요.",

@@ -9,6 +9,7 @@ import SwiftUI
 
 struct AlbumView: View {
     @Environment(Router.self) private var router
+    @Environment(PhotoSyncCoordinator.self) private var photoSync
     @State private var viewModel: AlbumViewModel
     let shareViewModel: ShareViewModel
 
@@ -112,35 +113,42 @@ struct AlbumView: View {
         )
         .bottomSheet(
             isPresented: $viewModel.isCreateAlbumSheetPresented,
-            detents: [.height(549)],
-            initialDetent: .height(549),
+            detents: [.height(AlbumCreationSheet.preferredHeight)],
+            initialDetent: .height(AlbumCreationSheet.preferredHeight),
             showsDragIndicator: .visible,
-            expandsToLargestDetentOnScroll: false
+            expandsToLargestDetentOnScroll: false,
+            isInteractiveDismissDisabled: viewModel.isCreatingAlbum
         ) { _ in
-            BottomSheet(
-                leftItem: {
-                    BottomSheetCloseButton(action: viewModel.dismissCreateAlbumSheet)
-                }
-            ) {
-                AlbumCreateSheetContent(
-                    albumName: $viewModel.createAlbumName,
-                    isCreateDisabled: viewModel.isCreateAlbumDisabled,
-                    onDeleteTap: viewModel.resetCreateAlbumDraft,
-                    onCreateTap: {
-                        Task {
-                            if let album = await viewModel.createAlbum() {
-                                router.push(.albumDetail(album.id))
-                            }
+            AlbumCreationSheet(
+                albumName: $viewModel.createAlbumName,
+                isCreateDisabled: viewModel.isCreateAlbumDisabled,
+                isBusy: viewModel.isCreatingAlbum,
+                onClose: viewModel.dismissCreateAlbumSheet,
+                onDeleteTap: viewModel.resetCreateAlbumDraft,
+                onCreateTap: {
+                    Task {
+                        if let album = await viewModel.createAlbum() {
+                            router.push(.albumDetail(album.id))
                         }
                     }
-                )
-            }
+                }
+            )
         }
         .bottomSheet(isPresented: $viewModel.isShareAlbumSheetPresented, detents: [.full]) { _ in
             AlbumShareDestinationSheet(
                 shareAlbums: shareViewModel.groups,
+                selectedShareAlbumID: viewModel.selectedShareGroupID,
+                isBusy: viewModel.isMovingAlbumsToShare,
                 onCancel: viewModel.dismissShareAlbumSheet,
-                onComplete: viewModel.completeShareAlbumMove
+                onSelect: viewModel.selectShareGroup,
+                onComplete: { group in
+                    viewModel.dismissShareAlbumSheet()
+                    router.push(.shareGroup(group.id))
+                    photoSync.runUpload {
+                        guard await viewModel.completeShareAlbumMove(to: group) else { return }
+                        await shareViewModel.loadSharedAlbums(groupID: group.id, refresh: true)
+                    }
+                }
             )
         }
     }
@@ -310,59 +318,15 @@ private struct AlbumSheetTextButton: View {
     }
 }
 
-private struct AlbumCreateSheetContent: View {
-    @Binding var albumName: String
-
-    let isCreateDisabled: Bool
-    let onDeleteTap: () -> Void
-    let onCreateTap: () -> Void
-
-    var body: some View {
-        VStack(spacing: 34) {
-            AlbumFolder(state: .plain) {
-                EmptyView()
-            }
-            .accessibilityHidden(true)
-
-            VStack(spacing: 49) {
-                VStack(alignment: .leading, spacing: 12) {
-                    Text("사진집 이름")
-                        .font(.t3_md)
-                        .foregroundStyle(.grey300)
-
-                    TextInput("이름 입력", text: $albumName, maxLength: 20)
-                }
-
-                HStack(spacing: 16) {
-                    CommonButton(
-                        title: "삭제",
-                        property1: .secondary,
-                        action: onDeleteTap
-                    )
-
-                    CommonButton(
-                        title: "생성",
-                        property1: isCreateDisabled ? .disabled : .cta,
-                        action: onCreateTap
-                    )
-                }
-            }
-            .frame(maxWidth: 358)
-        }
-        .padding(.horizontal, 16)
-        .padding(.top, 12)
-        .frame(maxWidth: .infinity, alignment: .top)
-    }
-}
-
 private struct AlbumShareDestinationSheet: View {
     @Environment(AuthenticationState.self) private var authenticationState
 
     let shareAlbums: [ShareAlbum]
+    let selectedShareAlbumID: ShareAlbum.ID?
+    let isBusy: Bool
     let onCancel: () -> Void
+    let onSelect: (ShareAlbum.ID) -> Void
     let onComplete: (ShareAlbum) -> Void
-
-    @State private var selectedShareAlbumID: ShareAlbum.ID?
 
     var body: some View {
         BottomSheet(
@@ -373,7 +337,7 @@ private struct AlbumShareDestinationSheet: View {
                 if authenticationState.isLoggedIn {
                     AlbumSheetTextButton(
                         title: "완료",
-                        isDisabled: true,
+                        isDisabled: selectedShareAlbumID == nil || isBusy,
                         action: completeSelection
                     )
                 }
@@ -396,11 +360,13 @@ private struct AlbumShareDestinationSheet: View {
     }
 
     private func selectShareAlbum(_ album: ShareAlbum) {
-        selectedShareAlbumID = album.id
+        onSelect(album.id)
     }
 
     private func completeSelection() {
-        guard let selectedShareAlbum = shareAlbums.first(where: { $0.id == selectedShareAlbumID }) else {
+        guard !isBusy,
+              let selectedShareAlbum = shareAlbums.first(where: { $0.id == selectedShareAlbumID })
+        else {
             return
         }
 

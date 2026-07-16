@@ -12,6 +12,7 @@ struct PhotoGroup: View {
     /// `nil` keeps the design-system placeholder used by previews.
     /// An empty array represents a real album without photos.
     var localIdentifiers: [String]? = nil
+    var remoteURLs: [URL]? = nil
     @State private var thumbnailImages: [String: UIImage] = [:]
 
     private static let thumbnailSize = CGSize(width: 200, height: 160)
@@ -20,6 +21,8 @@ struct PhotoGroup: View {
         ZStack {
             if let localIdentifiers {
                 thumbnailItems(Array(localIdentifiers.prefix(3)))
+            } else if let remoteURLs {
+                remoteThumbnailItems(Array(remoteURLs.prefix(3)))
             } else {
                 placeholderItems
             }
@@ -27,6 +30,23 @@ struct PhotoGroup: View {
         .frame(width: 112, height: 96)
         .task(id: localIdentifiers) {
             await loadThumbnails()
+        }
+    }
+
+    @ViewBuilder private func remoteThumbnailItems(_ urls: [URL]) -> some View {
+        if urls.indices.contains(2) {
+            RemotePhotoItem(url: urls[2])
+                .frame(width: 100, height: 80)
+        }
+        if urls.indices.contains(1) {
+            RemotePhotoItem(url: urls[1])
+                .frame(width: 100, height: 80)
+                .rotationEffect(.degrees(8))
+        }
+        if let firstURL = urls.first {
+            RemotePhotoItem(url: firstURL)
+                .frame(width: 100, height: 80)
+                .rotationEffect(.degrees(-10))
         }
     }
 
@@ -85,6 +105,22 @@ struct PhotoGroup: View {
 
             thumbnailImages[localIdentifier] = image
         }
+    }
+}
+
+private struct RemotePhotoItem: View {
+    let url: URL
+
+    var body: some View {
+        AsyncImage(url: url) { phase in
+            switch phase {
+            case let .success(image):
+                PhotoItem(image: image)
+            default:
+                PhotoItem()
+            }
+        }
+        .accessibilityHidden(true)
     }
 }
 

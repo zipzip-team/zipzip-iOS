@@ -16,7 +16,6 @@ final class AlbumDetailViewModelTests: XCTestCase {
         XCTAssertTrue(viewModel.isSelectionMode)
         XCTAssertEqual(viewModel.selectedPhotoIDs, [photoID])
         XCTAssertTrue(viewModel.isMoveSheetPresented)
-        XCTAssertTrue(viewModel.isErrorAlertPresented)
     }
 
     func testDeleteFailureKeepsSelectionAndPresentsNativeError() async {
@@ -33,7 +32,6 @@ final class AlbumDetailViewModelTests: XCTestCase {
         XCTAssertTrue(viewModel.isSelectionMode)
         XCTAssertEqual(viewModel.selectedPhotoIDs, [photoID])
         XCTAssertFalse(viewModel.isDeleteAlertPresented)
-        XCTAssertTrue(viewModel.isErrorAlertPresented)
     }
 
     func testSuccessfulDeleteExitsSelectionMode() async {
@@ -48,7 +46,6 @@ final class AlbumDetailViewModelTests: XCTestCase {
 
         XCTAssertFalse(viewModel.isSelectionMode)
         XCTAssertTrue(viewModel.selectedPhotoIDs.isEmpty)
-        XCTAssertFalse(viewModel.isErrorAlertPresented)
     }
 
     func testPhotoAddFailureIsReturnedAndPresented() async {
@@ -59,6 +56,5 @@ final class AlbumDetailViewModelTests: XCTestCase {
         let didAdd = await viewModel.addPhotos(["photo-1"])
 
         XCTAssertFalse(didAdd)
-        XCTAssertTrue(viewModel.isErrorAlertPresented)
     }
 }

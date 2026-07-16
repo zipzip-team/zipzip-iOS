@@ -46,16 +46,6 @@ struct DeviceLoadingView: View {
         .task {
             photoSync.startIfNeeded()
         }
-        .alert("기기 목록을 불러오지 못했어요.", isPresented: $photoSync.isErrorAlertPresented) {
-            Button("취소", role: .cancel) {
-                photoSync.dismissSyncError()
-            }
-            Button("다시 시도") {
-                photoSync.retrySync()
-            }
-        } message: {
-            Text("잠시 후 다시 시도해주세요.")
-        }
     }
 }
 

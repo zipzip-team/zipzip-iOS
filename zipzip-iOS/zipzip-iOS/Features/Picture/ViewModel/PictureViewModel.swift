@@ -5,6 +5,7 @@
 //  Created by 성환 on 7/8/26.
 //
 
+import Foundation
 import OSLog
 import SQLiteData
 import SwiftUI
@@ -17,13 +18,14 @@ final class PictureViewModel {
     @ObservationIgnored
     private let deleteOperation: ([String]) async throws -> Void
 
-    private static let logger = Logger(subsystem: "com.zipzip.zipzip-iOS", category: "PictureSections")
+    private static let logger = Logger(
+        subsystem: Bundle.main.bundleIdentifier ?? "zipzip-iOS",
+        category: "PictureSections"
+    )
 
     var isSelectionMode = false
     private(set) var selectedPhotoIDs: [UUID] = []
     var showDeleteAlert = false
-    var isErrorAlertPresented = false
-    private(set) var errorAlertMessage = ""
 
     var sections: [PhotoSection] {
         response
@@ -76,7 +78,6 @@ final class PictureViewModel {
             return true
         } catch {
             Self.logger.error("failed to delete photos: \(error)")
-            presentError("사진을 삭제하지 못했어요.")
             return false
         }
     }
@@ -86,17 +87,11 @@ final class PictureViewModel {
         selectedPhotoIDs = []
     }
 
-    func dismissErrorAlert() {
-        isErrorAlertPresented = false
-        errorAlertMessage = ""
-    }
-
     func applyFilters(_ filters: [AppliedFilter]) async {
         do {
             try await $response.load(PhotoSectionsRequest(filters: filters))
         } catch {
             Self.logger.error("failed to load photo sections: \(error)")
-            presentError("사진을 불러오지 못했어요.")
         }
     }
 
@@ -114,10 +109,5 @@ final class PictureViewModel {
         } else {
             selectedPhotoIDs.append(id)
         }
-    }
-
-    private func presentError(_ message: String) {
-        errorAlertMessage = message
-        isErrorAlertPresented = true
     }
 }

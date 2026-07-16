@@ -10,6 +10,7 @@ import UIKit
 
 struct FilteredPictureView: View {
     @Environment(Router.self) private var router
+    @Environment(PhotoSyncCoordinator.self) private var photoSync
 
     @State private var pictureViewModel = PictureViewModel()
     @State private var viewModel: FilteredPictureViewModel
@@ -61,12 +62,6 @@ struct FilteredPictureView: View {
             await pictureViewModel.applyFilters(viewModel.appliedFilters)
             didLoadResult = true
         }
-        .alert("필터 정보를 불러오지 못했어요.", isPresented: $viewModel.isErrorAlertPresented) {
-            Button("다시 시도") {
-                Task { await viewModel.loadOptions() }
-            }
-            Button("확인", role: .cancel) {}
-        }
         .bottomSheet(isPresented: $viewModel.showDeviceSheet, detents: [.content]) { dismiss in
             DeviceFilterSheet(
                 devices: viewModel.options.devices,
@@ -113,7 +108,9 @@ struct FilteredPictureView: View {
                 onOpenShareAlbum: loadSharedAlbums,
                 onComplete: { destinations in
                     let localIdentifiers = pictureViewModel.selectedPhotoLocalIdentifiers
-                    Task {
+                    dismiss()
+                    pictureViewModel.cancelSelection()
+                    photoSync.track {
                         guard await albumViewModel.addPhotos(
                             localIdentifiers: localIdentifiers,
                             to: destinations
@@ -121,8 +118,6 @@ struct FilteredPictureView: View {
                             return
                         }
 
-                        dismiss()
-                        pictureViewModel.cancelSelection()
                         guard let albumID = destinations.firstPersonalAlbumID else {
                             return
                         }
@@ -144,11 +139,6 @@ struct FilteredPictureView: View {
                 Task { await pictureViewModel.deleteSelectedPhotos() }
             }
         )
-        .alert("요청을 완료하지 못했어요.", isPresented: $pictureViewModel.isErrorAlertPresented) {
-            Button("확인", role: .cancel, action: pictureViewModel.dismissErrorAlert)
-        } message: {
-            Text(pictureViewModel.errorAlertMessage)
-        }
         .overlay(alignment: .topLeading) {
             FloatingHeaderBar {
                 topBar

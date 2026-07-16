@@ -5,6 +5,7 @@
 //  Created by 성환 on 7/8/26.
 //
 
+import Foundation
 import OSLog
 import SQLiteData
 import SwiftUI
@@ -14,14 +15,16 @@ final class FilterViewModel {
     @ObservationIgnored
     @Dependency(\.photoFilterOptions) private var provider
 
-    private static let logger = Logger(subsystem: "com.zipzip.zipzip-iOS", category: "FilterOptions")
+    private static let logger = Logger(
+        subsystem: Bundle.main.bundleIdentifier ?? "zipzip-iOS",
+        category: "FilterOptions"
+    )
 
     private(set) var options = PhotoFilterOptions(
         devices: [],
         locations: [],
         etcItems: PhotoFilterOptions.defaultEtcItems
     )
-    var isErrorAlertPresented = false
 
     var selectedDevices: Set<String> = []
     var selectedLocations: Set<String> = []
@@ -79,7 +82,6 @@ final class FilterViewModel {
             options = try await provider.load()
         } catch {
             Self.logger.error("failed to load filter options: \(error)")
-            isErrorAlertPresented = true
         }
     }
 }

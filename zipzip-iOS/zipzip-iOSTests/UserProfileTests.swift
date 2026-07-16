@@ -88,13 +88,11 @@ final class UserProfileTests: XCTestCase {
             state.resolvedDisplayName(for: AuthUser(id: UUID(), displayName: "다른 로그인 이름")),
             "다른 로그인 이름"
         )
-        XCTAssertFalse(state.isErrorAlertPresented)
 
         state.reset()
 
         XCTAssertNil(state.ownerID)
         XCTAssertNil(state.displayName)
-        XCTAssertFalse(state.isErrorAlertPresented)
     }
 
     @MainActor
@@ -109,14 +107,11 @@ final class UserProfileTests: XCTestCase {
         await state.load(for: user)
 
         XCTAssertEqual(state.displayName, "로그인 이름")
-        XCTAssertTrue(state.isErrorAlertPresented)
-        XCTAssertFalse(state.errorAlertMessage.isEmpty)
 
-        await state.retry()
+        await state.load(for: user)
 
         XCTAssertEqual(repository.requestCount, 2)
         XCTAssertEqual(state.displayName, "재시도 이름")
-        XCTAssertFalse(state.isErrorAlertPresented)
     }
 
     @MainActor
@@ -136,7 +131,6 @@ final class UserProfileTests: XCTestCase {
 
         XCTAssertEqual(state.ownerID, secondUser.id)
         XCTAssertEqual(state.displayName, "둘째 서버 이름")
-        XCTAssertFalse(state.isErrorAlertPresented)
     }
 
     private static let profileJSON = """
