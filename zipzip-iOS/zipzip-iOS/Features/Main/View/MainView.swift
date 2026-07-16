@@ -46,6 +46,7 @@ struct MainView: View {
         .overlay(alignment: .topLeading) {
             FloatingHeader(.trailing) {
                 ProfileButton {
+                    guard router.path.isEmpty else { return }
                     router.push(.myPage)
                 }
             }
@@ -73,7 +74,7 @@ struct MainView: View {
                 .font(.t3_md)
 
             HStack(alignment: .bottom, spacing: 2) {
-                Text("\(organizedPhotoCount)")
+                Text(organizedPhotoCount, format: .number)
                     .font(.h1_sb)
 
                 Text("장")
@@ -83,7 +84,7 @@ struct MainView: View {
         }
         .foregroundStyle(.grey1000)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("집집에 모인 사진 \(organizedPhotoCount)장")
+        .accessibilityLabel("집집에 모인 사진 \(organizedPhotoCount.formatted(.number))장")
     }
 
     private var unresolvedPhotosSection: some View {
