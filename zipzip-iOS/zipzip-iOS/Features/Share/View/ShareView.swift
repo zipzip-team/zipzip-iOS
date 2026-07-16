@@ -108,7 +108,7 @@ struct ShareView: View {
         case .invitation:
             ShareInvitationSheet(code: viewModel.inviteCode, onComplete: viewModel.completeInvitation)
         case .comments:
-            ShareCommentsSheet(
+            CommentsBottomSheet(
                 messages: viewModel.chatItems,
                 comment: $viewModel.commentDraft,
                 isLoading: viewModel.isLoadingChat || viewModel.isLoadingOlderChat,
@@ -571,87 +571,6 @@ private struct ShareInvitationSheet: View {
             .padding(.horizontal, 16)
             .padding(.top, 12)
             .padding(.bottom, 49)
-        }
-    }
-}
-
-private struct ShareCommentsSheet: View {
-    let messages: [ShareGroupChatItem]
-    @Binding var comment: String
-    let isLoading: Bool
-    let isSending: Bool
-    let onClose: () -> Void
-    let onLoadOlder: () -> Void
-    let onSend: () -> Void
-
-    var body: some View {
-        BottomSheet(
-            leftItem: { BottomSheetCloseButton(action: onClose) },
-            rightItem: {
-                Button("완료", action: onClose)
-                    .font(.b1_sb)
-                    .foregroundStyle(.white00)
-                    .frame(width: 72, height: 48)
-            }
-        ) {
-            VStack(spacing: 12) {
-                ScrollView(showsIndicators: false) {
-                    LazyVStack(spacing: 16) {
-                        ForEach(messages) { message in
-                            ShareCommentBubble(text: message.content, isMine: message.isAuthor)
-                        }
-                    }
-                    .padding(.horizontal, 16)
-                    .padding(.top, 12)
-                }
-                .defaultScrollAnchor(.bottom)
-                .onScrollGeometryChange(for: Bool.self) { geometry in
-                    geometry.contentOffset.y <= geometry.contentInsets.top + 8
-                } action: { wasAtTop, isAtTop in
-                    guard isAtTop, !wasAtTop else { return }
-                    onLoadOlder()
-                }
-
-                HStack(spacing: 12) {
-                    TextInput("메시지 입력", text: $comment, style: .comment)
-                        .disabled(isLoading || isSending)
-                    ExtraSmallButton(icon: .send, action: onSend)
-                        .disabled(isSendDisabled)
-                }
-                .padding(.horizontal, 16)
-                .padding(.bottom, 12)
-            }
-        }
-    }
-
-    private var isSendDisabled: Bool {
-        isLoading || isSending || comment.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-    }
-}
-
-private struct ShareCommentBubble: View {
-    let text: String
-    let isMine: Bool
-
-    var body: some View {
-        HStack(alignment: .top, spacing: 12) {
-            if isMine {
-                Spacer(minLength: 44)
-            } else {
-                ProfileImage(size: 32, isStroke: false)
-            }
-
-            Text(text)
-                .font(.b1_md)
-                .foregroundStyle(.white00)
-                .padding(12)
-                .background(isMine ? .grey700 : .grey900, in: .rect(cornerRadius: 8))
-
-            if isMine {
-                ProfileImage(size: 32, isStroke: false)
-            } else {
-                Spacer(minLength: 44)
-            }
         }
     }
 }

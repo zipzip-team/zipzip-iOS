@@ -334,6 +334,16 @@ final class ShareViewModel {
                     size: size
                 )
             },
+            onCreateComment: { [weak self] photoID, content, idempotencyKey in
+                guard let repository = self?.sharedPhotoRepository else {
+                    throw SharedPhotoRepositoryError.cacheNotPrepared
+                }
+                return try await repository.createComment(
+                    photoID: photoID,
+                    content: content,
+                    idempotencyKey: idempotencyKey
+                )
+            },
             onSetLike: { [weak self] photoID, isLiked in
                 guard let repository = self?.sharedPhotoRepository else {
                     throw SharedPhotoRepositoryError.cacheNotPrepared

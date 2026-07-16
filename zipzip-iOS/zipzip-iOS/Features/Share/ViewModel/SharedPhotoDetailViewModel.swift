@@ -16,6 +16,11 @@ protocol SharedPhotoDetailRepository {
         cursor: String?,
         size: Int
     ) async throws -> SharedPhotoCommentPage
+    func createComment(
+        photoID: SharedAlbumPhoto.ID,
+        content: String,
+        idempotencyKey: UUID
+    ) async throws -> SharedPhotoComment
     func setLike(
         photoID: SharedAlbumPhoto.ID,
         isLiked: Bool
@@ -34,6 +39,11 @@ struct SharedPhotoDetailRepositoryAdapter: SharedPhotoDetailRepository {
         String?,
         Int
     ) async throws -> SharedPhotoCommentPage
+    let onCreateComment: (
+        SharedAlbumPhoto.ID,
+        String,
+        UUID
+    ) async throws -> SharedPhotoComment
     let onSetLike: (
         SharedAlbumPhoto.ID,
         Bool
@@ -53,6 +63,14 @@ struct SharedPhotoDetailRepositoryAdapter: SharedPhotoDetailRepository {
         size: Int
     ) async throws -> SharedPhotoCommentPage {
         try await onComments(photoID, cursor, size)
+    }
+
+    func createComment(
+        photoID: SharedAlbumPhoto.ID,
+        content: String,
+        idempotencyKey: UUID
+    ) async throws -> SharedPhotoComment {
+        try await onCreateComment(photoID, content, idempotencyKey)
     }
 
     func setLike(
@@ -82,17 +100,26 @@ final class SharedPhotoDetailViewModel {
     let albumID: SharedAlbum.ID
 
     private(set) var detail: SharedPhotoDetail?
+    private(set) var comments: [SharedPhotoComment] = []
     private(set) var latestComment: SharedPhotoComment?
     private(set) var isLikedByMe = false
     private(set) var likeCount = 0
+    private(set) var commentCount = 0
     private(set) var isLoading = false
+    private(set) var isLoadingComments = false
+    private(set) var isSendingComment = false
     private(set) var hasLoadFailed = false
     private(set) var isUpdatingLike = false
     private(set) var isDeleting = false
     var isErrorPresented = false
     private(set) var errorMessage = ""
+    var commentDraft = ""
+    var isCommentsPresented = false
 
     private var hasLoaded = false
+    private var hasLoadedComments = false
+    private var commentRequestContent: String?
+    private var commentIdempotencyKey: UUID?
     private let repository: any SharedPhotoDetailRepository
     private let onPhotoDeleted: () -> Void
 
@@ -135,6 +162,68 @@ final class SharedPhotoDetailViewModel {
     func retry() async {
         guard !isLoading else { return }
         await loadContent()
+    }
+
+    func presentComments() {
+        isCommentsPresented = true
+    }
+
+    func dismissComments() {
+        guard !isSendingComment else { return }
+        isCommentsPresented = false
+    }
+
+    func commentsDidDismiss() {
+        commentDraft = ""
+        commentRequestContent = nil
+        commentIdempotencyKey = nil
+    }
+
+    func loadComments() async {
+        await loadComments(presentFailure: true)
+    }
+
+    func sendComment() async {
+        guard detail != nil, !isSendingComment, !isLoadingComments else { return }
+
+        let content = commentDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !content.isEmpty else { return }
+        guard content.count <= 1000 else {
+            presentError("댓글은 1,000자 이하로 입력해 주세요.")
+            return
+        }
+
+        let idempotencyKey: UUID
+        if commentRequestContent == content, let commentIdempotencyKey {
+            idempotencyKey = commentIdempotencyKey
+        } else {
+            idempotencyKey = UUID()
+            commentRequestContent = content
+            commentIdempotencyKey = idempotencyKey
+        }
+
+        isSendingComment = true
+        defer { isSendingComment = false }
+
+        do {
+            let comment = try await repository.createComment(
+                photoID: photoID,
+                content: content,
+                idempotencyKey: idempotencyKey
+            )
+            let isNewComment = !comments.contains { $0.id == comment.id }
+            comments = deduplicatedComments(comments + [comment])
+            latestComment = comment
+            if isNewComment {
+                commentCount += 1
+            }
+            commentCount = max(commentCount, comments.count)
+            commentDraft = ""
+            commentRequestContent = nil
+            commentIdempotencyKey = nil
+        } catch {
+            presentError("댓글을 보내지 못했어요.", error: error)
+        }
     }
 
     func toggleLike() async {
@@ -188,18 +277,16 @@ final class SharedPhotoDetailViewModel {
             self.detail = detail
             isLikedByMe = detail.isLikedByMe
             likeCount = detail.likeCount
+            commentCount = detail.commentCount
             hasLoaded = true
 
             if detail.commentCount > 0 {
-                do {
-                    latestComment = try await fetchLatestComment()
-                } catch {
-                    Self.logger.error(
-                        "❌ [SharedPhotoDetail] failed to load latest comment: \(String(describing: error), privacy: .public)"
-                    )
-                }
+                hasLoadedComments = false
+                await loadComments(presentFailure: false)
             } else {
+                comments = []
                 latestComment = nil
+                hasLoadedComments = true
             }
         } catch {
             hasLoadFailed = true
@@ -207,10 +294,31 @@ final class SharedPhotoDetailViewModel {
         }
     }
 
-    private func fetchLatestComment() async throws -> SharedPhotoComment? {
+    private func loadComments(presentFailure: Bool) async {
+        guard !hasLoadedComments, !isLoadingComments else { return }
+        isLoadingComments = true
+        defer { isLoadingComments = false }
+
+        do {
+            comments = try await fetchComments()
+            latestComment = comments.last
+            commentCount = max(commentCount, comments.count)
+            hasLoadedComments = true
+        } catch {
+            if presentFailure {
+                presentError("댓글을 불러오지 못했어요.", error: error)
+            } else {
+                Self.logger.error(
+                    "❌ [SharedPhotoDetail] failed to load comments: \(String(describing: error), privacy: .public)"
+                )
+            }
+        }
+    }
+
+    private func fetchComments() async throws -> [SharedPhotoComment] {
         var cursor: String?
         var requestedCursors: Set<String> = []
-        var latestComment: SharedPhotoComment?
+        var comments: [SharedPhotoComment] = []
 
         repeat {
             let page = try await repository.comments(
@@ -218,9 +326,7 @@ final class SharedPhotoDetailViewModel {
                 cursor: cursor,
                 size: 100
             )
-            if let pageLatestComment = page.items.last {
-                latestComment = pageLatestComment
-            }
+            comments.append(contentsOf: page.items)
             guard page.hasNext else { break }
             guard let nextCursor = page.nextCursor,
                   requestedCursors.insert(nextCursor).inserted
@@ -230,7 +336,13 @@ final class SharedPhotoDetailViewModel {
             cursor = nextCursor
         } while true
 
-        return latestComment
+        return deduplicatedComments(comments)
+    }
+
+    private func deduplicatedComments<S: Sequence>(_ comments: S) -> [SharedPhotoComment]
+        where S.Element == SharedPhotoComment {
+        var seenIDs: Set<SharedPhotoComment.ID> = []
+        return comments.filter { seenIDs.insert($0.id).inserted }
     }
 
     private func presentError(_ message: String, error: Error? = nil) {

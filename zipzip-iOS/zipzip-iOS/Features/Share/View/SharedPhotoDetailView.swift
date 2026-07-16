@@ -16,19 +16,13 @@ struct SharedPhotoDetailView: View {
     @GestureState private var gestureScale: CGFloat = 1
     @GestureState private var gestureOffset: CGSize = .zero
 
-    private let onCommentsTap: (SharedAlbumPhoto.ID) -> Void
-
     private static let minimumPhotoScale: CGFloat = 1
     private static let maximumPhotoScale: CGFloat = 4
     private static let doubleTapPhotoScale: CGFloat = 2
     private static let zoomActivationThreshold: CGFloat = 1.01
 
-    init(
-        viewModel: SharedPhotoDetailViewModel,
-        onCommentsTap: @escaping (SharedAlbumPhoto.ID) -> Void = { _ in }
-    ) {
+    init(viewModel: SharedPhotoDetailViewModel) {
         _viewModel = State(initialValue: viewModel)
-        self.onCommentsTap = onCommentsTap
     }
 
     var body: some View {
@@ -101,6 +95,27 @@ struct SharedPhotoDetailView: View {
         .onChange(of: viewModel.imageURL) {
             resetPhotoTransform()
         }
+        .bottomSheet(
+            isPresented: $viewModel.isCommentsPresented,
+            detents: [.height(562)],
+            initialDetent: .height(562),
+            showsDragIndicator: .visible,
+            expandsToLargestDetentOnScroll: false,
+            isInteractiveDismissDisabled: viewModel.isSendingComment,
+            onDismiss: viewModel.commentsDidDismiss
+        ) {
+            CommentsBottomSheet(
+                messages: viewModel.comments,
+                comment: $viewModel.commentDraft,
+                isLoading: viewModel.isLoadingComments,
+                isSending: viewModel.isSendingComment,
+                onClose: viewModel.dismissComments,
+                onSend: { Task { await viewModel.sendComment() } }
+            )
+            .task(id: viewModel.photoID) {
+                await viewModel.loadComments()
+            }
+        }
         .bottomSheetAlert(
             isPresented: $showDeleteAlert,
             title: "이 사진을 삭제하시겠어요?",
@@ -152,7 +167,7 @@ struct SharedPhotoDetailView: View {
                 title: "댓글",
                 isDisabled: viewModel.isDeleting
             ) {
-                onCommentsTap(viewModel.photoID)
+                viewModel.presentComments()
             },
             .init(
                 icon: .delete,
@@ -342,7 +357,7 @@ private struct SharedPhotoLatestCommentToast: View {
         .padding(.horizontal, 8)
         .padding(.vertical, 4)
         .background(.white00, in: .capsule)
-        .frame(maxWidth: 292)
+        .frame(maxWidth: 292, alignment: .trailing)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("\(comment.author.displayName ?? "멤버"): \(comment.content)")
     }
@@ -410,6 +425,17 @@ private struct SharedPhotoLoadFailedView: View {
                 )
             },
             onComments: { _, _, _ in .init(items: [], nextCursor: nil, hasNext: false) },
+            onCreateComment: { photoID, content, _ in
+                SharedPhotoComment(
+                    id: UUID(),
+                    photoID: photoID,
+                    content: content,
+                    author: SharedPhotoAuthor(id: nil, displayName: "집집이"),
+                    isAuthor: true,
+                    createdAt: .now,
+                    updatedAt: .now
+                )
+            },
             onSetLike: { id, isLiked in .init(photoID: id, isLikedByMe: isLiked, likeCount: 4) },
             onDeletePhoto: { _, _ in true }
         )

@@ -31,15 +31,18 @@ struct BottomSheetMiddleItem {
 struct BottomSheet<Content: View>: View {
     @Environment(\.bottomSheetDragIndicatorVisibility) private var dragIndicatorVisibility
 
+    private let title: String?
     private let middleItem: BottomSheetMiddleItem?
     private let leftItem: AnyView?
     private let rightItem: AnyView?
     private let content: Content
 
     init(
+        title: String? = nil,
         middleItem: BottomSheetMiddleItem? = nil,
         @ViewBuilder content: () -> Content
     ) {
+        self.title = title
         self.middleItem = middleItem
         self.leftItem = nil
         self.rightItem = nil
@@ -47,10 +50,12 @@ struct BottomSheet<Content: View>: View {
     }
 
     init<LeftItem: View>(
+        title: String? = nil,
         middleItem: BottomSheetMiddleItem? = nil,
         @ViewBuilder leftItem: () -> LeftItem,
         @ViewBuilder content: () -> Content
     ) {
+        self.title = title
         self.middleItem = middleItem
         self.leftItem = AnyView(leftItem())
         self.rightItem = nil
@@ -58,10 +63,12 @@ struct BottomSheet<Content: View>: View {
     }
 
     init<RightItem: View>(
+        title: String? = nil,
         middleItem: BottomSheetMiddleItem? = nil,
         @ViewBuilder rightItem: () -> RightItem,
         @ViewBuilder content: () -> Content
     ) {
+        self.title = title
         self.middleItem = middleItem
         self.leftItem = nil
         self.rightItem = AnyView(rightItem())
@@ -69,11 +76,13 @@ struct BottomSheet<Content: View>: View {
     }
 
     init<LeftItem: View, RightItem: View>(
+        title: String? = nil,
         middleItem: BottomSheetMiddleItem? = nil,
         @ViewBuilder leftItem: () -> LeftItem,
         @ViewBuilder rightItem: () -> RightItem,
         @ViewBuilder content: () -> Content
     ) {
+        self.title = title
         self.middleItem = middleItem
         self.leftItem = AnyView(leftItem())
         self.rightItem = AnyView(rightItem())
@@ -99,7 +108,7 @@ struct BottomSheet<Content: View>: View {
     }
 
     private var showsHeader: Bool {
-        middleItem != nil || leftItem != nil || rightItem != nil
+        title != nil || middleItem != nil || leftItem != nil || rightItem != nil
     }
 
     private var dragIndicator: some View {
@@ -158,6 +167,11 @@ struct BottomSheet<Content: View>: View {
                 }
             }
             .frame(minHeight: 48)
+        } else if let title {
+            Text(title)
+                .font(.t2_sb)
+                .foregroundStyle(.white00)
+                .frame(minHeight: 48)
         }
     }
 

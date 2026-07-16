@@ -38,8 +38,80 @@ final class SharedPhotoDetailViewModelTests: XCTestCase {
         XCTAssertEqual(requestedCursors.value.count, 2)
         XCTAssertNil(requestedCursors.value[0])
         XCTAssertEqual(requestedCursors.value[1], "next")
+        XCTAssertEqual(viewModel.comments, [olderComment, latestComment])
         XCTAssertEqual(viewModel.latestComment, latestComment)
         XCTAssertEqual(viewModel.likeCount, 4)
+    }
+
+    @MainActor
+    func testSendCommentAppendsAndUpdatesLatestComment() async {
+        let photoID = UUID()
+        let albumID = UUID()
+        let olderComment = makeComment(photoID: photoID, content: "첫 댓글")
+        let sentComment = makeComment(photoID: photoID, content: "새 댓글", isAuthor: true)
+        let requestedContent = SharedPhotoDetailBox<String?>(nil)
+        let requestedKey = SharedPhotoDetailBox<UUID?>(nil)
+        let repository = makeRepository(
+            detail: makeDetail(photoID: photoID, albumID: albumID, commentCount: 1),
+            comments: { _, _, _ in
+                SharedPhotoCommentPage(items: [olderComment], nextCursor: nil, hasNext: false)
+            },
+            createComment: { _, content, idempotencyKey in
+                requestedContent.value = content
+                requestedKey.value = idempotencyKey
+                return sentComment
+            }
+        )
+        let viewModel = SharedPhotoDetailViewModel(
+            photoID: photoID,
+            albumID: albumID,
+            repository: repository
+        )
+        await viewModel.load()
+        viewModel.commentDraft = "  새 댓글\n"
+
+        await viewModel.sendComment()
+
+        XCTAssertEqual(requestedContent.value, "새 댓글")
+        XCTAssertNotNil(requestedKey.value)
+        XCTAssertEqual(viewModel.comments, [olderComment, sentComment])
+        XCTAssertEqual(viewModel.latestComment, sentComment)
+        XCTAssertEqual(viewModel.commentCount, 2)
+        XCTAssertEqual(viewModel.commentDraft, "")
+    }
+
+    @MainActor
+    func testSendCommentReusesIdempotencyKeyAfterFailure() async {
+        let photoID = UUID()
+        let albumID = UUID()
+        let sentComment = makeComment(photoID: photoID, content: "재시도", isAuthor: true)
+        let requestedKeys = SharedPhotoDetailBox<[UUID]>([])
+        let repository = makeRepository(
+            detail: makeDetail(photoID: photoID, albumID: albumID),
+            createComment: { _, _, idempotencyKey in
+                requestedKeys.value.append(idempotencyKey)
+                if requestedKeys.value.count == 1 {
+                    throw URLError(.timedOut)
+                }
+                return sentComment
+            }
+        )
+        let viewModel = SharedPhotoDetailViewModel(
+            photoID: photoID,
+            albumID: albumID,
+            repository: repository
+        )
+        await viewModel.load()
+        viewModel.commentDraft = "재시도"
+
+        await viewModel.sendComment()
+        await viewModel.sendComment()
+
+        XCTAssertEqual(requestedKeys.value.count, 2)
+        XCTAssertEqual(requestedKeys.value[0], requestedKeys.value[1])
+        XCTAssertEqual(viewModel.latestComment, sentComment)
+        XCTAssertEqual(viewModel.commentCount, 1)
+        XCTAssertEqual(viewModel.commentDraft, "")
     }
 
     @MainActor
@@ -109,6 +181,21 @@ final class SharedPhotoDetailViewModelTests: XCTestCase {
         ) async throws -> SharedPhotoCommentPage = { _, _, _ in
             SharedPhotoCommentPage(items: [], nextCursor: nil, hasNext: false)
         },
+        createComment: @escaping (
+            SharedAlbumPhoto.ID,
+            String,
+            UUID
+        ) async throws -> SharedPhotoComment = { photoID, content, _ in
+            SharedPhotoComment(
+                id: UUID(),
+                photoID: photoID,
+                content: content,
+                author: SharedPhotoAuthor(id: nil, displayName: "집집이"),
+                isAuthor: true,
+                createdAt: .now,
+                updatedAt: .now
+            )
+        },
         setLike: @escaping (
             SharedAlbumPhoto.ID,
             Bool
@@ -123,6 +210,7 @@ final class SharedPhotoDetailViewModelTests: XCTestCase {
         SharedPhotoDetailRepositoryAdapter(
             onPhoto: { _ in detail },
             onComments: comments,
+            onCreateComment: createComment,
             onSetLike: setLike,
             onDeletePhoto: deletePhoto
         )
@@ -163,14 +251,15 @@ final class SharedPhotoDetailViewModelTests: XCTestCase {
 
     private func makeComment(
         photoID: UUID,
-        content: String
+        content: String,
+        isAuthor: Bool = false
     ) -> SharedPhotoComment {
         SharedPhotoComment(
             id: UUID(),
             photoID: photoID,
             content: content,
             author: SharedPhotoAuthor(id: nil, displayName: "집집이"),
-            isAuthor: false,
+            isAuthor: isAuthor,
             createdAt: .now,
             updatedAt: .now
         )

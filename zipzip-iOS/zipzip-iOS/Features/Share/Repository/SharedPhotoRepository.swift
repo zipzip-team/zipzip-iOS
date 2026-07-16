@@ -38,7 +38,7 @@ struct SharedPhotoDetail: Identifiable, Equatable {
     let updatedAt: Date
 }
 
-struct SharedPhotoComment: Identifiable, Equatable {
+struct SharedPhotoComment: Identifiable, Equatable, CommentSheetMessage {
     let id: UUID
     let photoID: UUID
     let content: String

@@ -8,6 +8,8 @@
 import SwiftUI
 
 struct ExtraSmallButton: View {
+    @Environment(\.isEnabled) private var isEnabled
+
     private enum Content {
         case icon(ImageResource)
         case text(String)
@@ -36,7 +38,7 @@ struct ExtraSmallButton: View {
         Button(action: action) {
             label
                 .padding(14)
-                .background(.orange500, in: .rect(cornerRadius: 12))
+                .background(isEnabled ? .orange500 : .grey900, in: .rect(cornerRadius: 12))
                 .contentShape(.rect(cornerRadius: 12))
         }
         .buttonStyle(.plain)
@@ -47,14 +49,16 @@ struct ExtraSmallButton: View {
         switch content {
         case let .icon(icon):
             Image(icon)
+                .renderingMode(.template)
                 .resizable()
                 .scaledToFit()
+                .foregroundStyle(isEnabled ? .white00 : .grey600)
                 .frame(width: 24, height: 24)
 
         case let .text(title):
             Text(title)
                 .font(.b2_sb)
-                .foregroundStyle(.white00)
+                .foregroundStyle(isEnabled ? .white00 : .grey600)
                 .lineLimit(1)
         }
     }

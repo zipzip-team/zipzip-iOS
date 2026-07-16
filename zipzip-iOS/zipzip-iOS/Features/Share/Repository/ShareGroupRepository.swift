@@ -38,7 +38,7 @@ struct ShareGroupMemberPage {
     let hasNext: Bool
 }
 
-struct ShareGroupChatItem: Identifiable, Equatable {
+struct ShareGroupChatItem: Identifiable, Equatable, CommentSheetMessage {
     let id: UUID
     let type: ChatTimelineItemTypeResponse
     let photoID: UUID?
