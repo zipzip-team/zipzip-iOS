@@ -48,6 +48,8 @@ struct ShareSheet: View {
             rightItem: {
                 if showsCompletionButton {
                     headerButton("완료", isDisabled: isCompletionDisabled, action: completeSelection)
+                } else {
+                    Color.clear.frame(width: 72, height: 48)
                 }
             }
         ) {
