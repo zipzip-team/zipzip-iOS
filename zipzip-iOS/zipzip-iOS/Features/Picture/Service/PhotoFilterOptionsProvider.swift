@@ -12,6 +12,12 @@ nonisolated struct PhotoFilterOptionsProvider {
 
     func load() async throws -> PhotoFilterOptions {
         try await database.read { db in
+            let registeredDeviceIDs = try DeviceRecord
+                .where { $0.isRegistered.eq(true) }
+                .select(\.id)
+                .fetchAll(db)
+            let registeredIDs = Set(registeredDeviceIDs)
+
             let deviceRows = try DeviceRecord
                 .where { $0.isRegistered.eq(true) }
                 .group(by: \.id)
@@ -20,18 +26,22 @@ nonisolated struct PhotoFilterOptionsProvider {
                 .fetchAll(db)
 
             let placeRows = try PlaceRecord
-                .group(by: \.id)
                 .join(PhotoRecord.all) { $1.placeID.eq($0.id) }
-                .select { ($0.name, $1.id.count()) }
+                .select { ($0.name, $1.deviceID) }
                 .fetchAll(db)
 
             let devices = deviceRows
                 .sorted { $0.2 > $1.2 }
                 .map { DeviceModelCatalog.filterDevice(make: $0.0, model: $0.1) }
 
-            let locations = placeRows
-                .sorted { $0.1 > $1.1 }
-                .map(\.0)
+            var placeCounts: [String: Int] = [:]
+            for row in placeRows {
+                guard let deviceID = row.1, registeredIDs.contains(deviceID) else { continue }
+                placeCounts[row.0, default: 0] += 1
+            }
+            let locations = placeCounts
+                .sorted { $0.value != $1.value ? $0.value > $1.value : $0.key < $1.key }
+                .map(\.key)
 
             return PhotoFilterOptions(
                 devices: devices,
