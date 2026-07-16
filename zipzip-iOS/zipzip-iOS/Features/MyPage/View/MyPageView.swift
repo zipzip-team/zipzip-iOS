@@ -92,7 +92,7 @@ struct MyPageView: View {
 
             if let user = authenticationState.currentUser {
                 HStack(spacing: 14) {
-                    ProfileImage(size: 44, isStroke: false)
+                    ProfileImage(name: userProfileState.resolvedDisplayName(for: user), size: 44, isStroke: false)
 
                     VStack(alignment: .leading, spacing: 2) {
                         Text(userProfileState.resolvedDisplayName(for: user))

@@ -5,14 +5,18 @@
 //  Created by kyooonnnggg on 7/7/26.
 //
 
+import Lottie
 import SwiftUI
 
 struct SplashView: View {
     @Environment(Router.self) private var router
+    @State private var lottieFinished = false
     private let continuesOnboarding: Bool
+    private let onAnimationFinished: (() -> Void)?
 
-    init(continuesOnboarding: Bool = true) {
+    init(continuesOnboarding: Bool = true, onAnimationFinished: (() -> Void)? = nil) {
         self.continuesOnboarding = continuesOnboarding
+        self.onAnimationFinished = onAnimationFinished
     }
 
     var body: some View {
@@ -23,8 +27,17 @@ struct SplashView: View {
             alignment: .center
         ) {
             VStack {
-                Rectangle()
-                    .foregroundColor(.grey100)
+                LottieView(animation: .named("logo_motion"))
+                    .playbackMode(
+                        lottieFinished
+                            ? .paused(at: .progress(1))
+                            : .playing(.fromProgress(nil, toProgress: 1, loopMode: .playOnce))
+                    )
+                    .animationDidFinish { completed in
+                        guard completed, !lottieFinished else { return }
+                        lottieFinished = true
+                        onAnimationFinished?()
+                    }
                     .frame(width: 200, height: 200)
                     .padding(.bottom, 24)
 
