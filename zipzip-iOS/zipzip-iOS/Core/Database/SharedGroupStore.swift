@@ -363,6 +363,18 @@ nonisolated struct SharedGroupStore {
                     .delete()
                     .execute(db)
             }
+            // 앨범 삭제로 shared_album_photo 매핑이 CASCADE 제거된 뒤,
+            // 더 이상 어떤 공유집에도 속하지 않는 고아 shared_photo를 정리한다(서버 soft delete와 일치).
+            try #sql(
+                """
+                DELETE FROM "shared_photo"
+                WHERE NOT EXISTS (
+                  SELECT 1 FROM "shared_album_photo"
+                  WHERE "shared_album_photo"."shared_photo_id" = "shared_photo"."id"
+                )
+                """
+            )
+            .execute(db)
         }
     }
 
