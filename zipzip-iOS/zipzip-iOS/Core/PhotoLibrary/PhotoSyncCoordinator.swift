@@ -9,7 +9,10 @@ import Foundation
 import OSLog
 import SQLiteData
 
-private let logger = Logger(subsystem: "com.zipzip.zipzip-iOS", category: "PhotoLibrarySync")
+private let logger = Logger(
+    subsystem: Bundle.main.bundleIdentifier ?? "zipzip-iOS",
+    category: "PhotoLibrarySync"
+)
 
 enum SyncPhase: Equatable {
     case idle
@@ -64,7 +67,6 @@ final class PhotoSyncCoordinator {
 
     var progress: SyncProgress?
     var isFinished = false
-    var isErrorAlertPresented = false
     private(set) var phase: SyncPhase = .idle
     private(set) var estimatedSecondsRemaining: Double?
 
@@ -86,20 +88,10 @@ final class PhotoSyncCoordinator {
     }
 
     func startIfNeeded() {
-        guard !isErrorAlertPresented else { return }
         runSync()
     }
 
     func refresh() {
-        runSync()
-    }
-
-    func dismissSyncError() {
-        isErrorAlertPresented = false
-    }
-
-    func retrySync() {
-        isErrorAlertPresented = false
         runSync()
     }
 
@@ -108,7 +100,6 @@ final class PhotoSyncCoordinator {
         pipelineGeneration += 1
         let generation = pipelineGeneration
         isFinished = false
-        isErrorAlertPresented = false
         phase = .idle
         estimatedSecondsRemaining = nil
         task = Task {
@@ -129,7 +120,6 @@ final class PhotoSyncCoordinator {
             } catch {
                 logger.error("photo library sync failed: \(error)")
                 resetAfterInterruptedSync(generation: generation)
-                isErrorAlertPresented = true
                 return
             }
 

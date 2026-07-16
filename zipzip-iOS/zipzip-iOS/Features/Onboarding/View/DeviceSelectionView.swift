@@ -60,13 +60,6 @@ struct DeviceSelectionView: View {
                 }
             }
         }
-        .alert("기기 선택을 저장하지 못했어요.", isPresented: $viewModel.isErrorAlertPresented) {
-            Button("확인", role: .cancel) {
-                viewModel.dismissSaveError()
-            }
-        } message: {
-            Text("잠시 후 다시 시도해주세요.")
-        }
     }
 }
 

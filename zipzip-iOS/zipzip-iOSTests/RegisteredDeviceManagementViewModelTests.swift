@@ -14,14 +14,11 @@ final class RegisteredDeviceManagementViewModelTests: XCTestCase {
         await viewModel.load()
 
         XCTAssertTrue(viewModel.registeredDevices.isEmpty)
-        XCTAssertTrue(viewModel.isErrorAlertPresented)
-        XCTAssertTrue(viewModel.canRetryError)
 
         store.loadRegisteredError = nil
-        await viewModel.retryErrorAction()
+        await viewModel.load()
 
         XCTAssertEqual(viewModel.registeredDevices, [device])
-        XCTAssertFalse(viewModel.isErrorAlertPresented)
     }
 
     @MainActor
@@ -33,11 +30,10 @@ final class RegisteredDeviceManagementViewModelTests: XCTestCase {
         await viewModel.enterRegisteringMode()
 
         XCTAssertEqual(viewModel.mode, .normal)
-        XCTAssertTrue(viewModel.isErrorAlertPresented)
 
         store.loadAllError = nil
         store.allDevices = [makeDevice(id: "1")]
-        await viewModel.retryErrorAction()
+        await viewModel.enterRegisteringMode()
 
         XCTAssertEqual(viewModel.mode, .registering)
         XCTAssertEqual(viewModel.registerableDevices, store.allDevices)
@@ -56,9 +52,8 @@ final class RegisteredDeviceManagementViewModelTests: XCTestCase {
 
         XCTAssertEqual(viewModel.mode, .registering)
         XCTAssertEqual(viewModel.selectedDeviceIDs, [device.id])
-        XCTAssertTrue(viewModel.isErrorAlertPresented)
 
-        await viewModel.retryErrorAction()
+        await viewModel.registerSelectedDevices()
 
         XCTAssertEqual(store.savedDeviceIDs, [[1], [1]])
         XCTAssertEqual(viewModel.registeredDevices, [device])
@@ -83,7 +78,6 @@ final class RegisteredDeviceManagementViewModelTests: XCTestCase {
         XCTAssertTrue(store.savedDeviceIDs.isEmpty)
         XCTAssertEqual(viewModel.mode, .removing)
         XCTAssertEqual(viewModel.selectedDeviceIDs, [sample.id])
-        XCTAssertTrue(viewModel.isErrorAlertPresented)
     }
 
     @MainActor
