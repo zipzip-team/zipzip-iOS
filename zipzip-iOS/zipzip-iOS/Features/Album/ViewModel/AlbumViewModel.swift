@@ -211,6 +211,8 @@ final class AlbumViewModel {
         let sourceAlbums = albums.filter { selectedIDs.contains($0.id) && !$0.isFavorite }
         guard !sourceAlbums.isEmpty else { return false }
 
+        exitSelectionMode()
+
         isMovingAlbumsToShare = true
         defer { isMovingAlbumsToShare = false }
 
@@ -221,80 +223,86 @@ final class AlbumViewModel {
 
         for sourceAlbum in sourceAlbums {
             let requestIdentity = "\(group.id.uuidString):\(sourceAlbum.id):\(sourceAlbum.name)"
-            let idempotencyKey = albumMoveIdempotencyKeys[requestIdentity] ?? UUID()
-            albumMoveIdempotencyKeys[requestIdentity] = idempotencyKey
 
-            let destinationAlbum: SharedAlbum
-            if let existingDestination = albumMoveDestinations[requestIdentity] {
-                destinationAlbum = existingDestination
-            } else {
+            // 캐시된 목적지 공유집이 서버에서 삭제된 경우(SHARED_ALBUM_NOT_FOUND) 캐시를 비우고
+            // 공유집을 재생성해 한 번 재시도한다.
+            attemptLoop: for attempt in 0 ..< 2 {
+                let idempotencyKey = albumMoveIdempotencyKeys[requestIdentity] ?? UUID()
+                albumMoveIdempotencyKeys[requestIdentity] = idempotencyKey
+
+                let destinationAlbum: SharedAlbum
+                if let existingDestination = albumMoveDestinations[requestIdentity] {
+                    destinationAlbum = existingDestination
+                } else {
+                    do {
+                        destinationAlbum = try await shareGroupRepository.createSharedAlbum(
+                            groupID: group.id,
+                            name: sourceAlbum.name,
+                            idempotencyKey: idempotencyKey
+                        )
+                        albumMoveDestinations[requestIdentity] = destinationAlbum
+                        createdAlbumsThisRun.append((requestIdentity, destinationAlbum))
+                    } catch is CancellationError {
+                        rollbackCreatedSharedAlbums(createdAlbumsThisRun, in: group.id)
+                        return false
+                    } catch {
+                        logError("failed to create shared album", error: error)
+                        failedPhotoCount += sourceAlbum.count
+                        break attemptLoop
+                    }
+                }
+
                 do {
-                    destinationAlbum = try await shareGroupRepository.createSharedAlbum(
-                        groupID: group.id,
-                        name: sourceAlbum.name,
-                        idempotencyKey: idempotencyKey
+                    let sections = try await photoSectionsProvider.loadAlbumSections(albumID: sourceAlbum.id)
+                    let localIdentifiers = sections
+                        .flatMap(\.photos)
+                        .map(\.localIdentifier)
+                        .filter { !$0.isEmpty }
+                    guard !localIdentifiers.isEmpty else {
+                        if !sourceAlbum.hasPhotos {
+                            completedAnyWork = true
+                            albumMoveIdempotencyKeys.removeValue(forKey: requestIdentity)
+                            albumMoveDestinations.removeValue(forKey: requestIdentity)
+                        } else {
+                            logError("selected album has no local photos to upload")
+                            failedPhotoCount += sourceAlbum.count
+                        }
+                        break attemptLoop
+                    }
+
+                    let result = try await sharedPhotoRepository.addLocalPhotos(
+                        localIdentifiers: localIdentifiers,
+                        to: [destinationAlbum.id],
+                        in: group.id
                     )
-                    albumMoveDestinations[requestIdentity] = destinationAlbum
-                    createdAlbumsThisRun.append((requestIdentity, destinationAlbum))
+                    let succeededIdentifiers = Set(result.succeededLocalIdentifiers)
+
+                    succeededPhotoCount += succeededIdentifiers.count
+                    completedAnyWork = completedAnyWork || !succeededIdentifiers.isEmpty
+                    let unresolvedCount = max(0, localIdentifiers.count - succeededIdentifiers.count)
+                    failedPhotoCount += max(result.failedCount, unresolvedCount)
+                    if unresolvedCount == 0, result.failedCount == 0 {
+                        albumMoveIdempotencyKeys.removeValue(forKey: requestIdentity)
+                        albumMoveDestinations.removeValue(forKey: requestIdentity)
+                        createdAlbumsThisRun.removeAll { $0.identity == requestIdentity }
+                    }
+                    break attemptLoop
                 } catch is CancellationError {
                     rollbackCreatedSharedAlbums(createdAlbumsThisRun, in: group.id)
                     return false
+                } catch let error as NetworkError
+                    where attempt == 0 && error.serverCode == "SHARED_ALBUM_NOT_FOUND" {
+                    invalidateAlbumMoveCache(for: requestIdentity, createdAlbumsThisRun: &createdAlbumsThisRun)
+                    continue attemptLoop
                 } catch {
-                    logError("failed to create shared album", error: error)
+                    logError("failed to copy album photos to shared album", error: error)
                     failedPhotoCount += sourceAlbum.count
-                    continue
+                    break attemptLoop
                 }
-            }
-
-            do {
-                let sections = try await photoSectionsProvider.loadAlbumSections(albumID: sourceAlbum.id)
-                let localIdentifiers = sections
-                    .flatMap(\.photos)
-                    .map(\.localIdentifier)
-                    .filter { !$0.isEmpty }
-                guard !localIdentifiers.isEmpty else {
-                    if !sourceAlbum.hasPhotos {
-                        completedAnyWork = true
-                        albumMoveIdempotencyKeys.removeValue(forKey: requestIdentity)
-                        albumMoveDestinations.removeValue(forKey: requestIdentity)
-                    } else {
-                        logError("selected album has no local photos to upload")
-                        failedPhotoCount += sourceAlbum.count
-                    }
-                    continue
-                }
-
-                let result = try await sharedPhotoRepository.addLocalPhotos(
-                    localIdentifiers: localIdentifiers,
-                    to: [destinationAlbum.id],
-                    in: group.id
-                )
-                let succeededIdentifiers = Set(result.succeededLocalIdentifiers)
-
-                succeededPhotoCount += succeededIdentifiers.count
-                completedAnyWork = completedAnyWork || !succeededIdentifiers.isEmpty
-                let unresolvedCount = max(0, localIdentifiers.count - succeededIdentifiers.count)
-                failedPhotoCount += max(result.failedCount, unresolvedCount)
-                if unresolvedCount == 0, result.failedCount == 0 {
-                    albumMoveIdempotencyKeys.removeValue(forKey: requestIdentity)
-                    albumMoveDestinations.removeValue(forKey: requestIdentity)
-                    createdAlbumsThisRun.removeAll { $0.identity == requestIdentity }
-                }
-            } catch is CancellationError {
-                rollbackCreatedSharedAlbums(createdAlbumsThisRun, in: group.id)
-                return false
-            } catch {
-                logError("failed to copy album photos to shared album", error: error)
-                failedPhotoCount += sourceAlbum.count
             }
         }
 
         await loadAlbums()
-        if completedAnyWork {
-            exitSelectionMode()
-        } else {
-            dismissShareAlbumSheet()
-        }
         if failedPhotoCount > 0 {
             logMutationFailure(
                 succeededCount: succeededPhotoCount,
@@ -324,6 +332,15 @@ final class AlbumViewModel {
                 try? await shareGroupRepository.deleteSharedAlbum(id: albumID, groupID: groupID)
             }
         }
+    }
+
+    private func invalidateAlbumMoveCache(
+        for requestIdentity: String,
+        createdAlbumsThisRun: inout [(identity: String, album: SharedAlbum)]
+    ) {
+        albumMoveDestinations.removeValue(forKey: requestIdentity)
+        albumMoveIdempotencyKeys.removeValue(forKey: requestIdentity)
+        createdAlbumsThisRun.removeAll { $0.identity == requestIdentity }
     }
 
     func resetSharedAlbumMoveState() {
