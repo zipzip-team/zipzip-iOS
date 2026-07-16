@@ -197,6 +197,9 @@ struct RootView: View {
         .safeAreaInset(edge: .bottom, spacing: 0) {
             bottomBar
         }
+        .overlay(alignment: .top) {
+            topIndicator
+        }
         .bottomSheet(isPresented: $showShareSheet, detents: [.full]) { dismiss in
             ShareSheet(
                 albums: albumViewModel.shareDestinations,
@@ -316,6 +319,18 @@ struct RootView: View {
             !shareViewModel.isAddMode
         default:
             true
+        }
+    }
+
+    private var isNavbarVisible: Bool {
+        guard showsRootTab, router.path.isEmpty, showsNavbar else { return false }
+        if selection == .picture, pictureViewModel.isSelectionMode { return false }
+        return true
+    }
+
+    @ViewBuilder private var topIndicator: some View {
+        if isNavbarVisible {
+            MoveInIndicatorBar()
         }
     }
 
