@@ -276,6 +276,10 @@ private struct ShareGroupListView: View {
                 guard let userID = authenticationState.currentUser?.id else { return }
                 await viewModel.loadGroups(for: userID, refresh: true)
             }
+            .task {
+                guard let userID = authenticationState.currentUser?.id else { return }
+                await viewModel.loadGroups(for: userID, refresh: true)
+            }
         }
         .overlay(alignment: .topLeading) {
             if viewModel.isAddMode {

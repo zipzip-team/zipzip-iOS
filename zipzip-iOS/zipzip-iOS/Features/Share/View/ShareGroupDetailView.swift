@@ -70,6 +70,10 @@ struct ShareGroupDetailView: View {
                     }
                 }
                 .ignoresSafeArea(edges: .top)
+                .refreshable {
+                    await viewModel.loadGroup(id: groupID, refresh: true)
+                    await viewModel.loadSharedAlbums(groupID: groupID, refresh: true)
+                }
             }
         }
         .overlay(alignment: .topLeading) {
@@ -123,9 +127,9 @@ struct ShareGroupDetailView: View {
         .navigationBarBackButtonHidden(true)
         .toolbarVisibility(.hidden, for: .navigationBar)
         .task(id: groupID) {
-            async let groupRequest: Void = viewModel.loadGroup(id: groupID)
-            async let albumRequest: Void = viewModel.loadSharedAlbums(groupID: groupID)
-            async let memberRequest: Void = viewModel.loadMembers(groupID: groupID)
+            async let groupRequest: Void = viewModel.loadGroup(id: groupID, refresh: true)
+            async let albumRequest: Void = viewModel.loadSharedAlbums(groupID: groupID, refresh: true)
+            async let memberRequest: Void = viewModel.loadMembers(groupID: groupID, refresh: true)
             _ = await(groupRequest, albumRequest, memberRequest)
         }
     }
