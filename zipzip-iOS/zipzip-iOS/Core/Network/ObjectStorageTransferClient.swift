@@ -4,6 +4,7 @@
 //
 
 import Foundation
+import UniformTypeIdentifiers
 
 nonisolated protocol ObjectStorageTransferClient: Sendable {
     func upload(
@@ -86,8 +87,10 @@ final nonisolated class DefaultObjectStorageTransferClient: ObjectStorageTransfe
             let (temporaryURL, response) = try await session.download(for: request)
             try validate(response)
 
-            let destinationURL = fileManager.temporaryDirectory
-                .appendingPathComponent("shared-photo-download-\(UUID().uuidString)", isDirectory: false)
+            let destinationURL = fileManager.temporaryDirectory.appendingPathComponent(
+                downloadFilename(signedURL: signedURL, response: response),
+                isDirectory: false
+            )
             try fileManager.moveItem(at: temporaryURL, to: destinationURL)
             return destinationURL
         } catch let error as URLError where error.code == .cancelled {
@@ -101,6 +104,25 @@ final nonisolated class DefaultObjectStorageTransferClient: ObjectStorageTransfe
             throw ObjectStorageTransferError.contentLengthMismatch(expected: 0, actual: -1)
         }
         return fileSize.intValue
+    }
+
+    private func downloadFilename(signedURL: URL, response: URLResponse) -> String {
+        let filename = "shared-photo-download-\(UUID().uuidString)"
+        let pathExtensions = [
+            response.suggestedFilename.map { URL(fileURLWithPath: $0).pathExtension },
+            signedURL.pathExtension,
+            response.mimeType.flatMap {
+                UTType(mimeType: $0)?.preferredFilenameExtension
+            }
+        ]
+        let pathExtension = pathExtensions
+            .compactMap { $0 }
+            .first { !$0.isEmpty }
+
+        guard let pathExtension else {
+            return filename
+        }
+        return "\(filename).\(pathExtension)"
     }
 
     private func validate(_ response: URLResponse) throws {

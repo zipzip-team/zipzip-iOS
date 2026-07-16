@@ -150,7 +150,12 @@ struct RootView: View {
                     ShareGroupDetailView(
                         groupID: groupID,
                         viewModel: shareViewModel,
-                        personalAlbums: albumViewModel.shareDestinations
+                        onMoveAlbumsToPersonal: { sourceAlbums in
+                            await albumViewModel.moveSharedAlbumsToPersonalAlbums(sourceAlbums)
+                        },
+                        onMoveSucceeded: {
+                            selectTab(.album)
+                        }
                     )
                 case let .shareAlbum(groupID, albumID):
                     ShareAlbumDetailDestinationView(

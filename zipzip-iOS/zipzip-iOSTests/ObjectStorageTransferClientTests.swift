@@ -59,7 +59,14 @@ final class ObjectStorageTransferClientTests: XCTestCase {
             XCTAssertEqual(request.url, signedURL)
             XCTAssertEqual(request.httpMethod, "GET")
             XCTAssertNil(request.value(forHTTPHeaderField: "Authorization"))
-            return (Self.response(url: signedURL, statusCode: 200), bytes)
+            return (
+                Self.response(
+                    url: signedURL,
+                    statusCode: 200,
+                    headerFields: ["Content-Type": "image/jpeg"]
+                ),
+                bytes
+            )
         }
 
         let downloadedURL = try await makeClient().download(from: signedURL)
@@ -67,6 +74,7 @@ final class ObjectStorageTransferClientTests: XCTestCase {
 
         XCTAssertEqual(try Data(contentsOf: downloadedURL), bytes)
         XCTAssertTrue(downloadedURL.lastPathComponent.hasPrefix("shared-photo-download-"))
+        XCTAssertTrue(["jpg", "jpeg"].contains(downloadedURL.pathExtension))
     }
 
     func testNonSuccessfulObjectStorageStatusIsRejected() async throws {
@@ -89,12 +97,16 @@ final class ObjectStorageTransferClientTests: XCTestCase {
         return DefaultObjectStorageTransferClient(session: URLSession(configuration: configuration))
     }
 
-    private static func response(url: URL, statusCode: Int) -> HTTPURLResponse {
+    private static func response(
+        url: URL,
+        statusCode: Int,
+        headerFields: [String: String]? = nil
+    ) -> HTTPURLResponse {
         HTTPURLResponse(
             url: url,
             statusCode: statusCode,
             httpVersion: "HTTP/1.1",
-            headerFields: nil
+            headerFields: headerFields
         )!
     }
 }
