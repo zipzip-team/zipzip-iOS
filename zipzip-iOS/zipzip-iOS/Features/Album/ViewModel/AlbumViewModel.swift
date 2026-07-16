@@ -221,6 +221,11 @@ final class AlbumViewModel {
         var failedPhotoCount = 0
         var createdAlbumsThisRun: [(identity: String, album: SharedAlbum)] = []
 
+        // 업로드 남은 시간(인디케이터) 계산을 위해 완료된 사진 수를 코디네이터에 보고한다.
+        let progressReporter: @Sendable (Int) -> Void = { [photoSync] completed in
+            Task { @MainActor in photoSync?.reportUploadCompleted(completed) }
+        }
+
         for sourceAlbum in sourceAlbums {
             let requestIdentity = "\(group.id.uuidString):\(sourceAlbum.id):\(sourceAlbum.name)"
 
@@ -270,10 +275,15 @@ final class AlbumViewModel {
                         break attemptLoop
                     }
 
+                    if attempt == 0 {
+                        photoSync?.registerUploadUnits(localIdentifiers.count)
+                    }
+
                     let result = try await sharedPhotoRepository.addLocalPhotos(
                         localIdentifiers: localIdentifiers,
                         to: [destinationAlbum.id],
-                        in: group.id
+                        in: group.id,
+                        onProgress: progressReporter
                     )
                     let succeededIdentifiers = Set(result.succeededLocalIdentifiers)
 

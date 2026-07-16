@@ -79,7 +79,8 @@ protocol SharedPhotoRepository {
     func addLocalPhotos(
         localIdentifiers: [String],
         to albumIDs: [SharedAlbum.ID],
-        in groupID: ShareAlbum.ID
+        in groupID: ShareAlbum.ID,
+        onProgress: (@Sendable (Int) -> Void)?
     ) async throws -> SharedAlbumPhotoMutationResult
     func copyPhotos(
         photoIDs: [SharedAlbumPhoto.ID],
@@ -105,6 +106,22 @@ protocol SharedPhotoRepository {
         idempotencyKey: UUID
     ) async throws -> SharedPhotoComment
     func setLike(photoID: UUID, isLiked: Bool) async throws -> SharedPhotoLikeState
+}
+
+extension SharedPhotoRepository {
+    /// 진행률 보고가 필요 없는 호출을 위한 편의 오버로드.
+    func addLocalPhotos(
+        localIdentifiers: [String],
+        to albumIDs: [SharedAlbum.ID],
+        in groupID: ShareAlbum.ID
+    ) async throws -> SharedAlbumPhotoMutationResult {
+        try await addLocalPhotos(
+            localIdentifiers: localIdentifiers,
+            to: albumIDs,
+            in: groupID,
+            onProgress: nil
+        )
+    }
 }
 
 @MainActor
@@ -237,7 +254,8 @@ final class DefaultSharedPhotoRepository: SharedPhotoRepository {
     func addLocalPhotos(
         localIdentifiers: [String],
         to albumIDs: [SharedAlbum.ID],
-        in groupID: ShareAlbum.ID
+        in groupID: ShareAlbum.ID,
+        onProgress: (@Sendable (Int) -> Void)? = nil
     ) async throws -> SharedAlbumPhotoMutationResult {
         let context = try requiredCacheContext()
         let identifiers = Self.unique(localIdentifiers.filter { !$0.isEmpty })
@@ -261,7 +279,8 @@ final class DefaultSharedPhotoRepository: SharedPhotoRepository {
             localIdentifiers: identifiersToUpload,
             groupID: groupID,
             albumID: primaryAlbumID,
-            context: context
+            context: context,
+            onProgress: onProgress
         )
 
         var succeededCount = uploadOutcome.succeededCount
@@ -286,6 +305,9 @@ final class DefaultSharedPhotoRepository: SharedPhotoRepository {
                 candidatePhotoIDs.append(contentsOf: outcome.succeededPhotoIDs)
                 succeededCount += outcome.succeededPhotoIDs.count
                 failedCount += outcome.failedPhotoIDs.count
+                if !outcome.succeededPhotoIDs.isEmpty {
+                    onProgress?(outcome.succeededPhotoIDs.count)
+                }
             } catch let error as NetworkError where error.serverCode == "PHOTO_NOT_FOUND" {
                 // 로컬 캐시가 서버에서 이미 삭제된 사진을 가리킨다. 캐시를 비우고 원본을 다시 업로드한다.
                 try validate(context)
@@ -297,7 +319,8 @@ final class DefaultSharedPhotoRepository: SharedPhotoRepository {
                     localIdentifiers: existingMappings.map(\.localIdentifier),
                     groupID: groupID,
                     albumID: primaryAlbumID,
-                    context: context
+                    context: context,
+                    onProgress: onProgress
                 )
                 candidatePhotoIDs.append(contentsOf: reupload.photoIDs)
                 succeededCount += reupload.succeededCount
@@ -659,7 +682,8 @@ final class DefaultSharedPhotoRepository: SharedPhotoRepository {
         localIdentifiers: [String],
         groupID: ShareAlbum.ID,
         albumID: SharedAlbum.ID,
-        context: CacheContext
+        context: CacheContext,
+        onProgress: (@Sendable (Int) -> Void)? = nil
     ) async throws -> UploadBatchOutcome {
         let batches = localIdentifiers.chunked(maxCount: 20)
         var outcomes: [UploadBatchOutcome] = []
@@ -672,13 +696,15 @@ final class DefaultSharedPhotoRepository: SharedPhotoRepository {
                     localIdentifiers: firstBatch,
                     groupID: groupID,
                     albumID: albumID,
-                    context: context
+                    context: context,
+                    onProgress: onProgress
                 )
                 async let second = uploadBatchResult(
                     localIdentifiers: secondBatch,
                     groupID: groupID,
                     albumID: albumID,
-                    context: context
+                    context: context,
+                    onProgress: onProgress
                 )
                 let pair = try await(first, second)
                 outcomes.append(contentsOf: [pair.0, pair.1])
@@ -688,7 +714,8 @@ final class DefaultSharedPhotoRepository: SharedPhotoRepository {
                     localIdentifiers: batches[index],
                     groupID: groupID,
                     albumID: albumID,
-                    context: context
+                    context: context,
+                    onProgress: onProgress
                 ))
                 index += 1
             }
@@ -706,14 +733,16 @@ final class DefaultSharedPhotoRepository: SharedPhotoRepository {
         localIdentifiers: [String],
         groupID: ShareAlbum.ID,
         albumID: SharedAlbum.ID,
-        context: CacheContext
+        context: CacheContext,
+        onProgress: (@Sendable (Int) -> Void)? = nil
     ) async throws -> UploadBatchOutcome {
         do {
             return try await uploadBatch(
                 localIdentifiers: localIdentifiers,
                 groupID: groupID,
                 albumID: albumID,
-                context: context
+                context: context,
+                onProgress: onProgress
             )
         } catch is CancellationError {
             throw CancellationError()
@@ -733,7 +762,8 @@ final class DefaultSharedPhotoRepository: SharedPhotoRepository {
         localIdentifiers: [String],
         groupID: ShareAlbum.ID,
         albumID: SharedAlbum.ID,
-        context: CacheContext
+        context: CacheContext,
+        onProgress: (@Sendable (Int) -> Void)? = nil
     ) async throws -> UploadBatchOutcome {
         var preparedAssets: [PreparedSharedPhotoAsset] = []
         var preparationFailureCount = 0
@@ -793,6 +823,10 @@ final class DefaultSharedPhotoRepository: SharedPhotoRepository {
                 batchID: batchID,
                 context: context
             )
+        }
+
+        if !uploadedPhotoIDs.isEmpty {
+            onProgress?(uploadedPhotoIDs.count)
         }
 
         return UploadBatchOutcome(

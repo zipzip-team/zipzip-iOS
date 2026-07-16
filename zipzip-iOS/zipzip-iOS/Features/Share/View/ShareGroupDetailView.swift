@@ -453,8 +453,17 @@ struct ShareImportView: View {
             let selectedAlbums = albums.filter { selectedAlbumIDs.contains($0.id) }
             isImporting = true
             router.pop()
+            let totalPhotoCount = selectedAlbums.reduce(0) { $0 + $1.count }
+            let progressReporter: @Sendable (Int) -> Void = { [photoSync] completed in
+                Task { @MainActor in photoSync.reportUploadCompleted(completed) }
+            }
             photoSync.runUpload {
-                _ = await viewModel.importPersonalAlbums(selectedAlbums, into: groupID)
+                photoSync.registerUploadUnits(totalPhotoCount)
+                _ = await viewModel.importPersonalAlbums(
+                    selectedAlbums,
+                    into: groupID,
+                    onProgress: progressReporter
+                )
             }
         }
     }
@@ -472,11 +481,16 @@ struct ShareImportView: View {
         isImporting = true
         isDestinationPresented = false
         router.pop()
+        let progressReporter: @Sendable (Int) -> Void = { [photoSync] completed in
+            Task { @MainActor in photoSync.reportUploadCompleted(completed) }
+        }
         photoSync.runUpload {
+            photoSync.registerUploadUnits(localIdentifiers.count)
             _ = await viewModel.importPhotos(
                 localIdentifiers: localIdentifiers,
                 into: selectedDestinationAlbumID,
-                groupID: groupID
+                groupID: groupID,
+                onProgress: progressReporter
             )
         }
     }
