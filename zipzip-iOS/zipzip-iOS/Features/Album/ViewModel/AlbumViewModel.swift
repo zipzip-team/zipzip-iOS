@@ -211,7 +211,7 @@ final class AlbumViewModel {
         isMovingAlbumsToShare = true
         defer { isMovingAlbumsToShare = false }
 
-        var createdAnyAlbum = false
+        var completedAnyWork = false
         var succeededPhotoCount = 0
         var failedPhotoCount = 0
 
@@ -231,7 +231,6 @@ final class AlbumViewModel {
                         idempotencyKey: idempotencyKey
                     )
                     albumMoveDestinations[requestIdentity] = destinationAlbum
-                    createdAnyAlbum = true
                 } catch is CancellationError {
                     return false
                 } catch {
@@ -248,8 +247,14 @@ final class AlbumViewModel {
                     .map(\.localIdentifier)
                     .filter { !$0.isEmpty }
                 guard !localIdentifiers.isEmpty else {
-                    albumMoveIdempotencyKeys.removeValue(forKey: requestIdentity)
-                    albumMoveDestinations.removeValue(forKey: requestIdentity)
+                    if !sourceAlbum.hasPhotos {
+                        completedAnyWork = true
+                        albumMoveIdempotencyKeys.removeValue(forKey: requestIdentity)
+                        albumMoveDestinations.removeValue(forKey: requestIdentity)
+                    } else {
+                        logError("selected album has no local photos to upload")
+                        failedPhotoCount += sourceAlbum.count
+                    }
                     continue
                 }
 
@@ -261,6 +266,7 @@ final class AlbumViewModel {
                 let succeededIdentifiers = Set(result.succeededLocalIdentifiers)
 
                 succeededPhotoCount += succeededIdentifiers.count
+                completedAnyWork = completedAnyWork || !succeededIdentifiers.isEmpty
                 let unresolvedCount = max(0, localIdentifiers.count - succeededIdentifiers.count)
                 failedPhotoCount += max(result.failedCount, unresolvedCount)
                 if unresolvedCount == 0, result.failedCount == 0 {
@@ -276,7 +282,6 @@ final class AlbumViewModel {
         }
 
         await loadAlbums()
-        let completedAnyWork = createdAnyAlbum || succeededPhotoCount > 0
         if completedAnyWork {
             exitSelectionMode()
         } else {

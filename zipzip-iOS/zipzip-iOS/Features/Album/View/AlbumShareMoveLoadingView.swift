@@ -46,8 +46,8 @@ struct AlbumShareMoveLoadingView: View {
             return
         }
 
-        await shareViewModel.loadGroup(id: groupID)
-        await shareViewModel.loadSharedAlbums(groupID: groupID)
+        await shareViewModel.loadGroup(id: groupID, refresh: true)
+        await shareViewModel.loadSharedAlbums(groupID: groupID, refresh: true)
         guard !Task.isCancelled else { return }
         router.replacePath(with: [.shareGroup(groupID)])
     }
