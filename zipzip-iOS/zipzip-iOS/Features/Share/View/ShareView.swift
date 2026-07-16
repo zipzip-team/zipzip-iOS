@@ -244,10 +244,10 @@ private struct ShareGroupListView: View {
                                 ? FloatingHeaderLayout.roundedIconButtonTop + FloatingHeaderLayout.buttonHeight + 16
                                 : FloatingHeaderLayout.scrollableTitleContentSpacing
                         )
-                        .padding(.bottom, viewModel.isAddMode ? 130 : 24)
                     }
                 }
             }
+            .contentMargins(.bottom, NavbarLayout.contentBottomPadding, for: .scrollContent)
             .ignoresSafeArea(edges: .top)
             .refreshable {
                 guard let userID = authenticationState.currentUser?.id else { return }
@@ -353,6 +353,7 @@ private struct ShareRootStateContainer<Content: View>: View {
                         }
                 }
             }
+            .contentMargins(.bottom, NavbarLayout.contentBottomPadding, for: .scrollContent)
             .ignoresSafeArea(edges: .top)
         }
     }

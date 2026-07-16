@@ -7,6 +7,10 @@
 
 import SwiftUI
 
+enum NavbarLayout {
+    static let contentBottomPadding: CGFloat = 130
+}
+
 struct Navbar: View {
     let selection: NavbarTab
     let onSelect: (NavbarTab) -> Void
