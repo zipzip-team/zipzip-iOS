@@ -10,6 +10,7 @@ import UIKit
 
 struct ShareGroupManagementSheet: View {
     let group: ShareAlbum
+    let members: [ShareGroupMember]
     @Binding var groupName: String
     let inviteCode: String
     let isInviteCodeAvailable: Bool
@@ -37,6 +38,7 @@ struct ShareGroupManagementSheet: View {
                     VStack(spacing: 0) {
                         groupInformationSection
                         invitationSection
+                        memberSection
                         leaveSection
                     }
                     .padding(.horizontal, 16)
@@ -151,6 +153,14 @@ struct ShareGroupManagementSheet: View {
         .padding(.vertical, 20)
     }
 
+    private var memberSection: some View {
+        VStack(alignment: .leading, spacing: 24) {
+            sectionTitle("멤버")
+            ShareGroupMemberGrid(members: members)
+        }
+        .padding(.vertical, 20)
+    }
+
     private func sectionTitle(_ title: String) -> some View {
         Text(title)
             .font(.t3_md)
@@ -174,6 +184,73 @@ struct ShareGroupManagementSheet: View {
 
     private var isCompleteDisabled: Bool {
         isUpdating || isLeaving
+    }
+}
+
+private struct ShareGroupMemberGrid: View {
+    let members: [ShareGroupMember]
+
+    private let columns = [
+        GridItem(.flexible(), spacing: 16),
+        GridItem(.flexible(), spacing: 16)
+    ]
+
+    var body: some View {
+        LazyVGrid(columns: columns, spacing: 16) {
+            ForEach(members) { member in
+                ShareGroupMemberCard(member: member)
+            }
+        }
+    }
+}
+
+private struct ShareGroupMemberCard: View {
+    let member: ShareGroupMember
+
+    var body: some View {
+        HStack(spacing: 10) {
+            ProfileImage(size: 32, isStroke: false)
+                .accessibilityHidden(true)
+
+            HStack(spacing: 4) {
+                Text(member.displayName)
+                    .font(.b1_sb)
+                    .foregroundStyle(.white00)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+
+                if member.role == .admin {
+                    Image(.crown)
+                        .renderingMode(.template)
+                        .resizable()
+                        .scaledToFit()
+                        .foregroundStyle(.orange500)
+                        .frame(width: 24, height: 24)
+                        .accessibilityHidden(true)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding(.horizontal, 16)
+        .frame(maxWidth: .infinity, minHeight: 56, maxHeight: 56, alignment: .leading)
+        .background(backgroundColor, in: .rect(cornerRadius: 8))
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(accessibilityLabel)
+    }
+
+    private var backgroundColor: Color {
+        member.isMe ? .grey600 : .grey800
+    }
+
+    private var accessibilityLabel: String {
+        var labels = [member.displayName]
+        if member.isMe {
+            labels.append("나")
+        }
+        if member.role == .admin {
+            labels.append("방장")
+        }
+        return labels.joined(separator: ", ")
     }
 }
 
@@ -287,6 +364,36 @@ private struct ShareGroupLeaveConfirmation: View {
             photoCount: 0,
             createdBy: ShareGroupUser(id: nil, displayName: nil)
         ),
+        members: [
+            ShareGroupMember(
+                id: UUID(),
+                displayName: "류단아",
+                role: .admin,
+                isMe: true,
+                joinedAt: .now
+            ),
+            ShareGroupMember(
+                id: UUID(),
+                displayName: "집집이",
+                role: .participant,
+                isMe: false,
+                joinedAt: .now
+            ),
+            ShareGroupMember(
+                id: UUID(),
+                displayName: "사진왕",
+                role: .participant,
+                isMe: false,
+                joinedAt: .now
+            ),
+            ShareGroupMember(
+                id: UUID(),
+                displayName: "여행자",
+                role: .participant,
+                isMe: false,
+                joinedAt: .now
+            )
+        ],
         groupName: $groupName,
         inviteCode: "3d2dsd322d32d23",
         isInviteCodeAvailable: true,

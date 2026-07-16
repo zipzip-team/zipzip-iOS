@@ -106,6 +106,7 @@ struct ShareView: View {
             if let group = viewModel.managedShareGroup {
                 ShareGroupManagementSheet(
                     group: group,
+                    members: viewModel.members(for: group.id),
                     groupName: $viewModel.shareGroupNameDraft,
                     inviteCode: viewModel.inviteCode(for: group.id) ?? "",
                     isInviteCodeAvailable: viewModel.isInviteCodeAvailable(for: group.id),
@@ -116,7 +117,9 @@ struct ShareView: View {
                     onLeave: leaveManagedShareGroup
                 )
                 .task(id: group.id) {
-                    await viewModel.loadInviteCode(groupID: group.id)
+                    async let inviteRequest: Void = viewModel.loadInviteCode(groupID: group.id)
+                    async let memberRequest: Void = viewModel.loadMembers(groupID: group.id)
+                    _ = await(inviteRequest, memberRequest)
                 }
             }
         case nil:
