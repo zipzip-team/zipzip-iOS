@@ -16,6 +16,8 @@ struct SplashView: View {
     @State private var lottieFinished = false
     private let continuesOnboarding: Bool
     private let onAnimationFinished: (() -> Void)?
+    private let finalLogoFrame: AnimationFrameTime = 57
+    private let animationSpeed = 0.95
 
     init(continuesOnboarding: Bool = true, onAnimationFinished: (() -> Void)? = nil) {
         self.continuesOnboarding = continuesOnboarding
@@ -33,13 +35,13 @@ struct SplashView: View {
                 LottieView(animation: .named("logo_motion"))
                     .playbackMode(
                         lottieFinished
-                            ? .paused(at: .progress(1))
-                            : .playing(.fromProgress(nil, toProgress: 1, loopMode: .playOnce))
+                            ? .paused(at: .frame(finalLogoFrame))
+                            : .playing(.fromFrame(nil, toFrame: finalLogoFrame, loopMode: .playOnce))
                     )
+                    .animationSpeed(animationSpeed)
                     .animationDidFinish { completed in
                         guard completed, !lottieFinished else { return }
                         lottieFinished = true
-                        onAnimationFinished?()
                     }
                     .frame(width: 200, height: 200)
                     .padding(.bottom, 24)
@@ -47,9 +49,16 @@ struct SplashView: View {
                 Image(.splashText)
             }
         }
-        .task {
+        .task(id: lottieFinished) {
+            guard lottieFinished else { return }
+            do {
+                try await Task.sleep(for: .seconds(1))
+            } catch {
+                return
+            }
+
+            onAnimationFinished?()
             guard continuesOnboarding else { return }
-            try? await Task.sleep(for: .seconds(3))
             guard router.path.isEmpty, !hasCompletedOnboarding else { return }
 
             // 이미 사진 접근이 허용/제한된 상태면 권한 요청 뷰를 건너뛰고 바로 서비스 설명으로 이동한다.
