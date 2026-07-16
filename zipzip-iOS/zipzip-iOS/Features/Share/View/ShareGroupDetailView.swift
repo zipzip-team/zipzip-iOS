@@ -84,8 +84,8 @@ struct ShareGroupDetailView: View {
                         .init(id: "select-shared-albums", icon: .select, accessibilityLabel: "사진집 선택") {
                             enterSelectionMode()
                         },
-                        .init(id: "import-shared-content", icon: .createStroke, accessibilityLabel: "사진 불러오기") {
-                            router.push(.shareImport(groupID))
+                        .init(id: "create-shared-album", icon: .createStroke, accessibilityLabel: "공유집 생성") {
+                            viewModel.presentCreateSharedAlbumSheet(groupID: groupID)
                         },
                         .init(id: "open-comments", icon: .chatStroke, accessibilityLabel: "댓글") {
                             viewModel.presentComments(groupID: groupID)

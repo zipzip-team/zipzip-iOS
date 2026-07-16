@@ -17,6 +17,7 @@ enum ShareSheetPresentation: Equatable {
     case joinEntry
     case joinConfirmation
     case createGroup
+    case createSharedAlbum
     case invitation
     case comments
     case management
@@ -54,6 +55,7 @@ final class ShareViewModel {
     private var dismissingSheet: ShareSheetPresentation?
     private var pendingSheet: ShareSheetPresentation?
     private(set) var isCreatingGroup = false
+    private(set) var isCreatingSharedAlbum = false
     private(set) var isPreviewingJoin = false
     private(set) var isJoiningGroup = false
     private(set) var isUpdatingGroup = false
@@ -77,6 +79,7 @@ final class ShareViewModel {
 
     var joinCode = ""
     var groupNameDraft = ""
+    var sharedAlbumNameDraft = ""
     var inviteCode = ""
     var commentDraft = ""
     var shareGroupNameDraft = ""
@@ -91,6 +94,9 @@ final class ShareViewModel {
 
     private var groupCreationName: String?
     private var groupCreationIdempotencyKey: UUID?
+    private var sharedAlbumCreationGroupID: ShareAlbum.ID?
+    private var sharedAlbumCreationName: String?
+    private var sharedAlbumCreationIdempotencyKey: UUID?
     private var joinRequestInviteCode: String?
     private var joinIdempotencyKey: UUID?
     private var joinedGroupIDAwaitingSync: ShareAlbum.ID?
@@ -136,6 +142,8 @@ final class ShareViewModel {
             isJoiningGroup
         case .createGroup:
             isCreatingGroup
+        case .createSharedAlbum:
+            isCreatingSharedAlbum
         case .comments:
             isSendingChatMessage
         case .management:
@@ -155,6 +163,15 @@ final class ShareViewModel {
 
     var isCreateSheetPresented: Bool {
         presentedSheet == .createGroup
+    }
+
+    var isCreateSharedAlbumSheetPresented: Bool {
+        presentedSheet == .createSharedAlbum
+    }
+
+    var isCreateSharedAlbumDisabled: Bool {
+        let name = sharedAlbumNameDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+        return name.isEmpty || name.count > 100 || isCreatingSharedAlbum
     }
 
     var isInviteSheetPresented: Bool {
@@ -834,6 +851,8 @@ final class ShareViewModel {
         case .createGroup:
             groupCreationName = nil
             groupCreationIdempotencyKey = nil
+        case .createSharedAlbum:
+            clearSharedAlbumCreationState()
         case nil:
             break
         }
@@ -1014,6 +1033,99 @@ final class ShareViewModel {
         } catch {
             guard remoteDataSessionID == sessionID else { return }
             presentError(error, fallback: "공유 그룹을 만들지 못했어요.")
+        }
+    }
+
+    func presentCreateSharedAlbumSheet(groupID: ShareAlbum.ID) {
+        guard group(withID: groupID) != nil else { return }
+        clearSharedAlbumCreationState()
+        sharedAlbumCreationGroupID = groupID
+        presentSheet(.createSharedAlbum)
+    }
+
+    func dismissCreateSharedAlbumSheet() {
+        guard !isCreatingSharedAlbum else { return }
+        dismissSheet(if: .createSharedAlbum)
+    }
+
+    func resetSharedAlbumCreationDraft() {
+        sharedAlbumNameDraft = ""
+        sharedAlbumCreationName = nil
+        sharedAlbumCreationIdempotencyKey = nil
+    }
+
+    @discardableResult
+    func createSharedAlbum() async -> SharedAlbum? {
+        guard let groupID = sharedAlbumCreationGroupID,
+              group(withID: groupID) != nil,
+              !isCreatingSharedAlbum
+        else {
+            return nil
+        }
+
+        let name = sharedAlbumNameDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !name.isEmpty, name.count <= 100 else { return nil }
+
+        let idempotencyKey: UUID
+        if sharedAlbumCreationName == name, let sharedAlbumCreationIdempotencyKey {
+            idempotencyKey = sharedAlbumCreationIdempotencyKey
+        } else {
+            idempotencyKey = UUID()
+            sharedAlbumCreationName = name
+            sharedAlbumCreationIdempotencyKey = idempotencyKey
+        }
+
+        let sessionID = remoteDataSessionID
+        isCreatingSharedAlbum = true
+        sharedAlbumErrorCode = nil
+        defer {
+            if remoteDataSessionID == sessionID {
+                isCreatingSharedAlbum = false
+            }
+        }
+
+        do {
+            let album = try await repository.createSharedAlbum(
+                groupID: groupID,
+                name: name,
+                idempotencyKey: idempotencyKey
+            )
+            guard remoteDataSessionID == sessionID else { return nil }
+
+            var albumIDs = visibleSharedAlbumIDs[groupID]
+                ?? group(withID: groupID)?.albums.map(\.id)
+                ?? []
+            albumIDs.removeAll { $0 == album.id }
+            albumIDs.insert(album.id, at: 0)
+            visibleSharedAlbumIDs[groupID] = albumIDs
+            loadedSharedAlbumGroupIDs.insert(groupID)
+
+            try await reloadGroups()
+            guard remoteDataSessionID == sessionID else { return nil }
+            sharedAlbumCreationName = nil
+            sharedAlbumCreationIdempotencyKey = nil
+            dismissSheet(if: .createSharedAlbum)
+            return album
+        } catch ShareGroupRepositoryError.groupNotFound {
+            guard remoteDataSessionID == sessionID else { return nil }
+            await removeMissingGroup(id: groupID)
+            dismissSheet(if: .createSharedAlbum)
+            return nil
+        } catch let error as ShareGroupRepositoryError {
+            guard remoteDataSessionID == sessionID else { return nil }
+            sharedAlbumErrorCode = String(describing: error)
+            presentError(error, fallback: "공유집을 만들지 못했어요.")
+            return nil
+        } catch let error as NetworkError {
+            guard remoteDataSessionID == sessionID else { return nil }
+            sharedAlbumErrorCode = error.serverCode ?? "NETWORK_ERROR"
+            presentError(error, fallback: "공유집을 만들지 못했어요.")
+            return nil
+        } catch {
+            guard remoteDataSessionID == sessionID else { return nil }
+            sharedAlbumErrorCode = "UNKNOWN_ERROR"
+            presentError(error, fallback: "공유집을 만들지 못했어요.")
+            return nil
         }
     }
 
@@ -1457,6 +1569,7 @@ final class ShareViewModel {
         clearCommentsState()
         clearManagementState()
         resetJoinState()
+        clearSharedAlbumCreationState()
         sharedAlbumErrorCode = nil
     }
 
@@ -1676,6 +1789,14 @@ final class ShareViewModel {
         joinedGroupIDAwaitingSync = nil
         pendingJoinAlreadyJoined = false
         pendingJoinPreview = nil
+    }
+
+    private func clearSharedAlbumCreationState() {
+        isCreatingSharedAlbum = false
+        sharedAlbumNameDraft = ""
+        sharedAlbumCreationGroupID = nil
+        sharedAlbumCreationName = nil
+        sharedAlbumCreationIdempotencyKey = nil
     }
 
     private func presentError(

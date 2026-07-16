@@ -46,6 +46,8 @@ struct ShareView: View {
         switch viewModel.displayedSheet {
         case .joinConfirmation:
             [.height(477)]
+        case .createSharedAlbum:
+            [.height(AlbumCreationSheet.preferredHeight)]
         case .comments:
             [.height(562)]
         case .management:
@@ -75,6 +77,22 @@ struct ShareView: View {
                 isConfirming: viewModel.isCreatingGroup,
                 onCancel: viewModel.dismissPresentedSheet,
                 onConfirm: { Task { await viewModel.createGroup() } }
+            )
+        case .createSharedAlbum:
+            AlbumCreationSheet(
+                nameLabel: "공유집 이름",
+                albumName: $viewModel.sharedAlbumNameDraft,
+                isCreateDisabled: viewModel.isCreateSharedAlbumDisabled,
+                isBusy: viewModel.isCreatingSharedAlbum,
+                onClose: viewModel.dismissCreateSharedAlbumSheet,
+                onDeleteTap: viewModel.resetSharedAlbumCreationDraft,
+                onCreateTap: {
+                    Task {
+                        if let album = await viewModel.createSharedAlbum() {
+                            router.push(.shareAlbum(groupID: album.sharedGroupID, albumID: album.id))
+                        }
+                    }
+                }
             )
         case .joinConfirmation:
             ShareJoinConfirmationSheet(

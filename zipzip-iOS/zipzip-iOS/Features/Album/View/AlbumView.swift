@@ -112,29 +112,26 @@ struct AlbumView: View {
         )
         .bottomSheet(
             isPresented: $viewModel.isCreateAlbumSheetPresented,
-            detents: [.height(549)],
-            initialDetent: .height(549),
+            detents: [.height(AlbumCreationSheet.preferredHeight)],
+            initialDetent: .height(AlbumCreationSheet.preferredHeight),
             showsDragIndicator: .visible,
-            expandsToLargestDetentOnScroll: false
+            expandsToLargestDetentOnScroll: false,
+            isInteractiveDismissDisabled: viewModel.isCreatingAlbum
         ) { _ in
-            BottomSheet(
-                leftItem: {
-                    BottomSheetCloseButton(action: viewModel.dismissCreateAlbumSheet)
-                }
-            ) {
-                AlbumCreateSheetContent(
-                    albumName: $viewModel.createAlbumName,
-                    isCreateDisabled: viewModel.isCreateAlbumDisabled,
-                    onDeleteTap: viewModel.resetCreateAlbumDraft,
-                    onCreateTap: {
-                        Task {
-                            if let album = await viewModel.createAlbum() {
-                                router.push(.albumDetail(album.id))
-                            }
+            AlbumCreationSheet(
+                albumName: $viewModel.createAlbumName,
+                isCreateDisabled: viewModel.isCreateAlbumDisabled,
+                isBusy: viewModel.isCreatingAlbum,
+                onClose: viewModel.dismissCreateAlbumSheet,
+                onDeleteTap: viewModel.resetCreateAlbumDraft,
+                onCreateTap: {
+                    Task {
+                        if let album = await viewModel.createAlbum() {
+                            router.push(.albumDetail(album.id))
                         }
                     }
-                )
-            }
+                }
+            )
         }
         .bottomSheet(isPresented: $viewModel.isShareAlbumSheetPresented, detents: [.full]) { _ in
             AlbumShareDestinationSheet(
@@ -313,51 +310,6 @@ private struct AlbumSheetTextButton: View {
         }
         .buttonStyle(.plain)
         .disabled(isDisabled)
-    }
-}
-
-private struct AlbumCreateSheetContent: View {
-    @Binding var albumName: String
-
-    let isCreateDisabled: Bool
-    let onDeleteTap: () -> Void
-    let onCreateTap: () -> Void
-
-    var body: some View {
-        VStack(spacing: 34) {
-            AlbumFolder(state: .plain) {
-                EmptyView()
-            }
-            .accessibilityHidden(true)
-
-            VStack(spacing: 49) {
-                VStack(alignment: .leading, spacing: 12) {
-                    Text("사진집 이름")
-                        .font(.t3_md)
-                        .foregroundStyle(.grey300)
-
-                    TextInput("이름 입력", text: $albumName)
-                }
-
-                HStack(spacing: 16) {
-                    CommonButton(
-                        title: "삭제",
-                        property1: .secondary,
-                        action: onDeleteTap
-                    )
-
-                    CommonButton(
-                        title: "생성",
-                        property1: isCreateDisabled ? .disabled : .cta,
-                        action: onCreateTap
-                    )
-                }
-            }
-            .frame(maxWidth: 358)
-        }
-        .padding(.horizontal, 16)
-        .padding(.top, 12)
-        .frame(maxWidth: .infinity, alignment: .top)
     }
 }
 

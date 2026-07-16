@@ -1229,6 +1229,95 @@ final class ShareViewModelTests: XCTestCase {
     }
 
     @MainActor
+    func testCreatesSharedAlbumAndImmediatelyAddsItToGroup() async throws {
+        let groupID = try XCTUnwrap(UUID(uuidString: "11111111-1111-1111-1111-111111111111"))
+        let albumID = try XCTUnwrap(UUID(uuidString: "33333333-3333-3333-3333-333333333333"))
+        let response = makeSharedAlbum(id: albumID, name: "제주도")
+        let store = try makeStore()
+        let api = ManagementTrackingShareGroupAPI(
+            groupID: groupID,
+            role: .member,
+            createdSharedAlbumResponse: response
+        )
+        let viewModel = ShareViewModel(repository: makeRepository(api: api, store: store))
+        await viewModel.loadGroups(for: testCacheOwnerID)
+        await viewModel.loadSharedAlbums(groupID: groupID)
+        viewModel.presentCreateSharedAlbumSheet(groupID: groupID)
+        viewModel.sharedAlbumNameDraft = "  제주도  "
+
+        let createdAlbum = await viewModel.createSharedAlbum()
+
+        XCTAssertEqual(createdAlbum?.id, albumID)
+        XCTAssertEqual(api.createdSharedAlbumGroupIDs, [groupID])
+        XCTAssertEqual(api.createdSharedAlbumNames, ["제주도"])
+        XCTAssertEqual(api.createdSharedAlbumIdempotencyKeys.count, 1)
+        XCTAssertEqual(viewModel.group(withID: groupID)?.albums.map(\.id), [albumID])
+        XCTAssertEqual(viewModel.group(withID: groupID)?.sharedAlbumCount, 1)
+        XCTAssertFalse(viewModel.isCreateSharedAlbumSheetPresented)
+        XCTAssertEqual(viewModel.displayedSheet, .createSharedAlbum)
+
+        viewModel.shareSheetDidDismiss()
+
+        XCTAssertNil(viewModel.displayedSheet)
+        XCTAssertTrue(viewModel.sharedAlbumNameDraft.isEmpty)
+        let storedGroups = try await store.fetchGroups()
+        let storedGroup = try XCTUnwrap(storedGroups.first)
+        XCTAssertEqual(storedGroup.albums.map(\.id), [albumID])
+        XCTAssertEqual(storedGroup.sharedAlbumCount, 1)
+    }
+
+    @MainActor
+    func testSharedAlbumCreationRetryKeepsDraftAndReusesIdempotencyKey() async throws {
+        let groupID = try XCTUnwrap(UUID(uuidString: "11111111-1111-1111-1111-111111111111"))
+        let albumID = try XCTUnwrap(UUID(uuidString: "33333333-3333-3333-3333-333333333333"))
+        let api = ManagementTrackingShareGroupAPI(
+            groupID: groupID,
+            role: .member,
+            createSharedAlbumErrors: [.noResponse, nil],
+            createdSharedAlbumResponse: makeSharedAlbum(id: albumID, name: "제주도")
+        )
+        let viewModel = ShareViewModel(
+            repository: makeRepository(api: api, store: try makeStore())
+        )
+        await viewModel.loadGroups(for: testCacheOwnerID)
+        viewModel.presentCreateSharedAlbumSheet(groupID: groupID)
+        viewModel.sharedAlbumNameDraft = "제주도"
+
+        let firstAttempt = await viewModel.createSharedAlbum()
+
+        XCTAssertNil(firstAttempt)
+        XCTAssertTrue(viewModel.isCreateSharedAlbumSheetPresented)
+        XCTAssertEqual(viewModel.sharedAlbumNameDraft, "제주도")
+
+        let retry = await viewModel.createSharedAlbum()
+
+        XCTAssertEqual(retry?.id, albumID)
+        XCTAssertEqual(api.createdSharedAlbumIdempotencyKeys.count, 2)
+        XCTAssertEqual(
+            api.createdSharedAlbumIdempotencyKeys[0],
+            api.createdSharedAlbumIdempotencyKeys[1]
+        )
+    }
+
+    @MainActor
+    func testSharedAlbumCreationRejectsNamesLongerThanAPILimit() async throws {
+        let groupID = try XCTUnwrap(UUID(uuidString: "11111111-1111-1111-1111-111111111111"))
+        let api = ManagementTrackingShareGroupAPI(groupID: groupID, role: .member)
+        let viewModel = ShareViewModel(
+            repository: makeRepository(api: api, store: try makeStore())
+        )
+        await viewModel.loadGroups(for: testCacheOwnerID)
+        viewModel.presentCreateSharedAlbumSheet(groupID: groupID)
+        viewModel.sharedAlbumNameDraft = String(repeating: "가", count: 101)
+
+        let createdAlbum = await viewModel.createSharedAlbum()
+
+        XCTAssertTrue(viewModel.isCreateSharedAlbumDisabled)
+        XCTAssertNil(createdAlbum)
+        XCTAssertTrue(api.createdSharedAlbumNames.isEmpty)
+    }
+
+    @MainActor
     func testRenamesAndDeletesManagedSharedAlbum() async throws {
         let groupID = try XCTUnwrap(UUID(uuidString: "11111111-1111-1111-1111-111111111111"))
         let albumID = try XCTUnwrap(UUID(uuidString: "33333333-3333-3333-3333-333333333333"))
@@ -1957,6 +2046,8 @@ private final class ManagementTrackingShareGroupAPI: ShareGroupAPI {
     var chatMessageDelay: Duration
     var chatMessageErrors: [NetworkError?]
     var createdChatMessageResponse: ChatMessageResponse?
+    var createSharedAlbumErrors: [NetworkError?]
+    var createdSharedAlbumResponse: SharedAlbumResponse?
     var renameSharedAlbumErrors: [NetworkError?]
     var deleteGroupErrors: [NetworkError?]
     var leaveGroupErrors: [NetworkError?]
@@ -1970,6 +2061,9 @@ private final class ManagementTrackingShareGroupAPI: ShareGroupAPI {
     private(set) var leftGroupIDs: [UUID] = []
     private(set) var chatCursors: [String?] = []
     private(set) var sharedAlbumCursors: [String?] = []
+    private(set) var createdSharedAlbumGroupIDs: [UUID] = []
+    private(set) var createdSharedAlbumNames: [String] = []
+    private(set) var createdSharedAlbumIdempotencyKeys: [UUID] = []
     private(set) var sentChatContents: [String] = []
     private(set) var chatIdempotencyKeys: [UUID] = []
     private(set) var renamedAlbumIDs: [UUID] = []
@@ -1994,6 +2088,8 @@ private final class ManagementTrackingShareGroupAPI: ShareGroupAPI {
         chatMessageDelay: Duration = .zero,
         chatMessageErrors: [NetworkError?] = [],
         createdChatMessageResponse: ChatMessageResponse? = nil,
+        createSharedAlbumErrors: [NetworkError?] = [],
+        createdSharedAlbumResponse: SharedAlbumResponse? = nil,
         renameSharedAlbumErrors: [NetworkError?] = [],
         deleteGroupErrors: [NetworkError?] = [],
         leaveGroupErrors: [NetworkError?] = [],
@@ -2015,6 +2111,8 @@ private final class ManagementTrackingShareGroupAPI: ShareGroupAPI {
         self.chatMessageDelay = chatMessageDelay
         self.chatMessageErrors = chatMessageErrors
         self.createdChatMessageResponse = createdChatMessageResponse
+        self.createSharedAlbumErrors = createSharedAlbumErrors
+        self.createdSharedAlbumResponse = createdSharedAlbumResponse
         self.renameSharedAlbumErrors = renameSharedAlbumErrors
         self.deleteGroupErrors = deleteGroupErrors
         self.leaveGroupErrors = leaveGroupErrors
@@ -2096,6 +2194,32 @@ private final class ManagementTrackingShareGroupAPI: ShareGroupAPI {
             return sharedAlbumPages.removeFirst()
         }
         return SharedAlbumListPageResponse(items: sharedAlbums, nextCursor: nil, hasNext: false)
+    }
+
+    func createSharedAlbum(
+        groupID: UUID,
+        name: String,
+        idempotencyKey: UUID
+    ) async throws -> SharedAlbumResponse {
+        createdSharedAlbumGroupIDs.append(groupID)
+        createdSharedAlbumNames.append(name)
+        createdSharedAlbumIdempotencyKeys.append(idempotencyKey)
+        if !createSharedAlbumErrors.isEmpty, let error = createSharedAlbumErrors.removeFirst() {
+            throw error
+        }
+        let response = createdSharedAlbumResponse ?? SharedAlbumResponse(
+            id: UUID(),
+            name: name,
+            photoCount: 0,
+            createdBy: nil,
+            isCreator: true,
+            createdAt: "2026-07-15T10:15:30Z",
+            updatedAt: "2026-07-15T10:15:30Z"
+        )
+        if !sharedAlbums.contains(where: { $0.id == response.id }) {
+            sharedAlbums.insert(response, at: 0)
+        }
+        return response
     }
 
     func createGroup(name: String, idempotencyKey: UUID) async throws -> CreateSharedGroupResponse {
