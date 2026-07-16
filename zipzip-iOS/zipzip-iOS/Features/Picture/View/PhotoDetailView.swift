@@ -5,6 +5,8 @@
 //  Created by 성환 on 7/8/26.
 //
 
+import Foundation
+import OSLog
 import SwiftUI
 
 struct PhotoDeleteAlertContent {
@@ -44,6 +46,11 @@ enum PhotoDeletionAction {
 }
 
 struct PhotoDetailView: View {
+    private static let logger = Logger(
+        subsystem: Bundle.main.bundleIdentifier ?? "zipzip-iOS",
+        category: "PhotoDetail"
+    )
+
     @Environment(\.dismiss) private var dismiss
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -61,8 +68,6 @@ struct PhotoDetailView: View {
     @State private var isEditingInfo = false
     @State private var showShareSheet = false
     @State private var showDeleteAlert = false
-    @State private var showOperationError = false
-    @State private var operationErrorMessage = ""
     @State private var isFavorite = false
     @State private var didToggleFavorite = false
     @State private var isUpdatingFavorite = false
@@ -241,11 +246,6 @@ struct PhotoDetailView: View {
             onSecondaryTap: handleSecondaryDeleteAction,
             onPrimaryTap: handlePrimaryDeleteAction
         )
-        .alert("요청을 완료하지 못했어요.", isPresented: $showOperationError) {
-            Button("확인", role: .cancel) {}
-        } message: {
-            Text(operationErrorMessage)
-        }
     }
 
     private func loadSharedAlbums(groupID: ShareAlbum.ID) async {
@@ -352,8 +352,7 @@ struct PhotoDetailView: View {
             let didUpdate = await onToggleFavorite(photo.localIdentifier, next)
             guard !didUpdate else { return }
             isFavorite.toggle()
-            operationErrorMessage = "즐겨찾기를 변경하지 못했어요."
-            showOperationError = true
+            Self.logger.error("❌ [PhotoDetail] failed to update favorite")
         }
     }
 
@@ -525,8 +524,7 @@ struct PhotoDetailView: View {
             if await onDelete(action, photo) {
                 dismiss()
             } else {
-                operationErrorMessage = "사진을 삭제하지 못했어요."
-                showOperationError = true
+                Self.logger.error("❌ [PhotoDetail] failed to delete photo")
             }
         }
     }

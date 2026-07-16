@@ -5,6 +5,7 @@
 //  Created by 성환 on 7/12/26.
 //
 
+import Foundation
 import OSLog
 import SQLiteData
 
@@ -19,13 +20,13 @@ final class PhotoInfoEditViewModel {
     @ObservationIgnored
     @Dependency(\.photoMetadataEdit) private var metadataEdit
 
-    private static let logger = Logger(subsystem: "com.zipzip.zipzip-iOS", category: "PhotoInfoEdit")
+    private static let logger = Logger(
+        subsystem: Bundle.main.bundleIdentifier ?? "zipzip-iOS",
+        category: "PhotoInfoEdit"
+    )
 
     private(set) var devices: [FilterDevice]
     private(set) var hasSuccessfulChanges = false
-    private(set) var hasSaveFailure = false
-    var isErrorAlertPresented = false
-    private(set) var errorAlertMessage = ""
 
     @ObservationIgnored private var deviceRecords: [DeviceRecord] = []
     @ObservationIgnored private var localIdentifiers: [String]
@@ -53,7 +54,6 @@ final class PhotoInfoEditViewModel {
             }
         } catch {
             Self.logger.error("failed to load device options: \(error)")
-            recordFailure("사진 정보를 불러오지 못했어요.")
         }
     }
 
@@ -86,11 +86,6 @@ final class PhotoInfoEditViewModel {
         return hasSuccessfulChanges
     }
 
-    func dismissErrorAlert() {
-        isErrorAlertPresented = false
-        errorAlertMessage = ""
-    }
-
     private func runSaveDevice(name: String) async {
         guard !localIdentifiers.isEmpty else { return }
         guard let record = deviceRecords.first(where: {
@@ -111,13 +106,11 @@ final class PhotoInfoEditViewModel {
                 localIdentifiers = localIdentifiers.map { mapping[$0] ?? $0 }
                 onIdentifiersChanged(localIdentifiers)
                 hasSuccessfulChanges = true
-                hasSaveFailure = false
             } else {
                 recordFailure("기기 정보를 저장하지 못했어요.")
             }
         } catch {
             Self.logger.error("failed to update device: \(error)")
-            recordFailure("기기 정보를 저장하지 못했어요.")
         }
     }
 
@@ -132,13 +125,11 @@ final class PhotoInfoEditViewModel {
             )
             if didUpdate {
                 hasSuccessfulChanges = true
-                hasSaveFailure = false
             } else {
                 recordFailure("장소 정보를 저장하지 못했어요.")
             }
         } catch {
             Self.logger.error("failed to update location: \(error)")
-            recordFailure("장소 정보를 저장하지 못했어요.")
         }
     }
 
@@ -151,19 +142,15 @@ final class PhotoInfoEditViewModel {
             )
             if didUpdate {
                 hasSuccessfulChanges = true
-                hasSaveFailure = false
             } else {
                 recordFailure("날짜 정보를 저장하지 못했어요.")
             }
         } catch {
             Self.logger.error("failed to update date: \(error)")
-            recordFailure("날짜 정보를 저장하지 못했어요.")
         }
     }
 
     private func recordFailure(_ message: String) {
-        hasSaveFailure = true
-        errorAlertMessage = message
-        isErrorAlertPresented = true
+        Self.logger.error("❌ [PhotoInfoEdit] \(message, privacy: .public)")
     }
 }

@@ -11,7 +11,6 @@ struct PhotoInfoEditView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var viewModel: PhotoInfoEditViewModel
     @State private var isDismissing = false
-    @State private var isSaveFailureAlertPresented = false
 
     let metadata: PhotoMetadata
     private let onSuccessfulDismiss: () -> Void
@@ -40,14 +39,6 @@ struct PhotoInfoEditView: View {
                 backButton
             }
         }
-        .alert("변경사항을 저장하지 못했어요.", isPresented: $isSaveFailureAlertPresented) {
-            Button("계속 편집", role: .cancel) {}
-            Button("나가기", role: .destructive) {
-                dismiss()
-            }
-        } message: {
-            Text("입력한 정보가 저장되지 않았어요.")
-        }
     }
 
     private var backButton: some View {
@@ -57,11 +48,6 @@ struct PhotoInfoEditView: View {
                 isDismissing = true
                 Task {
                     let hasChanges = await viewModel.waitForPendingSaves()
-                    guard !viewModel.hasSaveFailure else {
-                        isDismissing = false
-                        isSaveFailureAlertPresented = true
-                        return
-                    }
                     if hasChanges {
                         onSuccessfulDismiss()
                     }

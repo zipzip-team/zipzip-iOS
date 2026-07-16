@@ -14,8 +14,6 @@ final class PictureViewModelTests: XCTestCase {
 
         XCTAssertTrue(viewModel.isSelectionMode)
         XCTAssertEqual(viewModel.selectedPhotoIDs, [photo.id])
-        XCTAssertTrue(viewModel.isErrorAlertPresented)
-        XCTAssertEqual(viewModel.errorAlertMessage, "사진을 삭제하지 못했어요.")
     }
 
     func testDeleteSuccessClearsSelection() async throws {
@@ -31,7 +29,6 @@ final class PictureViewModelTests: XCTestCase {
         XCTAssertEqual(deletedIdentifiers, [photo.localIdentifier])
         XCTAssertFalse(viewModel.isSelectionMode)
         XCTAssertTrue(viewModel.selectedPhotoIDs.isEmpty)
-        XCTAssertFalse(viewModel.isErrorAlertPresented)
     }
 
     private func makeViewModel(
