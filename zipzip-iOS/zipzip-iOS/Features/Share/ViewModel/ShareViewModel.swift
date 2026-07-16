@@ -6,6 +6,7 @@
 import Foundation
 import Observation
 import OSLog
+import SwiftUI
 
 enum ShareImportSelection: Hashable {
     case photos
@@ -814,7 +815,9 @@ final class ShareViewModel {
         dismissingSheet = nil
         if let pendingSheet {
             self.pendingSheet = nil
-            presentedSheet = pendingSheet
+            Task { @MainActor [weak self] in
+                self?.presentedSheet = pendingSheet
+            }
             return
         }
 
@@ -1644,10 +1647,12 @@ final class ShareViewModel {
     }
 
     private func transitionSheet(to sheet: ShareSheetPresentation) {
-        pendingSheet = sheet
-        if let presentedSheet {
-            dismissingSheet = presentedSheet
-            self.presentedSheet = nil
+        if presentedSheet != nil {
+            withAnimation(.easeInOut(duration: 0.25)) {
+                presentedSheet = sheet
+            }
+        } else {
+            pendingSheet = sheet
         }
     }
 
