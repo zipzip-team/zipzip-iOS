@@ -30,6 +30,8 @@ nonisolated struct SharedGroupStore {
                 .fetchOne(db)
             guard owner?.userID != userID else { return }
 
+            try #sql(#"DELETE FROM "shared_photo_upload_task""#).execute(db)
+            try #sql(#"DELETE FROM "shared_album_photo""#).execute(db)
             try #sql(#"DELETE FROM "shared_photo""#).execute(db)
             try #sql(#"DELETE FROM "shared_album""#).execute(db)
             try #sql(#"DELETE FROM "shared_group""#).execute(db)
@@ -201,6 +203,48 @@ nonisolated struct SharedGroupStore {
                 }
                 .execute(db)
             }
+        }
+    }
+
+    func upsertCreatedSharedAlbum(
+        _ response: SharedAlbumResponse,
+        groupID: UUID,
+        cacheOwnerID: UUID
+    ) async throws {
+        try await database.write { db in
+            try Self.requireCacheOwner(cacheOwnerID, in: db)
+            let albumID = response.id.uuidString
+            let existingAlbum = try SharedAlbumRecord
+                .where { $0.id.eq(albumID) }
+                .fetchOne(db)
+
+            try SharedAlbumRecord.upsert {
+                SharedAlbumRecord.Draft(
+                    id: albumID,
+                    sharedGroupID: groupID.uuidString,
+                    name: response.name,
+                    photoCount: response.photoCount,
+                    createdByUserID: response.createdBy?.userId?.uuidString,
+                    createdByDisplayName: response.createdBy?.displayName,
+                    isCreator: response.isCreator,
+                    createdAt: Self.date(response.createdAt),
+                    updatedAt: Self.date(response.updatedAt)
+                )
+            }
+            .execute(db)
+
+            guard existingAlbum == nil else { return }
+            let group = try SharedGroupRecord
+                .where { $0.id.eq(groupID.uuidString) }
+                .fetchOne(db)
+            guard let group else { return }
+            try SharedGroupRecord
+                .update {
+                    $0.sharedAlbumCount = #bind(group.sharedAlbumCount + 1)
+                    $0.updatedAt = #bind(max(group.updatedAt, Self.date(response.updatedAt)))
+                }
+                .where { $0.id.eq(groupID.uuidString) }
+                .execute(db)
         }
     }
 
