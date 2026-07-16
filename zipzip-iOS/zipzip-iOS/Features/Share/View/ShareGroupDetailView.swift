@@ -9,12 +9,14 @@ struct ShareGroupDetailView: View {
     @Environment(Router.self) private var router
     let groupID: ShareAlbum.ID
     let viewModel: ShareViewModel
-    let personalAlbums: [Album]
+    var onMoveAlbumsToPersonal: ([SharedAlbum]) async -> [Album.ID] = { _ in [] }
+    var onMoveSucceeded: () -> Void = {}
 
     @State private var isSelectionMode = false
     @State private var selectedAlbumIDs: [SharedAlbum.ID] = []
     @State private var isDeleteAlertPresented = false
-    @State private var isMoveSheetPresented = false
+    @State private var isMoveAlertPresented = false
+    @State private var isCopyingAlbumsToPersonal = false
 
     private let columns = [
         GridItem(.flexible(), spacing: 17),
@@ -109,17 +111,15 @@ struct ShareGroupDetailView: View {
             onSecondaryTap: { isDeleteAlertPresented = false },
             onPrimaryTap: deleteSelectedAlbums
         )
-        .bottomSheet(isPresented: $isMoveSheetPresented, detents: [.full]) { dismiss in
-            ShareSheet(
-                albums: personalAlbums,
-                shareAlbums: viewModel.groups,
-                onDismiss: { dismiss() },
-                onOpenShareAlbum: { groupID in
-                    await viewModel.loadSharedAlbums(groupID: groupID)
-                },
-                onComplete: { _ in exitSelectionMode() }
-            )
-        }
+        .bottomSheetAlert(
+            isPresented: $isMoveAlertPresented,
+            title: "선택한 공유집을\n사진집으로 옮길까요?",
+            message: "공유집에 있는 모든 사진이 기기에 저장돼요.",
+            secondaryTitle: "취소",
+            primaryTitle: "옮기기",
+            onSecondaryTap: { isMoveAlertPresented = false },
+            onPrimaryTap: moveSelectedAlbumsToPersonal
+        )
         .navigationBarBackButtonHidden(true)
         .toolbarVisibility(.hidden, for: .navigationBar)
         .task(id: groupID) {
@@ -133,6 +133,7 @@ struct ShareGroupDetailView: View {
     @ViewBuilder private var leadingButton: some View {
         if isSelectionMode {
             RoundedTextButton(title: "취소", style: .cancel, action: exitSelectionMode)
+                .disabled(isCopyingAlbumsToPersonal)
         } else {
             RoundedIconButton(items: [
                 .init(id: "share-group-back", icon: .iconChevronLeft, accessibilityLabel: "뒤로가기") {
@@ -147,26 +148,28 @@ struct ShareGroupDetailView: View {
             .init(
                 icon: .settingShare,
                 title: "공유 관리",
+                isDisabled: isCopyingAlbumsToPersonal,
                 action: presentShareManagement
             ),
             .init(
                 icon: .moveToAlbum,
                 title: "사진집으로",
-                // TODO: 정교은 담당 attach/detach API가 합쳐지면 선택한 공유집의 사진을
-                // 대상 사진집에 attach하고, 이동인 경우 기존 공유집에서 detach합니다.
-                isDisabled: true,
-                action: { isMoveSheetPresented = true }
+                isDisabled: selectedAlbumIDs.isEmpty || isCopyingAlbumsToPersonal,
+                action: { isMoveAlertPresented = true }
             ),
             .init(
                 icon: .delete,
                 title: "삭제",
-                isDisabled: selectedAlbumIDs.isEmpty || viewModel.isDeletingSharedAlbums,
+                isDisabled: selectedAlbumIDs.isEmpty
+                    || viewModel.isDeletingSharedAlbums
+                    || isCopyingAlbumsToPersonal,
                 action: { isDeleteAlertPresented = true }
             )
         ]
     }
 
     private func handleAlbumTap(_ album: SharedAlbum) {
+        guard !isCopyingAlbumsToPersonal else { return }
         if isSelectionMode {
             if let index = selectedAlbumIDs.firstIndex(of: album.id) {
                 selectedAlbumIDs.remove(at: index)
@@ -202,6 +205,7 @@ struct ShareGroupDetailView: View {
     private func exitSelectionMode() {
         isSelectionMode = false
         selectedAlbumIDs.removeAll()
+        isMoveAlertPresented = false
     }
 
     private func presentShareManagement() {
@@ -215,6 +219,31 @@ struct ShareGroupDetailView: View {
         Task {
             guard await viewModel.deleteSharedAlbums(albumIDs, from: groupID) else { return }
             exitSelectionMode()
+        }
+    }
+
+    private func moveSelectedAlbumsToPersonal() {
+        isMoveAlertPresented = false
+        guard !isCopyingAlbumsToPersonal,
+              let group = viewModel.group(withID: groupID)
+        else {
+            return
+        }
+
+        let albumsByID = Dictionary(uniqueKeysWithValues: group.albums.map { ($0.id, $0) })
+        let sourceAlbums = selectedAlbumIDs.compactMap { albumsByID[$0] }
+        guard !sourceAlbums.isEmpty else { return }
+
+        isCopyingAlbumsToPersonal = true
+        Task {
+            defer { isCopyingAlbumsToPersonal = false }
+            let createdAlbumIDs = await onMoveAlbumsToPersonal(sourceAlbums)
+            guard !createdAlbumIDs.isEmpty else {
+                return
+            }
+
+            exitSelectionMode()
+            onMoveSucceeded()
         }
     }
 }
@@ -575,7 +604,7 @@ private struct ShareImportDestinationSheet: View {
             groups: [group],
             repository: container.shareGroupRepository
         )
-        ShareGroupDetailView(groupID: group.id, viewModel: viewModel, personalAlbums: [])
+        ShareGroupDetailView(groupID: group.id, viewModel: viewModel)
             .environment(AuthenticationState.preview(isLoggedIn: true))
             .environment(container)
             .environment(Router())

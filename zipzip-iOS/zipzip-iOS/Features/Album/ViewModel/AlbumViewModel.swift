@@ -519,6 +519,85 @@ final class AlbumViewModel {
         return completedAnyWork
     }
 
+    /// 선택한 공유집마다 같은 이름의 개인 사진집을 만들고 전체 사진을 사진 보관함에 저장한다.
+    func moveSharedAlbumsToPersonalAlbums(
+        _ sourceAlbums: [SharedAlbum]
+    ) async -> [Album.ID] {
+        guard let sharedPhotoRepository else { return [] }
+
+        let uniqueSourceAlbums = sourceAlbums.reduce(into: [SharedAlbum]()) { result, album in
+            if !result.contains(where: { $0.id == album.id }) {
+                result.append(album)
+            }
+        }
+        guard !uniqueSourceAlbums.isEmpty else { return [] }
+
+        var createdAlbumIDs: [Album.ID] = []
+        var totalSucceededCount = 0
+        var totalFailedCount = 0
+
+        for sourceAlbum in uniqueSourceAlbums {
+            let personalAlbum: StoredAlbum
+            do {
+                personalAlbum = try await albumStore.createAlbum(name: sourceAlbum.name)
+                createdAlbumIDs.append(personalAlbum.id)
+            } catch is CancellationError {
+                break
+            } catch {
+                logError("failed to create personal album from shared album", error: error)
+                totalFailedCount += 1
+                continue
+            }
+
+            let photos: [SharedAlbumPhoto]
+            do {
+                photos = try await sharedPhotoRepository.synchronizePhotos(in: sourceAlbum.id)
+            } catch is CancellationError {
+                break
+            } catch {
+                logError("failed to synchronize shared album photos", error: error)
+                totalFailedCount += max(sourceAlbum.count, 1)
+                continue
+            }
+
+            let photoIDs = photos.map(\.id)
+            guard !photoIDs.isEmpty else { continue }
+
+            do {
+                let result = try await sharedPhotoRepository.savePhotosToLibrary(
+                    photoIDs: photoIDs,
+                    in: sourceAlbum.id
+                )
+                if !result.succeededLocalIdentifiers.isEmpty {
+                    try await albumStore.addPhotos(
+                        localIdentifiers: result.succeededLocalIdentifiers,
+                        to: [personalAlbum.id]
+                    )
+                }
+                totalSucceededCount += result.succeededLocalIdentifiers.count
+                totalFailedCount += max(
+                    result.failedCount,
+                    photoIDs.count - result.succeededLocalIdentifiers.count
+                )
+            } catch is CancellationError {
+                break
+            } catch {
+                logError("failed to move shared album photos to personal album", error: error)
+                totalFailedCount += photoIDs.count
+            }
+        }
+
+        await loadAlbums()
+        if totalFailedCount > 0 {
+            logMutationFailure(
+                succeededCount: totalSucceededCount,
+                failedCount: totalFailedCount,
+                operation: "move shared albums to personal albums"
+            )
+        }
+        return createdAlbumIDs
+    }
+
     func moveAlbumPhotos(
         ids: [Int],
         from sourceAlbumID: AlbumViewItem.ID,

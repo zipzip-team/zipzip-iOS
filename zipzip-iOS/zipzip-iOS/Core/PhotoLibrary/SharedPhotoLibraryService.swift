@@ -5,7 +5,9 @@
 
 import CoreLocation
 import Foundation
+import ImageIO
 @preconcurrency import Photos
+import UniformTypeIdentifiers
 
 nonisolated enum SharedPhotoLibraryError: Error {
     case creationPlaceholderMissing
@@ -25,9 +27,14 @@ nonisolated struct SharedPhotoLibraryService {
         longitude: Double?
     ) async throws -> String {
         var createdLocalIdentifier: String?
+        let resourceOptions = resourceCreationOptions(for: fileURL)
         try await PHPhotoLibrary.shared().performChanges {
             let request = PHAssetCreationRequest.forAsset()
-            request.addResource(with: .photo, fileURL: fileURL, options: nil)
+            request.addResource(
+                with: .photo,
+                fileURL: fileURL,
+                options: resourceOptions
+            )
             request.creationDate = creationDate
             if let latitude, let longitude {
                 request.location = CLLocation(latitude: latitude, longitude: longitude)
@@ -44,6 +51,27 @@ nonisolated struct SharedPhotoLibraryService {
             throw SharedPhotoLibraryError.createdAssetNotFound
         }
         return createdLocalIdentifier
+    }
+
+    private func resourceCreationOptions(
+        for fileURL: URL
+    ) -> PHAssetResourceCreationOptions {
+        let options = PHAssetResourceCreationOptions()
+        var filename = fileURL.lastPathComponent
+
+        if let imageSource = CGImageSourceCreateWithURL(fileURL as CFURL, nil),
+           let typeIdentifier = CGImageSourceGetType(imageSource) {
+            let identifier = typeIdentifier as String
+            options.uniformTypeIdentifier = identifier
+
+            if fileURL.pathExtension.isEmpty,
+               let pathExtension = UTType(identifier)?.preferredFilenameExtension {
+                filename += ".\(pathExtension)"
+            }
+        }
+
+        options.originalFilename = filename
+        return options
     }
 
     func deletePhotos(localIdentifiers: [String]) async throws {

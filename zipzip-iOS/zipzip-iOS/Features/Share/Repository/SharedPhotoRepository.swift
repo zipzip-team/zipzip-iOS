@@ -421,6 +421,7 @@ final class DefaultSharedPhotoRepository: SharedPhotoRepository {
         let uniquePhotoIDs = Self.unique(photoIDs)
         var succeededCount = 0
         var failedCount = 0
+        var succeededLocalIdentifiers: [String] = []
         var refreshedExpiredURLs = false
 
         for photoID in uniquePhotoIDs {
@@ -428,8 +429,18 @@ final class DefaultSharedPhotoRepository: SharedPhotoRepository {
                 guard var photo = try await store.fetchPhoto(id: photoID) else {
                     throw SharedPhotoRepositoryError.photoNotFound
                 }
-                if try await saveLocalDuplicateIfAvailable(photo, photoID: photoID) {
+                if let localIdentifier = try await saveLocalDuplicateIfAvailable(
+                    photo,
+                    photoID: photoID
+                ) {
+                    try validate(context)
+                    try await store.linkLocalPhoto(
+                        sharedPhotoID: photoID,
+                        localIdentifier: localIdentifier,
+                        cacheOwnerID: context.ownerID
+                    )
                     succeededCount += 1
+                    succeededLocalIdentifiers.append(localIdentifier)
                     continue
                 }
 
@@ -480,6 +491,7 @@ final class DefaultSharedPhotoRepository: SharedPhotoRepository {
                     cacheOwnerID: context.ownerID
                 )
                 succeededCount += 1
+                succeededLocalIdentifiers.append(localIdentifier)
             } catch is CancellationError {
                 throw CancellationError()
             } catch {
@@ -495,18 +507,19 @@ final class DefaultSharedPhotoRepository: SharedPhotoRepository {
         }
         return SharedAlbumPhotoMutationResult(
             succeededCount: succeededCount,
-            failedCount: failedCount
+            failedCount: failedCount,
+            succeededLocalIdentifiers: succeededLocalIdentifiers
         )
     }
 
     private func saveLocalDuplicateIfAvailable(
         _ photo: StoredSharedPhoto,
         photoID: SharedAlbumPhoto.ID
-    ) async throws -> Bool {
+    ) async throws -> String? {
         guard let localIdentifier = photo.localIdentifier,
               photoLibrary.containsPhoto(localIdentifier: localIdentifier)
         else {
-            return false
+            return nil
         }
 
         let preparedAsset: PreparedSharedPhotoAsset
@@ -522,17 +535,16 @@ final class DefaultSharedPhotoRepository: SharedPhotoRepository {
                 Error: \(String(describing: error), privacy: .public)
                 """
             )
-            return false
+            return nil
         }
 
         defer { assetPreparer.removePreparedFile(preparedAsset) }
-        _ = try await photoLibrary.savePhoto(
+        return try await photoLibrary.savePhoto(
             from: preparedAsset.fileURL,
             creationDate: photo.takenAt ?? preparedAsset.takenAt ?? photo.createdAt,
             latitude: photo.latitude ?? preparedAsset.latitude,
             longitude: photo.longitude ?? preparedAsset.longitude
         )
-        return true
     }
 
     func deleteLocalCopies(photoIDs: [SharedAlbumPhoto.ID]) async throws -> SharedAlbumPhotoMutationResult {
