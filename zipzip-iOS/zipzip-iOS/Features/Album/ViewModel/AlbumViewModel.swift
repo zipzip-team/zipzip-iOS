@@ -38,6 +38,7 @@ final class AlbumViewModel {
     @ObservationIgnored private let photoDeletion: PhotoDeletionService
     @ObservationIgnored private let sharedPhotoRepository: (any SharedPhotoRepository)?
     @ObservationIgnored private let shareGroupRepository: (any ShareGroupRepository)?
+    @ObservationIgnored private let photoSync: PhotoSyncCoordinator?
     @ObservationIgnored private let loadsAlbumsFromDatabase: Bool
     @ObservationIgnored private var albumMoveIdempotencyKeys: [String: UUID] = [:]
     @ObservationIgnored private var albumMoveDestinations: [String: SharedAlbum] = [:]
@@ -48,7 +49,8 @@ final class AlbumViewModel {
         photoSectionsProvider: PhotoSectionsProvider = PhotoSectionsProvider(),
         photoDeletion: PhotoDeletionService = PhotoDeletionService(),
         sharedPhotoRepository: (any SharedPhotoRepository)? = nil,
-        shareGroupRepository: (any ShareGroupRepository)? = nil
+        shareGroupRepository: (any ShareGroupRepository)? = nil,
+        photoSync: PhotoSyncCoordinator? = nil
     ) {
         self.albums = albums ?? []
         self.albumStore = albumStore
@@ -56,6 +58,7 @@ final class AlbumViewModel {
         self.photoDeletion = photoDeletion
         self.sharedPhotoRepository = sharedPhotoRepository
         self.shareGroupRepository = shareGroupRepository
+        self.photoSync = photoSync
         self.loadsAlbumsFromDatabase = albums == nil
     }
 
@@ -214,6 +217,7 @@ final class AlbumViewModel {
         var completedAnyWork = false
         var succeededPhotoCount = 0
         var failedPhotoCount = 0
+        var createdAlbumsThisRun: [(identity: String, album: SharedAlbum)] = []
 
         for sourceAlbum in sourceAlbums {
             let requestIdentity = "\(group.id.uuidString):\(sourceAlbum.id):\(sourceAlbum.name)"
@@ -231,7 +235,9 @@ final class AlbumViewModel {
                         idempotencyKey: idempotencyKey
                     )
                     albumMoveDestinations[requestIdentity] = destinationAlbum
+                    createdAlbumsThisRun.append((requestIdentity, destinationAlbum))
                 } catch is CancellationError {
+                    rollbackCreatedSharedAlbums(createdAlbumsThisRun, in: group.id)
                     return false
                 } catch {
                     logError("failed to create shared album", error: error)
@@ -272,8 +278,10 @@ final class AlbumViewModel {
                 if unresolvedCount == 0, result.failedCount == 0 {
                     albumMoveIdempotencyKeys.removeValue(forKey: requestIdentity)
                     albumMoveDestinations.removeValue(forKey: requestIdentity)
+                    createdAlbumsThisRun.removeAll { $0.identity == requestIdentity }
                 }
             } catch is CancellationError {
+                rollbackCreatedSharedAlbums(createdAlbumsThisRun, in: group.id)
                 return false
             } catch {
                 logError("failed to copy album photos to shared album", error: error)
@@ -295,6 +303,27 @@ final class AlbumViewModel {
             )
         }
         return completedAnyWork
+    }
+
+    /// 이동이 취소돼 생성된 공유 앨범을 서버에서 되돌린다.
+    /// 취소된 Task 안에서는 네트워크 호출이 즉시 취소되므로, 취소 영향을 받지 않는 새 Task에서 삭제한다.
+    private func rollbackCreatedSharedAlbums(
+        _ created: [(identity: String, album: SharedAlbum)],
+        in groupID: ShareAlbum.ID
+    ) {
+        guard let shareGroupRepository, !created.isEmpty else { return }
+
+        for (identity, _) in created {
+            albumMoveIdempotencyKeys.removeValue(forKey: identity)
+            albumMoveDestinations.removeValue(forKey: identity)
+        }
+
+        let albumIDs = created.map(\.album.id)
+        Task {
+            for albumID in albumIDs {
+                try? await shareGroupRepository.deleteSharedAlbum(id: albumID, groupID: groupID)
+            }
+        }
     }
 
     func resetSharedAlbumMoveState() {
@@ -488,7 +517,9 @@ final class AlbumViewModel {
             }
         }
 
-        if let sharedPhotoRepository {
+        if let sharedPhotoRepository, !sharedDestinations.isEmpty {
+            photoSync?.beginUpload()
+            defer { photoSync?.endUpload() }
             for (groupID, values) in sharedDestinations {
                 do {
                     let result = try await sharedPhotoRepository.addLocalPhotos(
@@ -634,6 +665,8 @@ final class AlbumViewModel {
         }
 
         guard let sharedPhotoRepository else { return false }
+        photoSync?.beginUpload()
+        defer { photoSync?.endUpload() }
         do {
             let localIdentifiers = try await sharedPhotoRepository.localIdentifiers(forAlbumPhotoIDs: ids)
             guard !localIdentifiers.isEmpty else { return false }

@@ -9,6 +9,7 @@ import SwiftUI
 
 struct AlbumView: View {
     @Environment(Router.self) private var router
+    @Environment(PhotoSyncCoordinator.self) private var photoSync
     @State private var viewModel: AlbumViewModel
     let shareViewModel: ShareViewModel
 
@@ -142,7 +143,11 @@ struct AlbumView: View {
                 onSelect: viewModel.selectShareGroup,
                 onComplete: { group in
                     viewModel.dismissShareAlbumSheet()
-                    router.push(.albumShareMoveLoading(group.id))
+                    router.push(.shareGroup(group.id))
+                    photoSync.runUpload {
+                        guard await viewModel.completeShareAlbumMove(to: group) else { return }
+                        await shareViewModel.loadSharedAlbums(groupID: group.id, refresh: true)
+                    }
                 }
             )
         }

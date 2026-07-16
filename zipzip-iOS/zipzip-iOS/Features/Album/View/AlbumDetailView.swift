@@ -30,6 +30,7 @@ struct AlbumDeletionAlertContent {
 
 struct AlbumDetailView<Content: View>: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(PhotoSyncCoordinator.self) private var photoSync
     @State private var viewModel: AlbumDetailViewModel
 
     let album: AlbumDetailItem
@@ -150,7 +151,7 @@ struct AlbumDetailView<Content: View>: View {
                 excludedAlbumIDs: [album.id],
                 onOpenShareAlbum: onOpenShareAlbum,
                 onComplete: { destinations in
-                    Task { await viewModel.completePhotoMove(to: destinations) }
+                    photoSync.track { await viewModel.completePhotoMove(to: destinations) }
                 }
             )
         }

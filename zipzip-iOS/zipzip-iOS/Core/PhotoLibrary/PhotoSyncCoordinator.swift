@@ -53,7 +53,7 @@ final class PhotoSyncCoordinator {
     private var task: Task<Void, Never>?
 
     @ObservationIgnored
-    private var uploadTask: Task<Void, Never>?
+    private var uploadTasks: [UUID: Task<Void, Never>] = [:]
 
     @ObservationIgnored
     private var etaStartedAt: Date?
@@ -74,7 +74,11 @@ final class PhotoSyncCoordinator {
     var isFinished = false
     private(set) var phase: SyncPhase = .idle
     private(set) var estimatedSecondsRemaining: Double?
-    private(set) var isUploading = false
+    private var activeUploadCount = 0
+
+    var isUploading: Bool {
+        activeUploadCount > 0
+    }
 
     init(
         syncOperation: SyncOperation? = nil,
@@ -103,18 +107,40 @@ final class PhotoSyncCoordinator {
 
     func cancelSync() {
         task?.cancel()
-        uploadTask?.cancel()
+        let tasks = uploadTasks
+        uploadTasks.removeAll()
+        tasks.values.forEach { $0.cancel() }
     }
 
+    func beginUpload() {
+        if activeUploadCount == 0 {
+            estimatedSecondsRemaining = nil
+        }
+        activeUploadCount += 1
+    }
+
+    func endUpload() {
+        activeUploadCount = max(0, activeUploadCount - 1)
+    }
+
+    /// 인디케이터 상태를 스스로 관리하지 않는 업로드를 실행하며 인디케이터를 켜고, 취소 가능하도록 추적한다.
     func runUpload(_ operation: @escaping @MainActor () async -> Void) {
-        uploadTask?.cancel()
-        estimatedSecondsRemaining = nil
-        isUploading = true
-        uploadTask = Task {
+        beginUpload()
+        let id = UUID()
+        uploadTasks[id] = Task {
             defer {
-                isUploading = false
-                uploadTask = nil
+                endUpload()
+                uploadTasks[id] = nil
             }
+            await operation()
+        }
+    }
+
+    /// 업로드를 자체 관리(begin/end)하는 작업을, `cancelSync()`로 취소 가능하도록 추적만 한다. `Task {}`의 드롭인 대체.
+    func track(_ operation: @escaping @MainActor () async -> Void) {
+        let id = UUID()
+        uploadTasks[id] = Task {
+            defer { uploadTasks[id] = nil }
             await operation()
         }
     }

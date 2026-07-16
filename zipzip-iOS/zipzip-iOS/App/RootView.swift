@@ -14,13 +14,14 @@ struct RootView: View {
     @Environment(AuthenticationState.self) private var authenticationState
     @Environment(\.scenePhase) private var scenePhase
     @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
-    @State private var photoSync = PhotoSyncCoordinator()
+    @State private var photoSync: PhotoSyncCoordinator
     @State private var albumViewModel: AlbumViewModel
     @State private var pictureViewModel = PictureViewModel()
     @State private var shareViewModel: ShareViewModel
     @State private var selection: NavbarTab = .main
     @State private var showShareSheet = false
     @State private var splashAnimationFinished = false
+    @State private var hasTriggeredInitialSync = false
     private let makePhotoInfoEditViewModel: ([String]) -> PhotoInfoEditViewModel
 
     init(
@@ -28,10 +29,13 @@ struct RootView: View {
         sharedPhotoRepository: any SharedPhotoRepository,
         makePhotoInfoEditViewModel: @escaping ([String]) -> PhotoInfoEditViewModel
     ) {
+        let photoSync = PhotoSyncCoordinator()
+        _photoSync = State(initialValue: photoSync)
         _albumViewModel = State(
             initialValue: AlbumViewModel(
                 sharedPhotoRepository: sharedPhotoRepository,
-                shareGroupRepository: shareGroupRepository
+                shareGroupRepository: shareGroupRepository,
+                photoSync: photoSync
             )
         )
         _shareViewModel = State(
@@ -62,7 +66,10 @@ struct RootView: View {
             }
             .task {
                 guard hasCompletedOnboarding else { return }
-                photoSync.startIfNeeded()
+                if !hasTriggeredInitialSync {
+                    hasTriggeredInitialSync = true
+                    photoSync.startIfNeeded()
+                }
                 await albumViewModel.loadAlbums()
             }
             .onChange(of: scenePhase) { _, newPhase in
@@ -139,12 +146,6 @@ struct RootView: View {
                         loadIsFavorite: { await albumViewModel.isPhotoFavorited(localIdentifier: $0) },
                         onToggleFavorite: togglePhotoFavorite
                     )
-                case let .albumShareMoveLoading(groupID):
-                    AlbumShareMoveLoadingView(
-                        groupID: groupID,
-                        albumViewModel: albumViewModel,
-                        shareViewModel: shareViewModel
-                    )
                 case let .shareGroup(groupID):
                     ShareGroupDetailView(
                         groupID: groupID,
@@ -197,9 +198,6 @@ struct RootView: View {
         .safeAreaInset(edge: .bottom, spacing: 0) {
             bottomBar
         }
-        .overlay(alignment: .top) {
-            topIndicator
-        }
         .bottomSheet(isPresented: $showShareSheet, detents: [.full]) { dismiss in
             ShareSheet(
                 albums: albumViewModel.shareDestinations,
@@ -208,7 +206,9 @@ struct RootView: View {
                 onOpenShareAlbum: loadSharedAlbums,
                 onComplete: { destinations in
                     let localIdentifiers = pictureViewModel.selectedPhotoLocalIdentifiers
-                    Task {
+                    dismiss()
+                    pictureViewModel.cancelSelection()
+                    photoSync.track {
                         guard await albumViewModel.addPhotos(
                             localIdentifiers: localIdentifiers,
                             to: destinations
@@ -216,8 +216,6 @@ struct RootView: View {
                             return
                         }
 
-                        dismiss()
-                        pictureViewModel.cancelSelection()
                         guard let albumID = destinations.firstPersonalAlbumID else {
                             return
                         }
@@ -322,18 +320,6 @@ struct RootView: View {
         }
     }
 
-    private var isNavbarVisible: Bool {
-        guard showsRootTab, router.path.isEmpty, showsNavbar else { return false }
-        if selection == .picture, pictureViewModel.isSelectionMode { return false }
-        return true
-    }
-
-    @ViewBuilder private var topIndicator: some View {
-        if isNavbarVisible || (showsRootTab && photoSync.isUploading) {
-            MoveInIndicatorBar()
-        }
-    }
-
     private func loadSharedAlbums(groupID: ShareAlbum.ID) async {
         await shareViewModel.loadSharedAlbums(groupID: groupID)
     }
@@ -362,7 +348,7 @@ struct RootView: View {
         localIdentifiers: [String],
         destinations: [ShareDestination]
     ) {
-        Task {
+        photoSync.track {
             guard await albumViewModel.addPhotos(
                 localIdentifiers: localIdentifiers,
                 to: destinations
@@ -390,7 +376,7 @@ struct RootView: View {
         from sourceAlbumID: Album.ID,
         destinations: [ShareDestination]
     ) {
-        Task {
+        photoSync.track {
             guard await albumViewModel.moveAlbumPhotos(
                 ids: ids,
                 from: sourceAlbumID,

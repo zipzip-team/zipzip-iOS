@@ -10,6 +10,7 @@ import UIKit
 
 struct FilteredPictureView: View {
     @Environment(Router.self) private var router
+    @Environment(PhotoSyncCoordinator.self) private var photoSync
 
     @State private var pictureViewModel = PictureViewModel()
     @State private var viewModel: FilteredPictureViewModel
@@ -107,7 +108,9 @@ struct FilteredPictureView: View {
                 onOpenShareAlbum: loadSharedAlbums,
                 onComplete: { destinations in
                     let localIdentifiers = pictureViewModel.selectedPhotoLocalIdentifiers
-                    Task {
+                    dismiss()
+                    pictureViewModel.cancelSelection()
+                    photoSync.track {
                         guard await albumViewModel.addPhotos(
                             localIdentifiers: localIdentifiers,
                             to: destinations
@@ -115,8 +118,6 @@ struct FilteredPictureView: View {
                             return
                         }
 
-                        dismiss()
-                        pictureViewModel.cancelSelection()
                         guard let albumID = destinations.firstPersonalAlbumID else {
                             return
                         }
