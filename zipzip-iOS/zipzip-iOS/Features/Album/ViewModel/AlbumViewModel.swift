@@ -241,31 +241,22 @@ final class AlbumViewModel {
 
             do {
                 let sections = try await photoSectionsProvider.loadAlbumSections(albumID: sourceAlbum.id)
-                let memberships = sections.flatMap(\.photos).compactMap { photo -> (Int, String)? in
-                    guard let membershipID = photo.albumPhotoID,
-                          !photo.localIdentifier.isEmpty
-                    else { return nil }
-                    return (membershipID, photo.localIdentifier)
-                }
-                guard !memberships.isEmpty else {
+                let localIdentifiers = sections
+                    .flatMap(\.photos)
+                    .map(\.localIdentifier)
+                    .filter { !$0.isEmpty }
+                guard !localIdentifiers.isEmpty else {
                     albumMoveIdempotencyKeys.removeValue(forKey: requestIdentity)
                     albumMoveDestinations.removeValue(forKey: requestIdentity)
                     continue
                 }
 
-                let localIdentifiers = memberships.map { $0.1 }
                 let result = try await sharedPhotoRepository.addLocalPhotos(
                     localIdentifiers: localIdentifiers,
                     to: [destinationAlbum.id],
                     in: group.id
                 )
                 let succeededIdentifiers = Set(result.succeededLocalIdentifiers)
-                let succeededMembershipIDs = memberships.compactMap { membershipID, localIdentifier in
-                    succeededIdentifiers.contains(localIdentifier) ? membershipID : nil
-                }
-                if !succeededMembershipIDs.isEmpty {
-                    try await albumStore.removeAlbumPhotos(ids: succeededMembershipIDs)
-                }
 
                 succeededPhotoCount += succeededIdentifiers.count
                 let unresolvedCount = max(0, localIdentifiers.count - succeededIdentifiers.count)

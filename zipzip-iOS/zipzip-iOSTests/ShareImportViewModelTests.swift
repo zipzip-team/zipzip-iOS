@@ -73,7 +73,7 @@ final class ShareImportViewModelTests: XCTestCase {
 }
 
 @MainActor
-private final class ImportShareGroupRepository: ShareGroupRepository {
+final class ImportShareGroupRepository: ShareGroupRepository {
     struct CreateRequest {
         let groupID: UUID
         let name: String
@@ -217,7 +217,7 @@ private final class ImportShareGroupRepository: ShareGroupRepository {
 }
 
 @MainActor
-private final class ImportSharedPhotoRepository: SharedPhotoRepository {
+final class ImportSharedPhotoRepository: SharedPhotoRepository {
     private let localIdentifiers: [String]
     private var mutationResults: [SharedAlbumPhotoMutationResult]
     private(set) var destinationAlbumIDs: [SharedAlbum.ID] = []
@@ -311,6 +311,6 @@ private final class ImportSharedPhotoRepository: SharedPhotoRepository {
     }
 }
 
-private enum ImportStubError: Error {
+enum ImportStubError: Error {
     case unsupported
 }
