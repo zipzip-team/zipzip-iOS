@@ -5,19 +5,22 @@
 
 import Foundation
 import Observation
+import OSLog
 
 @MainActor
 @Observable
 final class UserProfileState {
+    private static let logger = Logger(
+        subsystem: Bundle.main.bundleIdentifier ?? "zipzip-iOS",
+        category: "UserProfile"
+    )
+
     private let repository: UserProfileRepository
 
     private(set) var displayName: String?
     private(set) var ownerID: UUID?
     private(set) var isLoading = false
-    var isErrorAlertPresented = false
-    private(set) var errorAlertMessage = ""
 
-    private var fallbackUser: AuthUser?
     private var requestID: UUID?
 
     init(repository: UserProfileRepository) {
@@ -27,12 +30,9 @@ final class UserProfileState {
     func load(for user: AuthUser) async {
         let requestID = UUID()
         self.requestID = requestID
-        fallbackUser = user
         ownerID = user.id
         displayName = user.displayName
         isLoading = true
-        isErrorAlertPresented = false
-        errorAlertMessage = ""
 
         do {
             let profile = try await repository.myProfile()
@@ -41,17 +41,16 @@ final class UserProfileState {
         } catch {
             guard self.requestID == requestID, ownerID == user.id else { return }
             displayName = user.displayName
-            errorAlertMessage = "로그인 정보의 이름으로 표시합니다. 네트워크 연결 후 다시 시도해 주세요."
-            isErrorAlertPresented = true
+            Self.logger.error(
+                """
+                ❌ [UserProfile] failed to load user profile
+                Error: \(String(describing: error), privacy: .public)
+                """
+            )
         }
 
         guard self.requestID == requestID else { return }
         isLoading = false
-    }
-
-    func retry() async {
-        guard let fallbackUser, !isLoading else { return }
-        await load(for: fallbackUser)
     }
 
     func resolvedDisplayName(for user: AuthUser) -> String {
@@ -59,18 +58,11 @@ final class UserProfileState {
         return displayName ?? user.displayName
     }
 
-    func dismissErrorAlert() {
-        isErrorAlertPresented = false
-    }
-
     func reset() {
         requestID = nil
-        fallbackUser = nil
         displayName = nil
         ownerID = nil
         isLoading = false
-        isErrorAlertPresented = false
-        errorAlertMessage = ""
     }
 }
 

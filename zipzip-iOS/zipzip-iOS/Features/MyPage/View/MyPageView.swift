@@ -72,14 +72,6 @@ struct MyPageView: View {
         } message: {
             Text("탈퇴가 완료된 뒤 이 기기의 로그인 정보가 삭제돼요.")
         }
-        .alert("프로필을 불러오지 못했어요", isPresented: $userProfileState.isErrorAlertPresented) {
-            Button("다시 시도") {
-                Task { await userProfileState.retry() }
-            }
-            Button("확인", role: .cancel, action: userProfileState.dismissErrorAlert)
-        } message: {
-            Text(userProfileState.errorAlertMessage)
-        }
     }
 
     private var loginSection: some View {
