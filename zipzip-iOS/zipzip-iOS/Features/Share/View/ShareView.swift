@@ -409,16 +409,24 @@ private struct ShareJoinConfirmationSheet: View {
 
     var body: some View {
         BottomSheet {
-            VStack(spacing: 18) {
+            VStack(spacing: 16) {
                 representativeImage
 
-                VStack(spacing: 4) {
-                    Text("\(preview?.group.name ?? "공유 그룹")에 들어갈까요?")
-                        .font(.t3_sb)
-                        .foregroundStyle(.white00)
-                    Text("생성자: \(creatorName)")
-                        .font(.b3_md)
-                        .foregroundStyle(.grey400)
+                VStack(spacing: 8) {
+                    VStack(spacing: 4) {
+                        HStack(spacing: 4) {
+                            Text(preview?.group.name ?? "공유 그룹")
+                                .foregroundStyle(.orange500)
+                            Text("에 들어갈까요?")
+                                .foregroundStyle(.white00)
+                        }
+                        .font(.t2_sb)
+
+                        Text("생성자: \(creatorName)")
+                            .font(.b2_md)
+                            .foregroundStyle(.grey200)
+                    }
+
                     HStack(spacing: -8) {
                         ForEach(0 ..< visibleMemberCount, id: \.self) { _ in
                             ProfileImage(size: 24)
@@ -453,14 +461,21 @@ private struct ShareJoinConfirmationSheet: View {
                         .resizable()
                         .scaledToFill()
                         .frame(width: 160, height: 160)
-                        .clipShape(.rect(cornerRadius: 24))
+                        .clipShape(.rect(cornerRadius: 12))
                 default:
-                    ShareAssetPlaceholder(width: 160, height: 160)
+                    representativeImagePlaceholder
                 }
             }
         } else {
-            ShareAssetPlaceholder(width: 160, height: 160)
+            representativeImagePlaceholder
         }
+    }
+
+    private var representativeImagePlaceholder: some View {
+        RoundedRectangle(cornerRadius: 12)
+            .fill(.grey500)
+            .frame(width: 160, height: 160)
+            .accessibilityHidden(true)
     }
 
     private var validRepresentativeImageURL: URL? {
@@ -492,10 +507,22 @@ private struct ShareInvitationSheet: View {
                     .foregroundStyle(.grey400)
 
                 HStack(spacing: 8) {
-                    Text(code)
-                        .font(.b1_sb)
-                        .foregroundStyle(.white00)
-                        .lineLimit(1)
+                    HStack(spacing: 4) {
+                        Text("#")
+                            .font(.t2_md)
+                            .foregroundStyle(.white00)
+                            .frame(width: 12)
+                        Text(code)
+                            .font(.t2_md)
+                            .foregroundStyle(.white00)
+                            .lineLimit(1)
+                            .padding(.vertical, 4)
+                            .overlay(alignment: .bottom) {
+                                Rectangle()
+                                    .fill(.orange400)
+                                    .frame(height: 1)
+                            }
+                    }
                     Spacer(minLength: 0)
                     RoundedTextButton(title: "복사", style: .large) {
                         UIPasteboard.general.string = code

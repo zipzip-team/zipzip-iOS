@@ -96,16 +96,22 @@ struct ShareGroupManagementSheet: View {
             sectionTitle("참여자 초대")
 
             HStack(spacing: 12) {
-                Text(inviteCode)
-                    .font(.t2_md)
-                    .foregroundStyle(.white00)
-                    .lineLimit(1)
-                    .overlay(alignment: .bottom) {
-                        Rectangle()
-                            .fill(.orange400)
-                            .frame(height: 1)
-                            .offset(y: 4)
-                    }
+                HStack(spacing: 4) {
+                    Text("#")
+                        .font(.t2_md)
+                        .foregroundStyle(.white00)
+                        .frame(width: 12)
+                    Text(inviteCode)
+                        .font(.t2_md)
+                        .foregroundStyle(.white00)
+                        .lineLimit(1)
+                        .padding(.vertical, 4)
+                        .overlay(alignment: .bottom) {
+                            Rectangle()
+                                .fill(.orange400)
+                                .frame(height: 1)
+                        }
+                }
 
                 Spacer(minLength: 0)
 
@@ -282,7 +288,7 @@ private struct ShareGroupLeaveConfirmation: View {
             createdBy: ShareGroupUser(id: nil, displayName: nil)
         ),
         groupName: $groupName,
-        inviteCode: "# 3d2dsd322d32d23",
+        inviteCode: "3d2dsd322d32d23",
         isInviteCodeAvailable: true,
         isUpdating: false,
         isLeaving: false,
