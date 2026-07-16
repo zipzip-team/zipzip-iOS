@@ -6,10 +6,12 @@
 //
 
 import Lottie
+import Photos
 import SwiftUI
 
 struct SplashView: View {
     @Environment(Router.self) private var router
+    @Environment(PhotoSyncCoordinator.self) private var photoSync
     @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
     @State private var lottieFinished = false
     private let continuesOnboarding: Bool
@@ -49,7 +51,15 @@ struct SplashView: View {
             guard continuesOnboarding else { return }
             try? await Task.sleep(for: .seconds(3))
             guard router.path.isEmpty, !hasCompletedOnboarding else { return }
-            router.push(.photoPermission)
+
+            // 이미 사진 접근이 허용/제한된 상태면 권한 요청 뷰를 건너뛰고 바로 서비스 설명으로 이동한다.
+            let status = PHPhotoLibrary.authorizationStatus(for: .readWrite)
+            if status == .authorized || status == .limited {
+                photoSync.startIfNeeded()
+                router.push(.serviceIntro)
+            } else {
+                router.push(.photoPermission)
+            }
         }
     }
 }
@@ -57,4 +67,5 @@ struct SplashView: View {
 #Preview {
     SplashView()
         .environment(Router())
+        .environment(PhotoSyncCoordinator())
 }
