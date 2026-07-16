@@ -45,6 +45,7 @@ struct DeviceSelectionView: View {
                             }
                         }
                     }
+                    .padding(1)
                 }
                 .frame(maxHeight: .infinity)
 
