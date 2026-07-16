@@ -15,6 +15,7 @@ enum SyncPhase: Equatable {
     case idle
     case reading
     case organizing
+    case uploading
     case finished
 
     fileprivate var kind: Int {
@@ -22,7 +23,8 @@ enum SyncPhase: Equatable {
         case .idle: 0
         case .reading: 1
         case .organizing: 2
-        case .finished: 3
+        case .uploading: 3
+        case .finished: 4
         }
     }
 }
@@ -103,6 +105,11 @@ final class PhotoSyncCoordinator {
         runSync()
     }
 
+    /// 진행 중인 동기화를 사용자가 중단한다.
+    func cancelSync() {
+        task?.cancel()
+    }
+
     private func runSync() {
         guard task == nil else { return }
         pipelineGeneration += 1
@@ -148,6 +155,10 @@ final class PhotoSyncCoordinator {
                         )
                     }
                 }
+                if Task.isCancelled {
+                    resetAfterInterruptedSync(generation: generation)
+                    return
+                }
                 advance(to: .finished, generation: generation)
                 return
             }
@@ -180,6 +191,10 @@ final class PhotoSyncCoordinator {
                 }
             }
 
+            if Task.isCancelled {
+                resetAfterInterruptedSync(generation: generation)
+                return
+            }
             advance(to: .finished, generation: generation)
         }
     }
