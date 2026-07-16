@@ -34,7 +34,7 @@ struct ShareGroupDetailView: View {
 
                     if group.albums.isEmpty, viewModel.hasLoadedSharedAlbums(groupID: groupID) {
                         ShareGroupEmptyContent {
-                            router.push(.shareImport(groupID))
+                            viewModel.presentCreateSharedAlbumSheet(groupID: groupID)
                         }
                         .frame(minHeight: 500)
                     } else {
