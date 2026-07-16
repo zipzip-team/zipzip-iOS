@@ -5,6 +5,7 @@
 //  Created by 성환 on 7/11/26.
 //
 
+import Foundation
 import OSLog
 import SQLiteData
 
@@ -16,7 +17,10 @@ final class DeviceSelectionViewModel {
     @ObservationIgnored
     private let store: RegisteredDeviceStore
 
-    private static let logger = Logger(subsystem: "com.zipzip.zipzip-iOS", category: "DeviceSelection")
+    private static let logger = Logger(
+        subsystem: Bundle.main.bundleIdentifier ?? "zipzip-iOS",
+        category: "DeviceSelection"
+    )
 
     var devices: [DetectedDevice] {
         fetchedDevices
@@ -24,7 +28,6 @@ final class DeviceSelectionViewModel {
 
     var selectedDeviceIDs = Set<DetectedDevice.ID>()
     private(set) var isSavingSelection = false
-    var isErrorAlertPresented = false
 
     init(store: RegisteredDeviceStore) {
         self.store = store
@@ -45,7 +48,6 @@ final class DeviceSelectionViewModel {
         guard !selectedDeviceIDs.isEmpty else { return false }
 
         isSavingSelection = true
-        isErrorAlertPresented = false
         defer { isSavingSelection = false }
 
         let ids = Set(selectedDeviceIDs.compactMap(Int.init))
@@ -57,12 +59,7 @@ final class DeviceSelectionViewModel {
             return false
         } catch {
             Self.logger.error("failed to save selected devices: \(error)")
-            isErrorAlertPresented = true
             return false
         }
-    }
-
-    func dismissSaveError() {
-        isErrorAlertPresented = false
     }
 }

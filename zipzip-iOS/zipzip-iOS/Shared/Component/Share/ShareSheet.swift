@@ -147,9 +147,7 @@ struct ShareSheet: View {
     }
 
     private var isCompletionDisabled: Bool {
-        // TODO: 정교은 담당 photos/attach API가 합쳐지면 공유 탭에서도 선택 완료를 허용하고,
-        // 호출 화면에서 선택한 server photo id와 shared album id를 attach한 뒤 목록을 갱신합니다.
-        selection == .right || selectedDestinations.isEmpty
+        selectedDestinations.isEmpty
     }
 
     private var personalAlbums: [Album] {
@@ -272,7 +270,8 @@ private struct SharedAlbumSelectionGrid: View {
                             name: album.name,
                             count: album.count,
                             state: selectedAlbumIDs.contains(album.id) ? .highlighted : .plain,
-                            nameColorOverride: .white00
+                            nameColorOverride: .white00,
+                            thumbnailRemoteURLs: album.validThumbnailURLs()
                         )
                     }
                     .buttonStyle(StaticButtonStyle())
@@ -323,9 +322,11 @@ private struct ShareDestinationRow: View {
     var body: some View {
         HStack(spacing: 10) {
             HStack(spacing: 16) {
-                Color.grey100
-                    .frame(width: 72, height: 72)
-                    .clipShape(.rect(cornerRadius: 8))
+                ShareGroupThumbnailImage(
+                    url: album.validRepresentativeImageURL(),
+                    cornerRadius: 8
+                )
+                .frame(width: 72, height: 72)
 
                 VStack(alignment: .leading, spacing: 0) {
                     Text(album.name)

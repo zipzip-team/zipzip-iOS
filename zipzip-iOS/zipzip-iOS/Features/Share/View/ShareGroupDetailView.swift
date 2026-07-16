@@ -9,12 +9,14 @@ struct ShareGroupDetailView: View {
     @Environment(Router.self) private var router
     let groupID: ShareAlbum.ID
     let viewModel: ShareViewModel
-    let personalAlbums: [Album]
+    var onMoveAlbumsToPersonal: ([SharedAlbum]) async -> [Album.ID] = { _ in [] }
+    var onMoveSucceeded: () -> Void = {}
 
     @State private var isSelectionMode = false
     @State private var selectedAlbumIDs: [SharedAlbum.ID] = []
     @State private var isDeleteAlertPresented = false
-    @State private var isMoveSheetPresented = false
+    @State private var isMoveAlertPresented = false
+    @State private var isCopyingAlbumsToPersonal = false
 
     private let columns = [
         GridItem(.flexible(), spacing: 17),
@@ -32,7 +34,7 @@ struct ShareGroupDetailView: View {
 
                     if group.albums.isEmpty, viewModel.hasLoadedSharedAlbums(groupID: groupID) {
                         ShareGroupEmptyContent {
-                            router.push(.shareImport(groupID))
+                            viewModel.presentCreateSharedAlbumSheet(groupID: groupID)
                         }
                         .frame(minHeight: 500)
                     } else {
@@ -44,7 +46,8 @@ struct ShareGroupDetailView: View {
                                     AlbumCard(
                                         name: album.name,
                                         count: album.count,
-                                        state: albumState(for: album)
+                                        state: albumState(for: album),
+                                        thumbnailRemoteURLs: album.validThumbnailURLs()
                                     )
                                 }
                                 .buttonStyle(StaticButtonStyle())
@@ -67,6 +70,10 @@ struct ShareGroupDetailView: View {
                     }
                 }
                 .ignoresSafeArea(edges: .top)
+                .refreshable {
+                    await viewModel.loadGroup(id: groupID, refresh: true)
+                    await viewModel.loadSharedAlbums(groupID: groupID, refresh: true)
+                }
             }
         }
         .overlay(alignment: .topLeading) {
@@ -81,8 +88,8 @@ struct ShareGroupDetailView: View {
                         .init(id: "select-shared-albums", icon: .select, accessibilityLabel: "사진집 선택") {
                             enterSelectionMode()
                         },
-                        .init(id: "import-shared-content", icon: .createStroke, accessibilityLabel: "사진 불러오기") {
-                            router.push(.shareImport(groupID))
+                        .init(id: "create-shared-album", icon: .createStroke, accessibilityLabel: "공유집 생성") {
+                            viewModel.presentCreateSharedAlbumSheet(groupID: groupID)
                         },
                         .init(id: "open-comments", icon: .chatStroke, accessibilityLabel: "댓글") {
                             viewModel.presentComments(groupID: groupID)
@@ -108,23 +115,21 @@ struct ShareGroupDetailView: View {
             onSecondaryTap: { isDeleteAlertPresented = false },
             onPrimaryTap: deleteSelectedAlbums
         )
-        .bottomSheet(isPresented: $isMoveSheetPresented, detents: [.full]) { dismiss in
-            ShareSheet(
-                albums: personalAlbums,
-                shareAlbums: viewModel.groups,
-                onDismiss: { dismiss() },
-                onOpenShareAlbum: { groupID in
-                    await viewModel.loadSharedAlbums(groupID: groupID)
-                },
-                onComplete: { _ in exitSelectionMode() }
-            )
-        }
+        .bottomSheetAlert(
+            isPresented: $isMoveAlertPresented,
+            title: "선택한 공유집을\n사진집으로 옮길까요?",
+            message: "공유집에 있는 모든 사진이 기기에 저장돼요.",
+            secondaryTitle: "취소",
+            primaryTitle: "옮기기",
+            onSecondaryTap: { isMoveAlertPresented = false },
+            onPrimaryTap: moveSelectedAlbumsToPersonal
+        )
         .navigationBarBackButtonHidden(true)
         .toolbarVisibility(.hidden, for: .navigationBar)
         .task(id: groupID) {
-            async let groupRequest: Void = viewModel.loadGroup(id: groupID)
-            async let albumRequest: Void = viewModel.loadSharedAlbums(groupID: groupID)
-            async let memberRequest: Void = viewModel.loadMembers(groupID: groupID)
+            async let groupRequest: Void = viewModel.loadGroup(id: groupID, refresh: true)
+            async let albumRequest: Void = viewModel.loadSharedAlbums(groupID: groupID, refresh: true)
+            async let memberRequest: Void = viewModel.loadMembers(groupID: groupID, refresh: true)
             _ = await(groupRequest, albumRequest, memberRequest)
         }
     }
@@ -132,6 +137,7 @@ struct ShareGroupDetailView: View {
     @ViewBuilder private var leadingButton: some View {
         if isSelectionMode {
             RoundedTextButton(title: "취소", style: .cancel, action: exitSelectionMode)
+                .disabled(isCopyingAlbumsToPersonal)
         } else {
             RoundedIconButton(items: [
                 .init(id: "share-group-back", icon: .iconChevronLeft, accessibilityLabel: "뒤로가기") {
@@ -146,26 +152,28 @@ struct ShareGroupDetailView: View {
             .init(
                 icon: .settingShare,
                 title: "공유 관리",
+                isDisabled: isCopyingAlbumsToPersonal,
                 action: presentShareManagement
             ),
             .init(
                 icon: .moveToAlbum,
                 title: "사진집으로",
-                // TODO: 정교은 담당 attach/detach API가 합쳐지면 선택한 공유집의 사진을
-                // 대상 사진집에 attach하고, 이동인 경우 기존 공유집에서 detach합니다.
-                isDisabled: true,
-                action: { isMoveSheetPresented = true }
+                isDisabled: selectedAlbumIDs.isEmpty || isCopyingAlbumsToPersonal,
+                action: { isMoveAlertPresented = true }
             ),
             .init(
                 icon: .delete,
                 title: "삭제",
-                isDisabled: selectedAlbumIDs.isEmpty || viewModel.isDeletingSharedAlbums,
+                isDisabled: selectedAlbumIDs.isEmpty
+                    || viewModel.isDeletingSharedAlbums
+                    || isCopyingAlbumsToPersonal,
                 action: { isDeleteAlertPresented = true }
             )
         ]
     }
 
     private func handleAlbumTap(_ album: SharedAlbum) {
+        guard !isCopyingAlbumsToPersonal else { return }
         if isSelectionMode {
             if let index = selectedAlbumIDs.firstIndex(of: album.id) {
                 selectedAlbumIDs.remove(at: index)
@@ -201,6 +209,7 @@ struct ShareGroupDetailView: View {
     private func exitSelectionMode() {
         isSelectionMode = false
         selectedAlbumIDs.removeAll()
+        isMoveAlertPresented = false
     }
 
     private func presentShareManagement() {
@@ -214,6 +223,31 @@ struct ShareGroupDetailView: View {
         Task {
             guard await viewModel.deleteSharedAlbums(albumIDs, from: groupID) else { return }
             exitSelectionMode()
+        }
+    }
+
+    private func moveSelectedAlbumsToPersonal() {
+        isMoveAlertPresented = false
+        guard !isCopyingAlbumsToPersonal,
+              let group = viewModel.group(withID: groupID)
+        else {
+            return
+        }
+
+        let albumsByID = Dictionary(uniqueKeysWithValues: group.albums.map { ($0.id, $0) })
+        let sourceAlbums = selectedAlbumIDs.compactMap { albumsByID[$0] }
+        guard !sourceAlbums.isEmpty else { return }
+
+        isCopyingAlbumsToPersonal = true
+        Task {
+            defer { isCopyingAlbumsToPersonal = false }
+            let createdAlbumIDs = await onMoveAlbumsToPersonal(sourceAlbums)
+            guard !createdAlbumIDs.isEmpty else {
+                return
+            }
+
+            exitSelectionMode()
+            onMoveSucceeded()
         }
     }
 }
@@ -302,6 +336,7 @@ private struct ShareGroupEmptyContent: View {
 
 struct ShareImportView: View {
     @Environment(Router.self) private var router
+    @Environment(PhotoSyncCoordinator.self) private var photoSync
     let groupID: ShareAlbum.ID
     let viewModel: ShareViewModel
     let albums: [Album]
@@ -310,6 +345,9 @@ struct ShareImportView: View {
     @State private var selection: ShareImportSelection = .albums
     @State private var selectedAlbumIDs: Set<Album.ID> = []
     @State private var selectedPhotoIDs: [UUID] = []
+    @State private var selectedDestinationAlbumID: SharedAlbum.ID?
+    @State private var isDestinationPresented = false
+    @State private var isImporting = false
 
     private let columns = [
         GridItem(.flexible(), spacing: 17),
@@ -325,6 +363,7 @@ struct ShareImportView: View {
                 ShareImportHeader(
                     selection: $selection,
                     onCancel: router.pop,
+                    isCompleteDisabled: isCompleteDisabled,
                     onComplete: completeImport
                 )
 
@@ -366,6 +405,26 @@ struct ShareImportView: View {
         }
         .navigationBarBackButtonHidden(true)
         .toolbarVisibility(.hidden, for: .navigationBar)
+        .bottomSheet(
+            isPresented: $isDestinationPresented,
+            detents: [.full],
+            isInteractiveDismissDisabled: isImporting
+        ) { dismiss in
+            ShareImportDestinationSheet(
+                albums: sharedAlbums,
+                selectedAlbumID: selectedDestinationAlbumID,
+                isBusy: isImporting,
+                onClose: {
+                    selectedDestinationAlbumID = nil
+                    dismiss()
+                },
+                onSelect: { selectedDestinationAlbumID = $0 },
+                onComplete: completePhotoImport
+            )
+        }
+        .task(id: groupID) {
+            await viewModel.loadSharedAlbums(groupID: groupID)
+        }
     }
 
     private func toggleAlbum(_ album: Album) {
@@ -385,16 +444,62 @@ struct ShareImportView: View {
     }
 
     private func completeImport() {
-        // TODO: 정교은 담당 공유집 생성·사진 업로드 API가 합쳐지면 아래 순서로 연결합니다.
-        // 사진집 선택: POST /shared-groups/{id}/shared-albums로 공유집을 만든 뒤 사진을 업로드합니다.
-        // 사진 선택: upload-urls 요청 → object storage PUT → photos/complete 호출 후 목록을 갱신합니다.
-        // 이미 서버 photo id가 있는 사진은 새로 업로드하지 않고 photos/attach를 사용합니다.
+        guard !isCompleteDisabled else { return }
+        switch selection {
+        case .photos:
+            selectedDestinationAlbumID = nil
+            isDestinationPresented = true
+        case .albums:
+            let selectedAlbums = albums.filter { selectedAlbumIDs.contains($0.id) }
+            isImporting = true
+            router.pop()
+            photoSync.runUpload {
+                _ = await viewModel.importPersonalAlbums(selectedAlbums, into: groupID)
+            }
+        }
+    }
+
+    private func completePhotoImport() {
+        guard let selectedDestinationAlbumID, !isImporting else { return }
+        let selectedIDs = Set(selectedPhotoIDs)
+        let localIdentifiers = photoSections
+            .flatMap(\.photos)
+            .filter { selectedIDs.contains($0.id) }
+            .map(\.localIdentifier)
+            .filter { !$0.isEmpty }
+        guard !localIdentifiers.isEmpty else { return }
+
+        isImporting = true
+        isDestinationPresented = false
+        router.pop()
+        photoSync.runUpload {
+            _ = await viewModel.importPhotos(
+                localIdentifiers: localIdentifiers,
+                into: selectedDestinationAlbumID,
+                groupID: groupID
+            )
+        }
+    }
+
+    private var isCompleteDisabled: Bool {
+        if isImporting { return true }
+        return switch selection {
+        case .photos:
+            selectedPhotoIDs.isEmpty || sharedAlbums.isEmpty
+        case .albums:
+            selectedAlbumIDs.isEmpty
+        }
+    }
+
+    private var sharedAlbums: [SharedAlbum] {
+        viewModel.group(withID: groupID)?.albums ?? []
     }
 }
 
 private struct ShareImportHeader: View {
     @Binding var selection: ShareImportSelection
     let onCancel: () -> Void
+    let isCompleteDisabled: Bool
     let onComplete: () -> Void
 
     var body: some View {
@@ -424,9 +529,71 @@ private struct ShareImportHeader: View {
             Spacer(minLength: 0)
 
             RoundedTextButton(title: "완료", style: .cancel, action: onComplete)
+                .disabled(isCompleteDisabled)
+                .opacity(isCompleteDisabled ? 0.4 : 1)
         }
         .padding(.horizontal, 16)
         .frame(height: 60)
+    }
+}
+
+private struct ShareImportDestinationSheet: View {
+    let albums: [SharedAlbum]
+    let selectedAlbumID: SharedAlbum.ID?
+    let isBusy: Bool
+    let onClose: () -> Void
+    let onSelect: (SharedAlbum.ID) -> Void
+    let onComplete: () -> Void
+
+    private let columns = [
+        GridItem(.flexible(), spacing: 17),
+        GridItem(.flexible(), spacing: 17)
+    ]
+
+    var body: some View {
+        BottomSheet(
+            leftItem: {
+                BottomSheetCloseButton(action: onClose)
+                    .disabled(isBusy)
+            },
+            rightItem: {
+                Button("완료", action: onComplete)
+                    .font(.b1_sb)
+                    .foregroundStyle(.white00)
+                    .frame(width: 72, height: 48)
+                    .disabled(selectedAlbumID == nil || isBusy)
+                    .opacity(selectedAlbumID == nil || isBusy ? 0.4 : 1)
+            }
+        ) {
+            VStack(alignment: .leading, spacing: 12) {
+                Text("사진을 넣을 공유집")
+                    .font(.t3_sb)
+                    .foregroundStyle(.white00)
+                    .padding(.horizontal, 16)
+
+                ScrollView(showsIndicators: false) {
+                    LazyVGrid(columns: columns, spacing: 20) {
+                        ForEach(albums) { album in
+                            Button {
+                                onSelect(album.id)
+                            } label: {
+                                AlbumCard(
+                                    name: album.name,
+                                    count: album.count,
+                                    state: selectedAlbumID == album.id ? .highlighted : .plain,
+                                    nameColorOverride: .white00,
+                                    thumbnailRemoteURLs: album.validThumbnailURLs()
+                                )
+                            }
+                            .buttonStyle(StaticButtonStyle())
+                            .disabled(isBusy)
+                        }
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 16)
+                }
+            }
+        }
     }
 }
 
@@ -438,7 +605,7 @@ private struct ShareImportHeader: View {
             groups: [group],
             repository: container.shareGroupRepository
         )
-        ShareGroupDetailView(groupID: group.id, viewModel: viewModel, personalAlbums: [])
+        ShareGroupDetailView(groupID: group.id, viewModel: viewModel)
             .environment(AuthenticationState.preview(isLoggedIn: true))
             .environment(container)
             .environment(Router())

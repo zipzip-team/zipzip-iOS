@@ -9,7 +9,10 @@ import Foundation
 import OSLog
 import SQLiteData
 
-private let logger = Logger(subsystem: "com.zipzip.zipzip-iOS", category: "PhotoLibrarySync")
+private let logger = Logger(
+    subsystem: Bundle.main.bundleIdentifier ?? "zipzip-iOS",
+    category: "PhotoLibrarySync"
+)
 
 enum SyncPhase: Equatable {
     case idle
@@ -50,6 +53,9 @@ final class PhotoSyncCoordinator {
     private var task: Task<Void, Never>?
 
     @ObservationIgnored
+    private var uploadTasks: [UUID: Task<Void, Never>] = [:]
+
+    @ObservationIgnored
     private var etaStartedAt: Date?
 
     @ObservationIgnored
@@ -66,9 +72,13 @@ final class PhotoSyncCoordinator {
 
     var progress: SyncProgress?
     var isFinished = false
-    var isErrorAlertPresented = false
     private(set) var phase: SyncPhase = .idle
     private(set) var estimatedSecondsRemaining: Double?
+    private var activeUploadCount = 0
+
+    var isUploading: Bool {
+        activeUploadCount > 0
+    }
 
     init(
         syncOperation: SyncOperation? = nil,
@@ -79,7 +89,7 @@ final class PhotoSyncCoordinator {
     }
 
     var isProcessing: Bool {
-        phase != .idle && phase != .finished
+        isUploading || (phase != .idle && phase != .finished)
     }
 
     var remainingMinutes: Int? {
@@ -88,7 +98,6 @@ final class PhotoSyncCoordinator {
     }
 
     func startIfNeeded() {
-        guard !isErrorAlertPresented else { return }
         runSync()
     }
 
@@ -96,18 +105,44 @@ final class PhotoSyncCoordinator {
         runSync()
     }
 
-    func dismissSyncError() {
-        isErrorAlertPresented = false
-    }
-
-    func retrySync() {
-        isErrorAlertPresented = false
-        runSync()
-    }
-
-    /// 진행 중인 동기화를 사용자가 중단한다.
     func cancelSync() {
         task?.cancel()
+        let tasks = uploadTasks
+        uploadTasks.removeAll()
+        tasks.values.forEach { $0.cancel() }
+    }
+
+    func beginUpload() {
+        if activeUploadCount == 0 {
+            estimatedSecondsRemaining = nil
+        }
+        activeUploadCount += 1
+    }
+
+    func endUpload() {
+        activeUploadCount = max(0, activeUploadCount - 1)
+    }
+
+    /// 인디케이터 상태를 스스로 관리하지 않는 업로드를 실행하며 인디케이터를 켜고, 취소 가능하도록 추적한다.
+    func runUpload(_ operation: @escaping @MainActor () async -> Void) {
+        beginUpload()
+        let id = UUID()
+        uploadTasks[id] = Task {
+            defer {
+                endUpload()
+                uploadTasks[id] = nil
+            }
+            await operation()
+        }
+    }
+
+    /// 업로드를 자체 관리(begin/end)하는 작업을, `cancelSync()`로 취소 가능하도록 추적만 한다. `Task {}`의 드롭인 대체.
+    func track(_ operation: @escaping @MainActor () async -> Void) {
+        let id = UUID()
+        uploadTasks[id] = Task {
+            defer { uploadTasks[id] = nil }
+            await operation()
+        }
     }
 
     private func runSync() {
@@ -115,7 +150,6 @@ final class PhotoSyncCoordinator {
         pipelineGeneration += 1
         let generation = pipelineGeneration
         isFinished = false
-        isErrorAlertPresented = false
         phase = .idle
         estimatedSecondsRemaining = nil
         task = Task {
@@ -136,7 +170,6 @@ final class PhotoSyncCoordinator {
             } catch {
                 logger.error("photo library sync failed: \(error)")
                 resetAfterInterruptedSync(generation: generation)
-                isErrorAlertPresented = true
                 return
             }
 

@@ -23,6 +23,7 @@ struct zipzip_iOSApp: App {
             if ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] == nil {
                 RootView(
                     shareGroupRepository: container.shareGroupRepository,
+                    sharedPhotoRepository: container.sharedPhotoRepository,
                     makePhotoInfoEditViewModel: { localIdentifiers in
                         PhotoInfoEditViewModel(localIdentifiers: localIdentifiers)
                     }

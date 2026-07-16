@@ -22,21 +22,17 @@ final class OnboardingCompletionTests: XCTestCase {
         )
 
         coordinator.startIfNeeded()
-        await waitUntil { coordinator.isErrorAlertPresented }
+        await waitUntil { attempt == 1 && coordinator.phase == .idle }
+        await waitForAsyncWork()
 
         XCTAssertFalse(coordinator.isFinished)
         XCTAssertEqual(coordinator.phase, .idle)
 
         coordinator.startIfNeeded()
-        await waitForAsyncWork()
-        XCTAssertEqual(attempt, 1)
-
-        coordinator.retrySync()
         await waitUntil { coordinator.phase == .finished }
 
         XCTAssertEqual(attempt, 2)
         XCTAssertTrue(coordinator.isFinished)
-        XCTAssertFalse(coordinator.isErrorAlertPresented)
     }
 
     @MainActor
@@ -54,7 +50,6 @@ final class OnboardingCompletionTests: XCTestCase {
         await waitForAsyncWork()
 
         XCTAssertFalse(coordinator.isFinished)
-        XCTAssertFalse(coordinator.isErrorAlertPresented)
         XCTAssertEqual(coordinator.phase, .idle)
     }
 
@@ -67,7 +62,6 @@ final class OnboardingCompletionTests: XCTestCase {
         let didSave = await viewModel.saveSelection()
 
         XCTAssertFalse(didSave)
-        XCTAssertTrue(viewModel.isErrorAlertPresented)
         XCTAssertFalse(viewModel.isSavingSelection)
         XCTAssertEqual(store.savedDeviceIDs, [[7]])
     }
@@ -81,7 +75,6 @@ final class OnboardingCompletionTests: XCTestCase {
         let didSave = await viewModel.saveSelection()
 
         XCTAssertTrue(didSave)
-        XCTAssertFalse(viewModel.isErrorAlertPresented)
         XCTAssertFalse(viewModel.isSavingSelection)
         XCTAssertEqual(store.savedDeviceIDs, [[7, 11]])
     }
@@ -94,7 +87,6 @@ final class OnboardingCompletionTests: XCTestCase {
         let didSave = await viewModel.saveSelection()
 
         XCTAssertFalse(didSave)
-        XCTAssertFalse(viewModel.isErrorAlertPresented)
         XCTAssertFalse(viewModel.isSavingSelection)
     }
 

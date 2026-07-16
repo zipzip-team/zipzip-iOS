@@ -12,6 +12,11 @@ protocol ShareGroupAPI {
     func fetchMembers(groupID: UUID, cursor: String?, size: Int) async throws -> ShareGroupMemberListPageResponse
     func fetchInviteCode(groupID: UUID) async throws -> InviteCodeResponse
     func fetchSharedAlbums(groupID: UUID, cursor: String?, size: Int) async throws -> SharedAlbumListPageResponse
+    func createSharedAlbum(
+        groupID: UUID,
+        name: String,
+        idempotencyKey: UUID
+    ) async throws -> SharedAlbumResponse
     func createGroup(name: String, idempotencyKey: UUID) async throws -> CreateSharedGroupResponse
     func previewJoin(inviteCode: String) async throws -> ShareGroupJoinPreviewResponse
     func join(inviteCode: String, idempotencyKey: UUID) async throws -> ShareGroupJoinResponse
@@ -75,6 +80,21 @@ final class DefaultShareGroupAPI: ShareGroupAPI {
     ) async throws -> SharedAlbumListPageResponse {
         let response: APIEnvelope<SharedAlbumListPageResponse> = try await networkProvider.request(
             ShareGroupEndpoint.sharedAlbums(groupID: groupID, cursor: cursor, size: size)
+        )
+        return response.data
+    }
+
+    func createSharedAlbum(
+        groupID: UUID,
+        name: String,
+        idempotencyKey: UUID
+    ) async throws -> SharedAlbumResponse {
+        let response: APIEnvelope<SharedAlbumResponse> = try await networkProvider.request(
+            ShareGroupEndpoint.createSharedAlbum(
+                groupID: groupID,
+                name: name,
+                idempotencyKey: idempotencyKey
+            )
         )
         return response.data
     }
@@ -219,10 +239,36 @@ nonisolated struct SharedAlbumResponse: Decodable {
     let id: UUID
     let name: String
     let photoCount: Int
+    let thumbnails: [SharedAlbumThumbnailResponse]?
     let createdBy: ShareGroupUserResponse?
     let isCreator: Bool
     let createdAt: String
     let updatedAt: String
+
+    init(
+        id: UUID,
+        name: String,
+        photoCount: Int,
+        thumbnails: [SharedAlbumThumbnailResponse]? = nil,
+        createdBy: ShareGroupUserResponse?,
+        isCreator: Bool,
+        createdAt: String,
+        updatedAt: String
+    ) {
+        self.id = id
+        self.name = name
+        self.photoCount = photoCount
+        self.thumbnails = thumbnails
+        self.createdBy = createdBy
+        self.isCreator = isCreator
+        self.createdAt = createdAt
+        self.updatedAt = updatedAt
+    }
+}
+
+nonisolated struct SharedAlbumThumbnailResponse: Decodable, Equatable {
+    let url: String
+    let urlExpiresAt: String
 }
 
 nonisolated struct ShareGroupUserResponse: Decodable {
@@ -329,6 +375,7 @@ private enum ShareGroupEndpoint: APIEndpoint {
     case members(groupID: UUID, cursor: String?, size: Int)
     case inviteCode(groupID: UUID)
     case sharedAlbums(groupID: UUID, cursor: String?, size: Int)
+    case createSharedAlbum(groupID: UUID, name: String, idempotencyKey: UUID)
     case create(name: String, idempotencyKey: UUID)
     case joinPreview(inviteCode: String)
     case join(inviteCode: String, idempotencyKey: UUID)
@@ -351,7 +398,7 @@ private enum ShareGroupEndpoint: APIEndpoint {
             "/api/v1/shared-groups/\(groupID.uuidString)/members"
         case let .inviteCode(groupID):
             "/api/v1/shared-groups/\(groupID.uuidString)/invite-code"
-        case let .sharedAlbums(groupID, _, _):
+        case let .sharedAlbums(groupID, _, _), let .createSharedAlbum(groupID, _, _):
             "/api/v1/shared-groups/\(groupID.uuidString)/shared-albums"
         case .joinPreview:
             "/api/v1/shared-groups/join-preview"
@@ -372,7 +419,7 @@ private enum ShareGroupEndpoint: APIEndpoint {
         switch self {
         case .list, .detail, .members, .inviteCode, .sharedAlbums, .joinPreview, .chatTimeline:
             .get
-        case .create, .join, .createChatMessage, .deleteSharedAlbums:
+        case .create, .createSharedAlbum, .join, .createChatMessage, .deleteSharedAlbums:
             .post
         case .updateName, .renameSharedAlbum:
             .patch
@@ -383,6 +430,8 @@ private enum ShareGroupEndpoint: APIEndpoint {
 
     var headers: HTTPHeaders? {
         switch self {
+        case let .createSharedAlbum(_, _, idempotencyKey):
+            return ["Idempotency-Key": idempotencyKey.uuidString]
         case let .create(_, idempotencyKey):
             return ["Idempotency-Key": idempotencyKey.uuidString]
         case let .join(_, idempotencyKey):
@@ -409,6 +458,8 @@ private enum ShareGroupEndpoint: APIEndpoint {
             return parameters
         case let .create(name, _):
             return ["name": name]
+        case let .createSharedAlbum(_, name, _):
+            return ["name": name]
         case let .joinPreview(inviteCode):
             return ["inviteCode": inviteCode]
         case let .join(inviteCode, _):
@@ -428,7 +479,8 @@ private enum ShareGroupEndpoint: APIEndpoint {
 
     var encoding: ParameterEncoding {
         switch self {
-        case .create, .join, .updateName, .createChatMessage, .renameSharedAlbum, .deleteSharedAlbums:
+        case .create, .createSharedAlbum, .join, .updateName, .createChatMessage, .renameSharedAlbum,
+             .deleteSharedAlbums:
             JSONEncoding.default
         case .list, .detail, .members, .inviteCode, .sharedAlbums, .joinPreview, .delete, .leave,
              .chatTimeline, .deleteSharedAlbum:

@@ -27,6 +27,8 @@ struct ShareAlbum: Identifiable, Hashable {
     var albums: [SharedAlbum]
     var sharedAlbumCount: Int
     var photoCount: Int
+    var representativeImageURL: URL?
+    var representativeImageURLExpiresAt: Date?
     var createdBy: ShareGroupUser?
     var updatedAt: Date
 
@@ -39,6 +41,8 @@ struct ShareAlbum: Identifiable, Hashable {
         albums: [SharedAlbum] = [],
         sharedAlbumCount: Int = 0,
         photoCount: Int = 0,
+        representativeImageURL: URL? = nil,
+        representativeImageURLExpiresAt: Date? = nil,
         createdBy: ShareGroupUser? = nil,
         updatedAt: Date? = nil
     ) {
@@ -50,8 +54,28 @@ struct ShareAlbum: Identifiable, Hashable {
         self.albums = albums
         self.sharedAlbumCount = sharedAlbumCount
         self.photoCount = photoCount
+        self.representativeImageURL = representativeImageURL
+        self.representativeImageURLExpiresAt = representativeImageURLExpiresAt
         self.createdBy = createdBy
         self.updatedAt = updatedAt ?? date
+    }
+
+    func validRepresentativeImageURL(at date: Date = .now) -> URL? {
+        guard let representativeImageURL else { return nil }
+        if let representativeImageURLExpiresAt,
+           representativeImageURLExpiresAt <= date {
+            return nil
+        }
+        return representativeImageURL
+    }
+
+    func hasExpiredRepresentativeImage(at date: Date = .now) -> Bool {
+        guard representativeImageURL != nil,
+              let representativeImageURLExpiresAt
+        else {
+            return false
+        }
+        return representativeImageURLExpiresAt <= date
     }
 }
 
@@ -60,8 +84,18 @@ struct SharedAlbum: Identifiable, Hashable {
     let sharedGroupID: UUID
     var name: String
     var count: Int
+    var thumbnails: [SharedAlbumThumbnail] = []
     let createdBy: ShareGroupUser?
     let isCreator: Bool
     let createdAt: Date
     var updatedAt: Date
+
+    func validThumbnailURLs(at date: Date = .now) -> [URL] {
+        thumbnails.compactMap { $0.urlExpiresAt > date ? $0.url : nil }
+    }
+}
+
+struct SharedAlbumThumbnail: Hashable {
+    let url: URL
+    let urlExpiresAt: Date
 }

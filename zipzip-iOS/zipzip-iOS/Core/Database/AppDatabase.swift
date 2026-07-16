@@ -301,6 +301,101 @@ func appDatabase() throws -> any DatabaseWriter {
         .execute(db)
     }
 
+    migrator.registerMigration("Store shared photos as album memberships") { db in
+        // 공유 사진은 서버가 원본인 캐시다. 기존 1:N 임시 캐시는 버리고 서버의 N:M 구조로 다시 채운다.
+        try #sql(#"DROP TABLE "shared_photo""#).execute(db)
+
+        try #sql(
+            """
+            CREATE TABLE "shared_photo"(
+              "id" TEXT NOT NULL PRIMARY KEY,
+              "shared_group_id" TEXT NOT NULL REFERENCES "shared_group"("id") ON DELETE CASCADE,
+              "local_photo_id" INTEGER REFERENCES "photo"("id") ON DELETE SET NULL,
+              "original_url" TEXT NOT NULL,
+              "original_url_expires_at" INTEGER NOT NULL,
+              "thumbnail_url" TEXT,
+              "thumbnail_url_expires_at" INTEGER,
+              "thumbnail_status" TEXT NOT NULL,
+              "device_model" TEXT,
+              "taken_at" INTEGER,
+              "display_at" INTEGER NOT NULL,
+              "latitude" REAL,
+              "longitude" REAL,
+              "location_name" TEXT,
+              "is_inferred" INTEGER NOT NULL DEFAULT 0,
+              "width" INTEGER NOT NULL,
+              "height" INTEGER NOT NULL,
+              "uploaded_by_user_id" TEXT,
+              "uploaded_by_display_name" TEXT,
+              "is_uploader" INTEGER NOT NULL DEFAULT 0,
+              "like_count" INTEGER NOT NULL DEFAULT 0,
+              "comment_count" INTEGER NOT NULL DEFAULT 0,
+              "is_liked_by_me" INTEGER NOT NULL DEFAULT 0,
+              "created_at" INTEGER NOT NULL,
+              "updated_at" INTEGER NOT NULL
+            ) STRICT
+            """
+        )
+        .execute(db)
+
+        try #sql(
+            """
+            CREATE TABLE "shared_album_photo"(
+              "shared_album_id" TEXT NOT NULL REFERENCES "shared_album"("id") ON DELETE CASCADE,
+              "shared_photo_id" TEXT NOT NULL REFERENCES "shared_photo"("id") ON DELETE CASCADE,
+              "display_at" INTEGER NOT NULL,
+              PRIMARY KEY("shared_album_id", "shared_photo_id")
+            ) STRICT
+            """
+        )
+        .execute(db)
+
+        try #sql(
+            """
+            CREATE TABLE "shared_photo_upload_task"(
+              "id" TEXT NOT NULL PRIMARY KEY,
+              "batch_id" TEXT NOT NULL,
+              "shared_group_id" TEXT NOT NULL REFERENCES "shared_group"("id") ON DELETE CASCADE,
+              "shared_album_id" TEXT NOT NULL REFERENCES "shared_album"("id") ON DELETE CASCADE,
+              "local_photo_id" INTEGER NOT NULL REFERENCES "photo"("id") ON DELETE CASCADE,
+              "object_key" TEXT NOT NULL UNIQUE,
+              "upload_url" TEXT NOT NULL,
+              "upload_url_expires_at" INTEGER NOT NULL,
+              "content_type" TEXT NOT NULL,
+              "size_bytes" INTEGER NOT NULL CHECK("size_bytes" > 0),
+              "idempotency_key" TEXT NOT NULL,
+              "status" TEXT NOT NULL,
+              "created_at" INTEGER NOT NULL,
+              UNIQUE("shared_group_id", "local_photo_id")
+            ) STRICT
+            """
+        )
+        .execute(db)
+
+        try #sql(#"CREATE INDEX "idx_shared_photo_group_id" ON "shared_photo"("shared_group_id")"#)
+            .execute(db)
+        try #sql(
+            #"CREATE UNIQUE INDEX "idx_shared_photo_group_local" ON "shared_photo"("shared_group_id", "local_photo_id") WHERE "local_photo_id" IS NOT NULL"#
+        )
+        .execute(db)
+        try #sql(
+            #"CREATE INDEX "idx_shared_album_photo_album_display" ON "shared_album_photo"("shared_album_id", "display_at" DESC, "shared_photo_id")"#
+        )
+        .execute(db)
+        try #sql(
+            #"CREATE INDEX "idx_shared_album_photo_photo_id" ON "shared_album_photo"("shared_photo_id")"#
+        )
+        .execute(db)
+        try #sql(
+            #"CREATE INDEX "idx_shared_photo_upload_batch" ON "shared_photo_upload_task"("batch_id")"#
+        )
+        .execute(db)
+        try #sql(
+            #"CREATE INDEX "idx_shared_photo_upload_expiry" ON "shared_photo_upload_task"("upload_url_expires_at")"#
+        )
+        .execute(db)
+    }
+
     do {
         try migrator.migrate(database)
         return database

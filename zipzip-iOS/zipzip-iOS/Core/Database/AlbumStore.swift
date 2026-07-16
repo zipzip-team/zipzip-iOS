@@ -104,10 +104,12 @@ nonisolated struct AlbumStore {
                 }
 
                 for albumID in uniqueAlbumIDs {
-                    let alreadyExists = try AlbumPhotoRecord
+                    let existingCount = try AlbumPhotoRecord
                         .where { $0.albumID.eq(albumID) && $0.photoID.eq(storedPhotoID) }
-                        .fetchCount(db) > 0
-                    guard !alreadyExists else { continue }
+                        .fetchCount(db)
+                    guard existingCount == 0 else {
+                        continue
+                    }
 
                     try AlbumPhotoRecord.insert {
                         ($0.albumID, $0.photoID, $0.addedAt)

@@ -5,6 +5,7 @@
 //  Created by 성환 on 7/15/26.
 //
 
+import Foundation
 import OSLog
 import SQLiteData
 import SwiftUI
@@ -15,7 +16,10 @@ final class DateFilterPhotosViewModel {
     @ObservationIgnored
     @Dependency(\.photoSections) private var photoSections
 
-    private static let logger = Logger(subsystem: "com.zipzip.zipzip-iOS", category: "DateFilterPhotos")
+    private static let logger = Logger(
+        subsystem: Bundle.main.bundleIdentifier ?? "zipzip-iOS",
+        category: "DateFilterPhotos"
+    )
 
     private static let thumbnailSize = CGSize(width: 300, height: 300)
     private static let dayComponents: Set<Calendar.Component> = [.year, .month, .day]

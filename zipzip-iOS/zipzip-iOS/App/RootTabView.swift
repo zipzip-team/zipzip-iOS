@@ -17,6 +17,24 @@ struct RootTabView: View {
     var body: some View {
         page(for: selection)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .overlay(alignment: .top) {
+                if showsTopIndicator {
+                    MoveInIndicatorBar()
+                }
+            }
+    }
+
+    private var showsTopIndicator: Bool {
+        switch selection {
+        case .main:
+            true
+        case .picture:
+            !pictureViewModel.isSelectionMode
+        case .album:
+            !albumViewModel.isSelectionMode
+        case .share:
+            !shareViewModel.isAddMode
+        }
     }
 
     @ViewBuilder private func page(for tab: NavbarTab) -> some View {

@@ -46,8 +46,10 @@ struct ShareView: View {
         switch viewModel.displayedSheet {
         case .joinConfirmation:
             [.height(477)]
+        case .createSharedAlbum:
+            [.height(AlbumCreationSheet.preferredHeight)]
         case .comments:
-            [.height(562)]
+            [.full]
         case .management:
             [.full]
         default:
@@ -76,6 +78,22 @@ struct ShareView: View {
                 onCancel: viewModel.dismissPresentedSheet,
                 onConfirm: { Task { await viewModel.createGroup() } }
             )
+        case .createSharedAlbum:
+            AlbumCreationSheet(
+                nameLabel: "공유집 이름",
+                albumName: $viewModel.sharedAlbumNameDraft,
+                isCreateDisabled: viewModel.isCreateSharedAlbumDisabled,
+                isBusy: viewModel.isCreatingSharedAlbum,
+                onClose: viewModel.dismissCreateSharedAlbumSheet,
+                onDeleteTap: viewModel.resetSharedAlbumCreationDraft,
+                onCreateTap: {
+                    Task {
+                        if let album = await viewModel.createSharedAlbum() {
+                            router.push(.shareAlbum(groupID: album.sharedGroupID, albumID: album.id))
+                        }
+                    }
+                }
+            )
         case .joinConfirmation:
             ShareJoinConfirmationSheet(
                 preview: viewModel.pendingJoinPreview,
@@ -90,9 +108,10 @@ struct ShareView: View {
         case .invitation:
             ShareInvitationSheet(code: viewModel.inviteCode, onComplete: viewModel.completeInvitation)
         case .comments:
-            ShareCommentsSheet(
+            GroupChatBottomSheet(
                 messages: viewModel.chatItems,
-                comment: $viewModel.commentDraft,
+                photoURLs: viewModel.chatPhotoURLs,
+                messageDraft: $viewModel.commentDraft,
                 isLoading: viewModel.isLoadingChat || viewModel.isLoadingOlderChat,
                 isSending: viewModel.isSendingChatMessage,
                 onClose: viewModel.dismissComments,
@@ -106,6 +125,7 @@ struct ShareView: View {
             if let group = viewModel.managedShareGroup {
                 ShareGroupManagementSheet(
                     group: group,
+                    members: viewModel.members(for: group.id),
                     groupName: $viewModel.shareGroupNameDraft,
                     inviteCode: viewModel.inviteCode(for: group.id) ?? "",
                     isInviteCodeAvailable: viewModel.isInviteCodeAvailable(for: group.id),
@@ -116,7 +136,9 @@ struct ShareView: View {
                     onLeave: leaveManagedShareGroup
                 )
                 .task(id: group.id) {
-                    await viewModel.loadInviteCode(groupID: group.id)
+                    async let inviteRequest: Void = viewModel.loadInviteCode(groupID: group.id)
+                    async let memberRequest: Void = viewModel.loadMembers(groupID: group.id)
+                    _ = await(inviteRequest, memberRequest)
                 }
             }
         case nil:
@@ -155,25 +177,22 @@ struct ShareAlbumDetailDestinationView: View {
 
     var body: some View {
         if let album = viewModel.album(groupID: groupID, albumID: albumID) {
-            AlbumDetailView(
-                album: .init(
-                    id: 0,
-                    title: album.name,
-                    createdAt: album.createdAt,
-                    photoCount: album.count
-                ),
+            SharedAlbumDetailView(
+                album: album,
+                destinationAlbums: viewModel.group(withID: groupID)?.albums ?? [],
                 viewModel: viewModel.makeSharedAlbumDetailViewModel(
                     groupID: groupID,
                     albumID: albumID,
                     onDelete: router.pop
                 ),
-                moveAlbums: [],
-                albumDeletionAlertContent: .shared
-            ) { _ in
-                // TODO: 정교은 담당 GET 공유집 상세·사진 목록 API가 합쳐지면 응답을
-                // PhotoGallery에 전달하고 cursor 기반 다음 페이지 로딩을 연결합니다.
-                EmptyView()
-            }
+                onOpenPhoto: { photoID in
+                    router.push(.sharePhotoDetail(
+                        groupID: groupID,
+                        albumID: albumID,
+                        photoID: photoID
+                    ))
+                }
+            )
         } else {
             ContentUnavailableView("사진집을 찾을 수 없어요", systemImage: "photo.on.rectangle")
                 .navigationBarBackButtonHidden(true)
@@ -223,7 +242,7 @@ private struct ShareGroupListView: View {
                                     onOpenGroup(group.id)
                                 } label: {
                                     ShareAlbumCard(
-                                        thumbnail: nil,
+                                        thumbnailURL: group.validRepresentativeImageURL(),
                                         title: group.name,
                                         date: group.date,
                                         profileImages: Array(repeating: nil, count: min(group.memberCount, 4)),
@@ -233,7 +252,11 @@ private struct ShareGroupListView: View {
                                 .buttonStyle(StaticButtonStyle())
                                 .accessibilityLabel("\(group.name), \(group.memberCount)명")
                                 .task {
-                                    await viewModel.loadMoreGroupsIfNeeded(currentGroupID: group.id)
+                                    async let imageRequest: Void = viewModel.loadRepresentativeImage(groupID: group.id)
+                                    async let paginationRequest: Void = viewModel.loadMoreGroupsIfNeeded(
+                                        currentGroupID: group.id
+                                    )
+                                    _ = await(imageRequest, paginationRequest)
                                 }
                             }
                         }
@@ -250,6 +273,10 @@ private struct ShareGroupListView: View {
             }
             .ignoresSafeArea(edges: .top)
             .refreshable {
+                guard let userID = authenticationState.currentUser?.id else { return }
+                await viewModel.loadGroups(for: userID, refresh: true)
+            }
+            .task {
                 guard let userID = authenticationState.currentUser?.id else { return }
                 await viewModel.loadGroups(for: userID, refresh: true)
             }
@@ -419,16 +446,24 @@ private struct ShareJoinConfirmationSheet: View {
 
     var body: some View {
         BottomSheet {
-            VStack(spacing: 18) {
+            VStack(spacing: 16) {
                 representativeImage
 
-                VStack(spacing: 4) {
-                    Text("\(preview?.group.name ?? "공유 그룹")에 들어갈까요?")
-                        .font(.t3_sb)
-                        .foregroundStyle(.white00)
-                    Text("생성자: \(creatorName)")
-                        .font(.b3_md)
-                        .foregroundStyle(.grey400)
+                VStack(spacing: 8) {
+                    VStack(spacing: 4) {
+                        HStack(spacing: 4) {
+                            Text(preview?.group.name ?? "공유 그룹")
+                                .foregroundStyle(.orange500)
+                            Text("에 들어갈까요?")
+                                .foregroundStyle(.white00)
+                        }
+                        .font(.t2_sb)
+
+                        Text("생성자: \(creatorName)")
+                            .font(.b2_md)
+                            .foregroundStyle(.grey200)
+                    }
+
                     HStack(spacing: -8) {
                         ForEach(visibleMembers) { member in
                             ProfileImage(name: member.displayName, size: 24)
@@ -463,14 +498,21 @@ private struct ShareJoinConfirmationSheet: View {
                         .resizable()
                         .scaledToFill()
                         .frame(width: 160, height: 160)
-                        .clipShape(.rect(cornerRadius: 24))
+                        .clipShape(.rect(cornerRadius: 12))
                 default:
-                    ShareAssetPlaceholder(width: 160, height: 160)
+                    representativeImagePlaceholder
                 }
             }
         } else {
-            ShareAssetPlaceholder(width: 160, height: 160)
+            representativeImagePlaceholder
         }
+    }
+
+    private var representativeImagePlaceholder: some View {
+        RoundedRectangle(cornerRadius: 12)
+            .fill(.grey500)
+            .frame(width: 160, height: 160)
+            .accessibilityHidden(true)
     }
 
     private var validRepresentativeImageURL: URL? {
@@ -502,10 +544,22 @@ private struct ShareInvitationSheet: View {
                     .foregroundStyle(.grey400)
 
                 HStack(spacing: 8) {
-                    Text(code)
-                        .font(.b1_sb)
-                        .foregroundStyle(.white00)
-                        .lineLimit(1)
+                    HStack(spacing: 4) {
+                        Text("#")
+                            .font(.t2_md)
+                            .foregroundStyle(.white00)
+                            .frame(width: 12)
+                        Text(code)
+                            .font(.t2_md)
+                            .foregroundStyle(.white00)
+                            .lineLimit(1)
+                            .padding(.vertical, 4)
+                            .overlay(alignment: .bottom) {
+                                Rectangle()
+                                    .fill(.orange400)
+                                    .frame(height: 1)
+                            }
+                    }
                     Spacer(minLength: 0)
                     RoundedTextButton(title: "복사", style: .large) {
                         UIPasteboard.general.string = code
@@ -522,92 +576,6 @@ private struct ShareInvitationSheet: View {
             .padding(.horizontal, 16)
             .padding(.top, 12)
             .padding(.bottom, 49)
-        }
-    }
-}
-
-private struct ShareCommentsSheet: View {
-    let messages: [ShareGroupChatItem]
-    @Binding var comment: String
-    let isLoading: Bool
-    let isSending: Bool
-    let onClose: () -> Void
-    let onLoadOlder: () -> Void
-    let onSend: () -> Void
-
-    var body: some View {
-        BottomSheet(
-            leftItem: { BottomSheetCloseButton(action: onClose) },
-            rightItem: {
-                Button("완료", action: onClose)
-                    .font(.b1_sb)
-                    .foregroundStyle(.white00)
-                    .frame(width: 72, height: 48)
-            }
-        ) {
-            VStack(spacing: 12) {
-                ScrollView(showsIndicators: false) {
-                    LazyVStack(spacing: 16) {
-                        ForEach(messages) { message in
-                            ShareCommentBubble(
-                                text: message.content,
-                                isMine: message.isAuthor,
-                                authorName: message.author?.displayName
-                            )
-                        }
-                    }
-                    .padding(.horizontal, 16)
-                    .padding(.top, 12)
-                }
-                .defaultScrollAnchor(.bottom)
-                .onScrollGeometryChange(for: Bool.self) { geometry in
-                    geometry.contentOffset.y <= geometry.contentInsets.top + 8
-                } action: { wasAtTop, isAtTop in
-                    guard isAtTop, !wasAtTop else { return }
-                    onLoadOlder()
-                }
-
-                HStack(spacing: 12) {
-                    TextInput("메시지 입력", text: $comment, style: .comment)
-                        .disabled(isLoading || isSending)
-                    ExtraSmallButton(icon: .send, action: onSend)
-                        .disabled(isSendDisabled)
-                }
-                .padding(.horizontal, 16)
-                .padding(.bottom, 12)
-            }
-        }
-    }
-
-    private var isSendDisabled: Bool {
-        isLoading || isSending || comment.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-    }
-}
-
-private struct ShareCommentBubble: View {
-    let text: String
-    let isMine: Bool
-    let authorName: String?
-
-    var body: some View {
-        HStack(alignment: .top, spacing: 12) {
-            if isMine {
-                Spacer(minLength: 44)
-            } else {
-                ProfileImage(name: authorName, size: 32, isStroke: false)
-            }
-
-            Text(text)
-                .font(.b1_md)
-                .foregroundStyle(.white00)
-                .padding(12)
-                .background(isMine ? .grey700 : .grey900, in: .rect(cornerRadius: 8))
-
-            if isMine {
-                ProfileImage(name: authorName, size: 32, isStroke: false)
-            } else {
-                Spacer(minLength: 44)
-            }
         }
     }
 }

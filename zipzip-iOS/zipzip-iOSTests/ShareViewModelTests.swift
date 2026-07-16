@@ -5,6 +5,14 @@ import XCTest
 private let testCacheOwnerID = UUID()
 
 extension ShareGroupAPI {
+    func createSharedAlbum(
+        groupID: UUID,
+        name: String,
+        idempotencyKey: UUID
+    ) async throws -> SharedAlbumResponse {
+        throw URLError(.unsupportedURL)
+    }
+
     func renameSharedAlbum(id: UUID, name: String) async throws -> SharedAlbumRenameResponse {
         throw URLError(.unsupportedURL)
     }
@@ -84,7 +92,7 @@ final class ShareViewModelTests: XCTestCase {
     }
 
     @MainActor
-    func testCreateGroupFailurePresentsErrorAlertWithoutClosingSheet() async throws {
+    func testCreateGroupFailureKeepsSheetOpen() async throws {
         let viewModel = ShareViewModel(
             groups: [],
             repository: try await makePreparedRepository(
@@ -99,15 +107,11 @@ final class ShareViewModelTests: XCTestCase {
 
         XCTAssertTrue(viewModel.isCreateSheetPresented)
         XCTAssertFalse(viewModel.isInviteSheetPresented)
-        XCTAssertTrue(viewModel.isErrorAlertPresented)
-        XCTAssertEqual(viewModel.errorAlertMessage, "네트워크 연결을 확인한 후 다시 시도해 주세요.")
-
-        viewModel.dismissErrorAlert()
-        XCTAssertFalse(viewModel.isErrorAlertPresented)
+        XCTAssertTrue(viewModel.groups.isEmpty)
     }
 
     @MainActor
-    func testGroupListFailureOffersRetryAndRetryLoadsGroups() async throws {
+    func testGroupListCanBeLoadedAfterFailure() async throws {
         let groupID = try XCTUnwrap(UUID(uuidString: "11111111-1111-1111-1111-111111111111"))
         let api = ManagementTrackingShareGroupAPI(
             groupID: groupID,
@@ -120,14 +124,10 @@ final class ShareViewModelTests: XCTestCase {
 
         await viewModel.loadGroups(for: testCacheOwnerID)
 
-        XCTAssertTrue(viewModel.isErrorAlertPresented)
-        XCTAssertTrue(viewModel.canRetryError)
         XCTAssertTrue(viewModel.groups.isEmpty)
 
-        await viewModel.retryErrorAction()
+        await viewModel.loadGroups(for: testCacheOwnerID, refresh: true)
 
-        XCTAssertFalse(viewModel.isErrorAlertPresented)
-        XCTAssertFalse(viewModel.canRetryError)
         XCTAssertEqual(viewModel.groups.map(\.id), [groupID])
     }
 
@@ -167,6 +167,12 @@ final class ShareViewModelTests: XCTestCase {
                     id: albumID,
                     name: "제주도",
                     photoCount: 42,
+                    thumbnails: [
+                        SharedAlbumThumbnailResponse(
+                            url: "https://cdn.example.com/thumbnail.jpg",
+                            urlExpiresAt: "2099-07-11T00:00:00Z"
+                        )
+                    ],
                     createdBy: nil,
                     isCreator: true,
                     createdAt: "2026-07-02T10:15:30Z",
@@ -192,6 +198,30 @@ final class ShareViewModelTests: XCTestCase {
         XCTAssertEqual(group.albums.map(\.count), [42])
         XCTAssertEqual(viewModel.inviteCode(for: groupID), "ZZ7K9P2Q")
         XCTAssertTrue(viewModel.hasLoadedSharedAlbums(groupID: groupID))
+    }
+
+    @MainActor
+    func testLoadsGroupRepresentativeImageFromJoinPreview() async throws {
+        let groupID = try XCTUnwrap(UUID(uuidString: "11111111-1111-1111-1111-111111111111"))
+        let api = StubShareGroupAPI(
+            groupListResponse: makeGroupListResponse(id: groupID, name: "우리 가족"),
+            inviteCodeResponse: InviteCodeResponse(
+                sharedGroupId: groupID,
+                inviteCode: "ZZ7K9P2Q"
+            ),
+            joinPreviewResponse: makeJoinPreview(groupID: groupID, alreadyJoined: true)
+        )
+        let viewModel = ShareViewModel(
+            repository: makeRepository(api: api, store: try makeStore())
+        )
+
+        await viewModel.loadGroups(for: testCacheOwnerID)
+        await viewModel.loadRepresentativeImage(groupID: groupID)
+
+        let expectedURL = try XCTUnwrap(URL(string: "https://cdn.example.com/group.jpg"))
+        let group = try XCTUnwrap(viewModel.group(withID: groupID))
+        XCTAssertEqual(group.validRepresentativeImageURL(), expectedURL)
+        XCTAssertEqual(viewModel.inviteCode(for: groupID), "ZZ7K9P2Q")
     }
 
     @MainActor
@@ -238,7 +268,6 @@ final class ShareViewModelTests: XCTestCase {
 
         await viewModel.loadGroups(for: testCacheOwnerID)
 
-        XCTAssertFalse(viewModel.isErrorAlertPresented)
         XCTAssertFalse(viewModel.hasLoadedGroups)
     }
 
@@ -438,6 +467,12 @@ final class ShareViewModelTests: XCTestCase {
                     id: albumID,
                     name: "제주도",
                     photoCount: 42,
+                    thumbnails: [
+                        SharedAlbumThumbnailResponse(
+                            url: "https://cdn.example.com/thumbnail.jpg",
+                            urlExpiresAt: "2099-07-11T00:00:00Z"
+                        )
+                    ],
                     createdBy: nil,
                     isCreator: true,
                     createdAt: "2026-07-02T10:15:30Z",
@@ -454,6 +489,12 @@ final class ShareViewModelTests: XCTestCase {
         await onlineViewModel.loadGroups(for: testCacheOwnerID)
         await onlineViewModel.loadSharedAlbums(groupID: groupID)
 
+        let thumbnailURL = try XCTUnwrap(URL(string: "https://cdn.example.com/thumbnail.jpg"))
+        XCTAssertEqual(
+            onlineViewModel.group(withID: groupID)?.albums.first?.validThumbnailURLs(),
+            [thumbnailURL]
+        )
+
         let offlineViewModel = ShareViewModel(
             repository: makeRepository(api: UnavailableShareGroupAPI(), store: store)
         )
@@ -462,6 +503,7 @@ final class ShareViewModelTests: XCTestCase {
         XCTAssertEqual(offlineViewModel.groups.map(\.id), [groupID])
         XCTAssertEqual(offlineViewModel.group(withID: groupID)?.albums.map(\.id), [albumID])
         XCTAssertEqual(offlineViewModel.group(withID: groupID)?.albums.map(\.count), [42])
+        XCTAssertTrue(offlineViewModel.group(withID: groupID)?.albums.first?.thumbnails.isEmpty == true)
     }
 
     @MainActor
@@ -566,7 +608,6 @@ final class ShareViewModelTests: XCTestCase {
         await detailLoad.value
 
         XCTAssertEqual(viewModel.groups.map(\.id), [secondGroupID])
-        XCTAssertFalse(viewModel.isErrorAlertPresented)
         let storedGroups = try await store.fetchGroups()
         XCTAssertEqual(storedGroups.map(\.id), [secondGroupID])
         XCTAssertEqual(storedGroups.map(\.name), ["두 번째 계정"])
@@ -698,12 +739,10 @@ final class ShareViewModelTests: XCTestCase {
 
         XCTAssertNil(firstResult)
         XCTAssertTrue(viewModel.isJoinConfirmationPresented)
-        XCTAssertTrue(viewModel.isErrorAlertPresented)
-        XCTAssertTrue(viewModel.canRetryError)
         XCTAssertTrue(viewModel.groups.isEmpty)
         XCTAssertEqual(api.joinInviteCodes.count, 1)
 
-        await viewModel.retryErrorAction()
+        _ = await viewModel.completeJoin()
 
         XCTAssertEqual(api.joinInviteCodes.count, 1)
         XCTAssertEqual(viewModel.groups.map(\.id), [groupID])
@@ -732,12 +771,10 @@ final class ShareViewModelTests: XCTestCase {
 
         XCTAssertNil(firstResult)
         XCTAssertTrue(viewModel.isJoinConfirmationPresented)
-        XCTAssertTrue(viewModel.isErrorAlertPresented)
-        XCTAssertTrue(viewModel.canRetryError)
         XCTAssertTrue(api.joinInviteCodes.isEmpty)
         XCTAssertEqual(api.fetchedGroupIDs, [groupID])
 
-        await viewModel.retryErrorAction()
+        _ = await viewModel.completeJoin()
 
         XCTAssertTrue(api.joinInviteCodes.isEmpty)
         XCTAssertEqual(api.fetchedGroupIDs, [groupID, groupID])
@@ -994,9 +1031,6 @@ final class ShareViewModelTests: XCTestCase {
 
         XCTAssertTrue(api.updatedNames.isEmpty)
         XCTAssertTrue(viewModel.isShareManagementPresented)
-        XCTAssertTrue(viewModel.isErrorAlertPresented)
-        XCTAssertEqual(viewModel.errorAlertMessage, "방장만 변경할 수 있어요.")
-        viewModel.dismissErrorAlert()
         let didLeave = await viewModel.leaveManagedShareGroup()
 
         XCTAssertTrue(didLeave)
@@ -1149,7 +1183,6 @@ final class ShareViewModelTests: XCTestCase {
 
         XCTAssertEqual(viewModel.commentDraft, "다시 보내기")
         XCTAssertTrue(viewModel.chatItems.isEmpty)
-        viewModel.dismissErrorAlert()
 
         await viewModel.sendChatMessage()
 
@@ -1186,7 +1219,6 @@ final class ShareViewModelTests: XCTestCase {
         XCTAssertFalse(viewModel.isSendingChatMessage)
         XCTAssertFalse(viewModel.isCommentsPresented)
         XCTAssertTrue(viewModel.groups.isEmpty)
-        XCTAssertFalse(viewModel.isErrorAlertPresented)
     }
 
     @MainActor
@@ -1218,6 +1250,95 @@ final class ShareViewModelTests: XCTestCase {
         XCTAssertFalse(viewModel.isCommentsPresented)
         XCTAssertNil(viewModel.activeChatGroupID)
         XCTAssertTrue(viewModel.chatItems.isEmpty)
+    }
+
+    @MainActor
+    func testCreatesSharedAlbumAndImmediatelyAddsItToGroup() async throws {
+        let groupID = try XCTUnwrap(UUID(uuidString: "11111111-1111-1111-1111-111111111111"))
+        let albumID = try XCTUnwrap(UUID(uuidString: "33333333-3333-3333-3333-333333333333"))
+        let response = makeSharedAlbum(id: albumID, name: "제주도")
+        let store = try makeStore()
+        let api = ManagementTrackingShareGroupAPI(
+            groupID: groupID,
+            role: .member,
+            createdSharedAlbumResponse: response
+        )
+        let viewModel = ShareViewModel(repository: makeRepository(api: api, store: store))
+        await viewModel.loadGroups(for: testCacheOwnerID)
+        await viewModel.loadSharedAlbums(groupID: groupID)
+        viewModel.presentCreateSharedAlbumSheet(groupID: groupID)
+        viewModel.sharedAlbumNameDraft = "  제주도  "
+
+        let createdAlbum = await viewModel.createSharedAlbum()
+
+        XCTAssertEqual(createdAlbum?.id, albumID)
+        XCTAssertEqual(api.createdSharedAlbumGroupIDs, [groupID])
+        XCTAssertEqual(api.createdSharedAlbumNames, ["제주도"])
+        XCTAssertEqual(api.createdSharedAlbumIdempotencyKeys.count, 1)
+        XCTAssertEqual(viewModel.group(withID: groupID)?.albums.map(\.id), [albumID])
+        XCTAssertEqual(viewModel.group(withID: groupID)?.sharedAlbumCount, 1)
+        XCTAssertFalse(viewModel.isCreateSharedAlbumSheetPresented)
+        XCTAssertEqual(viewModel.displayedSheet, .createSharedAlbum)
+
+        viewModel.shareSheetDidDismiss()
+
+        XCTAssertNil(viewModel.displayedSheet)
+        XCTAssertTrue(viewModel.sharedAlbumNameDraft.isEmpty)
+        let storedGroups = try await store.fetchGroups()
+        let storedGroup = try XCTUnwrap(storedGroups.first)
+        XCTAssertEqual(storedGroup.albums.map(\.id), [albumID])
+        XCTAssertEqual(storedGroup.sharedAlbumCount, 1)
+    }
+
+    @MainActor
+    func testSharedAlbumCreationRetryKeepsDraftAndReusesIdempotencyKey() async throws {
+        let groupID = try XCTUnwrap(UUID(uuidString: "11111111-1111-1111-1111-111111111111"))
+        let albumID = try XCTUnwrap(UUID(uuidString: "33333333-3333-3333-3333-333333333333"))
+        let api = ManagementTrackingShareGroupAPI(
+            groupID: groupID,
+            role: .member,
+            createSharedAlbumErrors: [.noResponse, nil],
+            createdSharedAlbumResponse: makeSharedAlbum(id: albumID, name: "제주도")
+        )
+        let viewModel = ShareViewModel(
+            repository: makeRepository(api: api, store: try makeStore())
+        )
+        await viewModel.loadGroups(for: testCacheOwnerID)
+        viewModel.presentCreateSharedAlbumSheet(groupID: groupID)
+        viewModel.sharedAlbumNameDraft = "제주도"
+
+        let firstAttempt = await viewModel.createSharedAlbum()
+
+        XCTAssertNil(firstAttempt)
+        XCTAssertTrue(viewModel.isCreateSharedAlbumSheetPresented)
+        XCTAssertEqual(viewModel.sharedAlbumNameDraft, "제주도")
+
+        let retry = await viewModel.createSharedAlbum()
+
+        XCTAssertEqual(retry?.id, albumID)
+        XCTAssertEqual(api.createdSharedAlbumIdempotencyKeys.count, 2)
+        XCTAssertEqual(
+            api.createdSharedAlbumIdempotencyKeys[0],
+            api.createdSharedAlbumIdempotencyKeys[1]
+        )
+    }
+
+    @MainActor
+    func testSharedAlbumCreationRejectsNamesLongerThanAPILimit() async throws {
+        let groupID = try XCTUnwrap(UUID(uuidString: "11111111-1111-1111-1111-111111111111"))
+        let api = ManagementTrackingShareGroupAPI(groupID: groupID, role: .member)
+        let viewModel = ShareViewModel(
+            repository: makeRepository(api: api, store: try makeStore())
+        )
+        await viewModel.loadGroups(for: testCacheOwnerID)
+        viewModel.presentCreateSharedAlbumSheet(groupID: groupID)
+        viewModel.sharedAlbumNameDraft = String(repeating: "가", count: 101)
+
+        let createdAlbum = await viewModel.createSharedAlbum()
+
+        XCTAssertTrue(viewModel.isCreateSharedAlbumDisabled)
+        XCTAssertNil(createdAlbum)
+        XCTAssertTrue(api.createdSharedAlbumNames.isEmpty)
     }
 
     @MainActor
@@ -1280,8 +1401,6 @@ final class ShareViewModelTests: XCTestCase {
         await detailViewModel.completeAlbumManagement()
 
         XCTAssertTrue(detailViewModel.isAlbumManagementPresented)
-        XCTAssertTrue(viewModel.isErrorAlertPresented)
-        viewModel.dismissErrorAlert()
 
         await detailViewModel.completeAlbumManagement()
 
@@ -1295,8 +1414,6 @@ final class ShareViewModelTests: XCTestCase {
 
         XCTAssertTrue(detailViewModel.isAlbumDeleteAlertPresented)
         XCTAssertFalse(didDelete)
-        XCTAssertTrue(viewModel.isErrorAlertPresented)
-        viewModel.dismissErrorAlert()
 
         await detailViewModel.confirmAlbumDeletion()
 
@@ -1499,7 +1616,6 @@ final class ShareViewModelTests: XCTestCase {
         let storedAlbumIDs = Set(try await store.fetchGroups().first?.albums.map(\.id) ?? [])
 
         XCTAssertFalse(didDelete)
-        XCTAssertTrue(viewModel.isErrorAlertPresented)
         XCTAssertEqual(storedAlbumIDs, Set([firstID, secondID]))
     }
 
@@ -1954,6 +2070,8 @@ private final class ManagementTrackingShareGroupAPI: ShareGroupAPI {
     var chatMessageDelay: Duration
     var chatMessageErrors: [NetworkError?]
     var createdChatMessageResponse: ChatMessageResponse?
+    var createSharedAlbumErrors: [NetworkError?]
+    var createdSharedAlbumResponse: SharedAlbumResponse?
     var renameSharedAlbumErrors: [NetworkError?]
     var deleteGroupErrors: [NetworkError?]
     var leaveGroupErrors: [NetworkError?]
@@ -1967,6 +2085,9 @@ private final class ManagementTrackingShareGroupAPI: ShareGroupAPI {
     private(set) var leftGroupIDs: [UUID] = []
     private(set) var chatCursors: [String?] = []
     private(set) var sharedAlbumCursors: [String?] = []
+    private(set) var createdSharedAlbumGroupIDs: [UUID] = []
+    private(set) var createdSharedAlbumNames: [String] = []
+    private(set) var createdSharedAlbumIdempotencyKeys: [UUID] = []
     private(set) var sentChatContents: [String] = []
     private(set) var chatIdempotencyKeys: [UUID] = []
     private(set) var renamedAlbumIDs: [UUID] = []
@@ -1991,6 +2112,8 @@ private final class ManagementTrackingShareGroupAPI: ShareGroupAPI {
         chatMessageDelay: Duration = .zero,
         chatMessageErrors: [NetworkError?] = [],
         createdChatMessageResponse: ChatMessageResponse? = nil,
+        createSharedAlbumErrors: [NetworkError?] = [],
+        createdSharedAlbumResponse: SharedAlbumResponse? = nil,
         renameSharedAlbumErrors: [NetworkError?] = [],
         deleteGroupErrors: [NetworkError?] = [],
         leaveGroupErrors: [NetworkError?] = [],
@@ -2012,6 +2135,8 @@ private final class ManagementTrackingShareGroupAPI: ShareGroupAPI {
         self.chatMessageDelay = chatMessageDelay
         self.chatMessageErrors = chatMessageErrors
         self.createdChatMessageResponse = createdChatMessageResponse
+        self.createSharedAlbumErrors = createSharedAlbumErrors
+        self.createdSharedAlbumResponse = createdSharedAlbumResponse
         self.renameSharedAlbumErrors = renameSharedAlbumErrors
         self.deleteGroupErrors = deleteGroupErrors
         self.leaveGroupErrors = leaveGroupErrors
@@ -2093,6 +2218,32 @@ private final class ManagementTrackingShareGroupAPI: ShareGroupAPI {
             return sharedAlbumPages.removeFirst()
         }
         return SharedAlbumListPageResponse(items: sharedAlbums, nextCursor: nil, hasNext: false)
+    }
+
+    func createSharedAlbum(
+        groupID: UUID,
+        name: String,
+        idempotencyKey: UUID
+    ) async throws -> SharedAlbumResponse {
+        createdSharedAlbumGroupIDs.append(groupID)
+        createdSharedAlbumNames.append(name)
+        createdSharedAlbumIdempotencyKeys.append(idempotencyKey)
+        if !createSharedAlbumErrors.isEmpty, let error = createSharedAlbumErrors.removeFirst() {
+            throw error
+        }
+        let response = createdSharedAlbumResponse ?? SharedAlbumResponse(
+            id: UUID(),
+            name: name,
+            photoCount: 0,
+            createdBy: nil,
+            isCreator: true,
+            createdAt: "2026-07-15T10:15:30Z",
+            updatedAt: "2026-07-15T10:15:30Z"
+        )
+        if !sharedAlbums.contains(where: { $0.id == response.id }) {
+            sharedAlbums.insert(response, at: 0)
+        }
+        return response
     }
 
     func createGroup(name: String, idempotencyKey: UUID) async throws -> CreateSharedGroupResponse {

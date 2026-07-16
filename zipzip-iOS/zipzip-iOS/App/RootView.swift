@@ -14,21 +14,35 @@ struct RootView: View {
     @Environment(AuthenticationState.self) private var authenticationState
     @Environment(\.scenePhase) private var scenePhase
     @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
-    @State private var photoSync = PhotoSyncCoordinator()
-    @State private var albumViewModel = AlbumViewModel()
+    @State private var photoSync: PhotoSyncCoordinator
+    @State private var albumViewModel: AlbumViewModel
     @State private var pictureViewModel = PictureViewModel()
     @State private var shareViewModel: ShareViewModel
     @State private var selection: NavbarTab = .main
     @State private var showShareSheet = false
     @State private var splashAnimationFinished = false
+    @State private var hasTriggeredInitialSync = false
     private let makePhotoInfoEditViewModel: ([String]) -> PhotoInfoEditViewModel
 
     init(
         shareGroupRepository: ShareGroupRepository,
+        sharedPhotoRepository: any SharedPhotoRepository,
         makePhotoInfoEditViewModel: @escaping ([String]) -> PhotoInfoEditViewModel
     ) {
+        let photoSync = PhotoSyncCoordinator()
+        _photoSync = State(initialValue: photoSync)
+        _albumViewModel = State(
+            initialValue: AlbumViewModel(
+                sharedPhotoRepository: sharedPhotoRepository,
+                shareGroupRepository: shareGroupRepository,
+                photoSync: photoSync
+            )
+        )
         _shareViewModel = State(
-            initialValue: ShareViewModel(repository: shareGroupRepository)
+            initialValue: ShareViewModel(
+                repository: shareGroupRepository,
+                sharedPhotoRepository: sharedPhotoRepository
+            )
         )
         self.makePhotoInfoEditViewModel = makePhotoInfoEditViewModel
     }
@@ -51,9 +65,11 @@ struct RootView: View {
                 }
             }
             .task {
-                KeyboardPrewarmer.prewarm()
                 guard hasCompletedOnboarding else { return }
-                photoSync.startIfNeeded()
+                if !hasTriggeredInitialSync {
+                    hasTriggeredInitialSync = true
+                    photoSync.startIfNeeded()
+                }
                 await albumViewModel.loadAlbums()
             }
             .onChange(of: scenePhase) { _, newPhase in
@@ -134,13 +150,27 @@ struct RootView: View {
                     ShareGroupDetailView(
                         groupID: groupID,
                         viewModel: shareViewModel,
-                        personalAlbums: albumViewModel.shareDestinations
+                        onMoveAlbumsToPersonal: { sourceAlbums in
+                            await albumViewModel.moveSharedAlbumsToPersonalAlbums(sourceAlbums)
+                        },
+                        onMoveSucceeded: {
+                            selectTab(.album)
+                        }
                     )
                 case let .shareAlbum(groupID, albumID):
                     ShareAlbumDetailDestinationView(
                         groupID: groupID,
                         albumID: albumID,
                         viewModel: shareViewModel
+                    )
+                case let .sharePhotoDetail(groupID, albumID, photoID):
+                    SharedPhotoDetailView(
+                        viewModel: shareViewModel.makeSharedPhotoDetailViewModel(
+                            groupID: groupID,
+                            albumID: albumID,
+                            photoID: photoID,
+                            onDelete: router.pop
+                        )
                     )
                 case let .shareImport(groupID):
                     ShareImportView(
@@ -176,7 +206,9 @@ struct RootView: View {
                 onOpenShareAlbum: loadSharedAlbums,
                 onComplete: { destinations in
                     let localIdentifiers = pictureViewModel.selectedPhotoLocalIdentifiers
-                    Task {
+                    dismiss()
+                    pictureViewModel.cancelSelection()
+                    photoSync.track {
                         guard await albumViewModel.addPhotos(
                             localIdentifiers: localIdentifiers,
                             to: destinations
@@ -184,8 +216,6 @@ struct RootView: View {
                             return
                         }
 
-                        dismiss()
-                        pictureViewModel.cancelSelection()
                         guard let albumID = destinations.firstPersonalAlbumID else {
                             return
                         }
@@ -199,26 +229,6 @@ struct RootView: View {
         .fullScreenCover(item: $authenticationState.loginIntent) { _ in
             ShareLoginView()
         }
-        .alert("요청을 완료하지 못했어요", isPresented: $shareViewModel.isErrorAlertPresented) {
-            if shareViewModel.canRetryError {
-                Button("다시 시도") {
-                    Task { await shareViewModel.retryErrorAction() }
-                }
-            }
-            Button("확인", role: .cancel, action: shareViewModel.dismissErrorAlert)
-        } message: {
-            Text(shareViewModel.errorAlertMessage)
-        }
-        .alert("요청을 완료하지 못했어요", isPresented: $albumViewModel.isErrorAlertPresented) {
-            if albumViewModel.canRetryError {
-                Button("다시 시도") {
-                    Task { await albumViewModel.retryErrorAction() }
-                }
-            }
-            Button("확인", role: .cancel, action: albumViewModel.dismissErrorAlert)
-        } message: {
-            Text(albumViewModel.errorAlertMessage)
-        }
         .task {
             await authenticationState.restore(
                 minimumDuration: hasCompletedOnboarding ? .seconds(2) : .zero
@@ -226,6 +236,7 @@ struct RootView: View {
             await authenticationState.checkAppleCredentialState()
         }
         .task(id: authenticationState.currentUser?.id) {
+            albumViewModel.resetSharedAlbumMoveState()
             if let userID = authenticationState.currentUser?.id {
                 await shareViewModel.loadGroups(for: userID)
             } else {
@@ -337,7 +348,7 @@ struct RootView: View {
         localIdentifiers: [String],
         destinations: [ShareDestination]
     ) {
-        Task {
+        photoSync.track {
             guard await albumViewModel.addPhotos(
                 localIdentifiers: localIdentifiers,
                 to: destinations
@@ -365,7 +376,7 @@ struct RootView: View {
         from sourceAlbumID: Album.ID,
         destinations: [ShareDestination]
     ) {
-        Task {
+        photoSync.track {
             guard await albumViewModel.moveAlbumPhotos(
                 ids: ids,
                 from: sourceAlbumID,
