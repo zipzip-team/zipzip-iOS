@@ -332,6 +332,7 @@ private struct ShareGroupEmptyContent: View {
 
 struct ShareImportView: View {
     @Environment(Router.self) private var router
+    @Environment(PhotoSyncCoordinator.self) private var photoSync
     let groupID: ShareAlbum.ID
     let viewModel: ShareViewModel
     let albums: [Album]
@@ -447,16 +448,9 @@ struct ShareImportView: View {
         case .albums:
             let selectedAlbums = albums.filter { selectedAlbumIDs.contains($0.id) }
             isImporting = true
-            Task {
-                defer { isImporting = false }
-                guard let outcome = await viewModel.importPersonalAlbums(
-                    selectedAlbums,
-                    into: groupID
-                ) else { return }
-
-                if outcome.completedAnyWork {
-                    router.pop()
-                }
+            router.pop()
+            photoSync.runUpload {
+                _ = await viewModel.importPersonalAlbums(selectedAlbums, into: groupID)
             }
         }
     }
@@ -472,18 +466,14 @@ struct ShareImportView: View {
         guard !localIdentifiers.isEmpty else { return }
 
         isImporting = true
-        Task {
-            defer { isImporting = false }
-            guard let result = await viewModel.importPhotos(
+        isDestinationPresented = false
+        router.pop()
+        photoSync.runUpload {
+            _ = await viewModel.importPhotos(
                 localIdentifiers: localIdentifiers,
                 into: selectedDestinationAlbumID,
                 groupID: groupID
-            ) else { return }
-
-            isDestinationPresented = false
-            if result.succeededCount > 0 || result.failedCount == 0 {
-                router.pop()
-            }
+            )
         }
     }
 

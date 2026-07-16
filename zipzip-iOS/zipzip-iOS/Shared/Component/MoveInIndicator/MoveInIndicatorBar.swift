@@ -19,7 +19,7 @@ struct MoveInIndicatorBar: View {
                 MoveInIndicator(
                     mode: indicatorMode,
                     remainingMinutes: photoSync.remainingMinutes,
-                    tooltipText: registeredPhotoCount > 0
+                    tooltipText: indicatorMode == .moveIn && registeredPhotoCount > 0
                         ? "\(registeredPhotoCount)장의 사진이 입주했어요!"
                         : nil,
                     onTap: { showCancelAlert = true }
@@ -41,7 +41,7 @@ struct MoveInIndicatorBar: View {
     }
 
     private var indicatorMode: MoveInIndicator.Mode {
-        photoSync.phase == .uploading ? .uploading : .moveIn
+        photoSync.isUploading || photoSync.phase == .uploading ? .uploading : .moveIn
     }
 
     private var cancelAlertTitle: String {

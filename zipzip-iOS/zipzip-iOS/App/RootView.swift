@@ -329,7 +329,7 @@ struct RootView: View {
     }
 
     @ViewBuilder private var topIndicator: some View {
-        if isNavbarVisible {
+        if isNavbarVisible || (showsRootTab && photoSync.isUploading) {
             MoveInIndicatorBar()
         }
     }

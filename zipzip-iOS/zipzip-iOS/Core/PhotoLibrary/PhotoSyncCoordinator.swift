@@ -53,6 +53,9 @@ final class PhotoSyncCoordinator {
     private var task: Task<Void, Never>?
 
     @ObservationIgnored
+    private var uploadTask: Task<Void, Never>?
+
+    @ObservationIgnored
     private var etaStartedAt: Date?
 
     @ObservationIgnored
@@ -71,6 +74,7 @@ final class PhotoSyncCoordinator {
     var isFinished = false
     private(set) var phase: SyncPhase = .idle
     private(set) var estimatedSecondsRemaining: Double?
+    private(set) var isUploading = false
 
     init(
         syncOperation: SyncOperation? = nil,
@@ -81,7 +85,7 @@ final class PhotoSyncCoordinator {
     }
 
     var isProcessing: Bool {
-        phase != .idle && phase != .finished
+        isUploading || (phase != .idle && phase != .finished)
     }
 
     var remainingMinutes: Int? {
@@ -99,6 +103,20 @@ final class PhotoSyncCoordinator {
 
     func cancelSync() {
         task?.cancel()
+        uploadTask?.cancel()
+    }
+
+    func runUpload(_ operation: @escaping @MainActor () async -> Void) {
+        uploadTask?.cancel()
+        estimatedSecondsRemaining = nil
+        isUploading = true
+        uploadTask = Task {
+            defer {
+                isUploading = false
+                uploadTask = nil
+            }
+            await operation()
+        }
     }
 
     private func runSync() {
