@@ -163,6 +163,15 @@ struct RootView: View {
                         albumID: albumID,
                         viewModel: shareViewModel
                     )
+                case let .sharePhotoDetail(groupID, albumID, photoID):
+                    SharedPhotoDetailView(
+                        viewModel: shareViewModel.makeSharedPhotoDetailViewModel(
+                            groupID: groupID,
+                            albumID: albumID,
+                            photoID: photoID,
+                            onDelete: router.pop
+                        )
+                    )
                 case let .shareImport(groupID):
                     ShareImportView(
                         groupID: groupID,

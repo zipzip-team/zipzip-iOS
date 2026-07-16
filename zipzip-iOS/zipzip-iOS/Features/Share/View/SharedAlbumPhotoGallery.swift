@@ -12,6 +12,7 @@ struct SharedAlbumPhotoGallery: View {
     var selectedPhotoIDs: [SharedAlbumPhoto.ID] = []
     var onSelectPhoto: (SharedAlbumPhoto.ID) -> Void = { _ in }
     var onBeginSelection: (SharedAlbumPhoto.ID) -> Void = { _ in }
+    var onOpenPhoto: (SharedAlbumPhoto.ID) -> Void = { _ in }
     var onNeedsURLRefresh: () async -> Void = {}
 
     private let columns = Array(
@@ -60,8 +61,11 @@ struct SharedAlbumPhotoGallery: View {
         }
         .contentShape(.rect)
         .onTapGesture {
-            guard isSelectionMode else { return }
-            onSelectPhoto(photo.id)
+            if isSelectionMode {
+                onSelectPhoto(photo.id)
+            } else {
+                onOpenPhoto(photo.id)
+            }
         }
         .onLongPressGesture {
             onBeginSelection(photo.id)
@@ -76,6 +80,8 @@ struct SharedAlbumPhotoGallery: View {
         .accessibilityAction {
             if isSelectionMode {
                 onSelectPhoto(photo.id)
+            } else {
+                onOpenPhoto(photo.id)
             }
         }
     }

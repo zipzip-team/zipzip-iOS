@@ -201,6 +201,30 @@ final class ShareViewModelTests: XCTestCase {
     }
 
     @MainActor
+    func testLoadsGroupRepresentativeImageFromJoinPreview() async throws {
+        let groupID = try XCTUnwrap(UUID(uuidString: "11111111-1111-1111-1111-111111111111"))
+        let api = StubShareGroupAPI(
+            groupListResponse: makeGroupListResponse(id: groupID, name: "우리 가족"),
+            inviteCodeResponse: InviteCodeResponse(
+                sharedGroupId: groupID,
+                inviteCode: "ZZ7K9P2Q"
+            ),
+            joinPreviewResponse: makeJoinPreview(groupID: groupID, alreadyJoined: true)
+        )
+        let viewModel = ShareViewModel(
+            repository: makeRepository(api: api, store: try makeStore())
+        )
+
+        await viewModel.loadGroups(for: testCacheOwnerID)
+        await viewModel.loadRepresentativeImage(groupID: groupID)
+
+        let expectedURL = try XCTUnwrap(URL(string: "https://cdn.example.com/group.jpg"))
+        let group = try XCTUnwrap(viewModel.group(withID: groupID))
+        XCTAssertEqual(group.validRepresentativeImageURL(), expectedURL)
+        XCTAssertEqual(viewModel.inviteCode(for: groupID), "ZZ7K9P2Q")
+    }
+
+    @MainActor
     func testResetRemoteDataClearsLoadedGroups() async throws {
         let groupID = try XCTUnwrap(UUID(uuidString: "11111111-1111-1111-1111-111111111111"))
         let api = StubShareGroupAPI(

@@ -319,9 +319,11 @@ private struct ShareDestinationRow: View {
     var body: some View {
         HStack(spacing: 10) {
             HStack(spacing: 16) {
-                Color.grey100
-                    .frame(width: 72, height: 72)
-                    .clipShape(.rect(cornerRadius: 8))
+                ShareGroupThumbnailImage(
+                    url: album.validRepresentativeImageURL(),
+                    cornerRadius: 8
+                )
+                .frame(width: 72, height: 72)
 
                 VStack(alignment: .leading, spacing: 0) {
                     Text(album.name)

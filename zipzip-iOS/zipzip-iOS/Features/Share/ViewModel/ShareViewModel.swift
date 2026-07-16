@@ -114,6 +114,8 @@ final class ShareViewModel {
     private var requestedSharedAlbumCursors: [ShareAlbum.ID: Set<String>] = [:]
     private var inviteCodes: [ShareAlbum.ID: String] = [:]
     private var loadingInviteCodeGroupIDs: Set<ShareAlbum.ID> = []
+    private var loadedRepresentativeImageGroupIDs: Set<ShareAlbum.ID> = []
+    private var loadingRepresentativeImageGroupIDs: Set<ShareAlbum.ID> = []
     private var loadingMemberGroupIDs: Set<ShareAlbum.ID> = []
     private var visibleGroupIDs: [ShareAlbum.ID]?
     private var visibleSharedAlbumIDs: [ShareAlbum.ID: [SharedAlbum.ID]] = [:]
@@ -306,6 +308,55 @@ final class ShareViewModel {
             albumID: albumID,
             repository: adapter,
             onAlbumDeleted: onDelete
+        )
+    }
+
+    func makeSharedPhotoDetailViewModel(
+        groupID: ShareAlbum.ID,
+        albumID: SharedAlbum.ID,
+        photoID: SharedAlbumPhoto.ID,
+        onDelete: @escaping () -> Void
+    ) -> SharedPhotoDetailViewModel {
+        let adapter = SharedPhotoDetailRepositoryAdapter(
+            onPhoto: { [weak self] photoID in
+                guard let repository = self?.sharedPhotoRepository else {
+                    throw SharedPhotoRepositoryError.cacheNotPrepared
+                }
+                return try await repository.photo(id: photoID)
+            },
+            onComments: { [weak self] photoID, cursor, size in
+                guard let repository = self?.sharedPhotoRepository else {
+                    throw SharedPhotoRepositoryError.cacheNotPrepared
+                }
+                return try await repository.comments(
+                    photoID: photoID,
+                    cursor: cursor,
+                    size: size
+                )
+            },
+            onSetLike: { [weak self] photoID, isLiked in
+                guard let repository = self?.sharedPhotoRepository else {
+                    throw SharedPhotoRepositoryError.cacheNotPrepared
+                }
+                return try await repository.setLike(photoID: photoID, isLiked: isLiked)
+            },
+            onDeletePhoto: { [weak self] photoID, albumID in
+                guard let self, let repository = self.sharedPhotoRepository else {
+                    throw SharedPhotoRepositoryError.cacheNotPrepared
+                }
+                let result = try await repository.detachPhotos(
+                    photoIDs: [photoID],
+                    from: albumID
+                )
+                await self.refreshSharedAlbumsAfterPhotoMutation(groupID: groupID)
+                return result.succeededCount == 1
+            }
+        )
+        return SharedPhotoDetailViewModel(
+            photoID: photoID,
+            albumID: albumID,
+            repository: adapter,
+            onPhotoDeleted: onDelete
         )
     }
 
@@ -545,6 +596,61 @@ final class ShareViewModel {
         } catch {
             guard remoteDataSessionID == sessionID else { return }
             presentError(error, fallback: "초대 코드를 불러오지 못했어요.")
+        }
+    }
+
+    func loadRepresentativeImage(
+        groupID: ShareAlbum.ID,
+        refresh: Bool = false
+    ) async {
+        guard let group = group(withID: groupID),
+              !loadingRepresentativeImageGroupIDs.contains(groupID)
+        else {
+            return
+        }
+        if !refresh,
+           loadedRepresentativeImageGroupIDs.contains(groupID),
+           !group.hasExpiredRepresentativeImage() {
+            return
+        }
+
+        let sessionID = remoteDataSessionID
+        loadingRepresentativeImageGroupIDs.insert(groupID)
+        defer {
+            if remoteDataSessionID == sessionID {
+                loadingRepresentativeImageGroupIDs.remove(groupID)
+            }
+        }
+
+        do {
+            let inviteCode: String?
+            if let cachedInviteCode = inviteCodes[groupID] {
+                inviteCode = cachedInviteCode
+            } else {
+                inviteCode = try await repository.inviteCode(groupID: groupID)
+                guard remoteDataSessionID == sessionID else { return }
+                inviteCodes[groupID] = inviteCode
+            }
+
+            guard let inviteCode else {
+                clearRepresentativeImage(groupID: groupID)
+                loadedRepresentativeImageGroupIDs.insert(groupID)
+                return
+            }
+
+            let preview = try await repository.previewJoin(inviteCode: inviteCode)
+            guard remoteDataSessionID == sessionID,
+                  preview.group.id == groupID
+            else {
+                return
+            }
+            updateRepresentativeImage(groupID: groupID, preview: preview)
+            loadedRepresentativeImageGroupIDs.insert(groupID)
+        } catch ShareGroupRepositoryError.groupNotFound {
+            guard remoteDataSessionID == sessionID else { return }
+            await removeMissingGroup(id: groupID)
+        } catch {
+            // 대표 이미지는 보조 정보이므로 목록 사용을 막거나 오류 UI를 노출하지 않는다.
         }
     }
 
@@ -804,6 +910,8 @@ final class ShareViewModel {
         requestedSharedAlbumCursors = [:]
         inviteCodes = [:]
         loadingInviteCodeGroupIDs = []
+        loadedRepresentativeImageGroupIDs = []
+        loadingRepresentativeImageGroupIDs = []
         membersByGroupID = [:]
         loadingMemberGroupIDs = []
         visibleGroupIDs = nil
@@ -942,6 +1050,11 @@ final class ShareViewModel {
             }
             try await prepareJoinedGroup(id: groupID)
             guard remoteDataSessionID == sessionID else { return nil }
+            cacheRepresentativeImage(
+                groupID: groupID,
+                preview: pendingJoinPreview,
+                inviteCode: joinRequestInviteCode
+            )
             joinedGroupIDAwaitingSync = nil
             completedJoinNavigationGroupID = groupID
             finishJoin()
@@ -952,6 +1065,11 @@ final class ShareViewModel {
                 joinedGroupIDAwaitingSync = pendingJoinPreview.group.id
                 try await prepareJoinedGroup(id: pendingJoinPreview.group.id)
                 guard remoteDataSessionID == sessionID else { return nil }
+                cacheRepresentativeImage(
+                    groupID: pendingJoinPreview.group.id,
+                    preview: pendingJoinPreview,
+                    inviteCode: joinRequestInviteCode
+                )
                 joinedGroupIDAwaitingSync = nil
                 completedJoinNavigationGroupID = pendingJoinPreview.group.id
                 finishJoin()
@@ -1574,6 +1692,7 @@ final class ShareViewModel {
     }
 
     private func reloadGroups() async throws {
+        let previousGroupsByID = Dictionary(uniqueKeysWithValues: groups.map { ($0.id, $0) })
         let storedGroups = try await repository.groups()
         let storedByID = Dictionary(uniqueKeysWithValues: storedGroups.map { ($0.id, $0) })
         let orderedGroups: [ShareAlbum]
@@ -1585,6 +1704,10 @@ final class ShareViewModel {
 
         groups = orderedGroups.map { storedGroup in
             var group = storedGroup
+            if let previousGroup = previousGroupsByID[group.id] {
+                group.representativeImageURL = previousGroup.representativeImageURL
+                group.representativeImageURLExpiresAt = previousGroup.representativeImageURLExpiresAt
+            }
             if let albumIDs = visibleSharedAlbumIDs[group.id] {
                 let albumsByID = Dictionary(uniqueKeysWithValues: group.albums.map { ($0.id, $0) })
                 group.albums = albumIDs.compactMap { albumsByID[$0] }
@@ -1658,6 +1781,8 @@ final class ShareViewModel {
         sharedAlbumHasNextPage.removeValue(forKey: id)
         requestedSharedAlbumCursors.removeValue(forKey: id)
         inviteCodes.removeValue(forKey: id)
+        loadedRepresentativeImageGroupIDs.remove(id)
+        loadingRepresentativeImageGroupIDs.remove(id)
         membersByGroupID.removeValue(forKey: id)
         if activeChatGroupID == id {
             dismissComments()
@@ -1666,6 +1791,33 @@ final class ShareViewModel {
 
     private func removeSharedAlbumState(id: SharedAlbum.ID, groupID: ShareAlbum.ID) {
         visibleSharedAlbumIDs[groupID]?.removeAll { $0 == id }
+    }
+
+    private func updateRepresentativeImage(
+        groupID: ShareAlbum.ID,
+        preview: ShareGroupJoinPreview
+    ) {
+        guard let index = groups.firstIndex(where: { $0.id == groupID }) else { return }
+        groups[index].representativeImageURL = preview.representativeImageURL
+        groups[index].representativeImageURLExpiresAt = preview.representativeImageURLExpiresAt
+        refreshManagedGroupIfNeeded(id: groupID)
+    }
+
+    private func clearRepresentativeImage(groupID: ShareAlbum.ID) {
+        guard let index = groups.firstIndex(where: { $0.id == groupID }) else { return }
+        groups[index].representativeImageURL = nil
+        groups[index].representativeImageURLExpiresAt = nil
+        refreshManagedGroupIfNeeded(id: groupID)
+    }
+
+    private func cacheRepresentativeImage(
+        groupID: ShareAlbum.ID,
+        preview: ShareGroupJoinPreview,
+        inviteCode: String
+    ) {
+        inviteCodes[groupID] = inviteCode
+        updateRepresentativeImage(groupID: groupID, preview: preview)
+        loadedRepresentativeImageGroupIDs.insert(groupID)
     }
 
     private func refreshGroupAfterAlbumMutation(groupID: ShareAlbum.ID) async {
