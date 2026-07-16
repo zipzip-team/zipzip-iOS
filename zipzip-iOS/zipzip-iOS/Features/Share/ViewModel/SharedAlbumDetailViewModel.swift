@@ -176,10 +176,6 @@ final class SharedAlbumDetailViewModel {
         !selectedPhotoIDs.isEmpty
     }
 
-    var canSaveSelectedPhotos: Bool {
-        selectedPhotos.contains { !$0.hasLocalCopy }
-    }
-
     var canDeleteSelectedLocalCopies: Bool {
         selectedPhotos.contains { $0.hasLocalCopy }
     }
@@ -327,7 +323,7 @@ final class SharedAlbumDetailViewModel {
     }
 
     func saveSelectedPhotos() async {
-        let photoIDs = selectedPhotos.filter { !$0.hasLocalCopy }.map(\.id)
+        let photoIDs = selectedPhotoIDs
         guard !photoIDs.isEmpty else { return }
         _ = await performPhotoMutation(fallbackError: "사진을 저장하지 못했어요.") {
             try await repository.savePhotosToLibrary(photoIDs: photoIDs, in: albumID)

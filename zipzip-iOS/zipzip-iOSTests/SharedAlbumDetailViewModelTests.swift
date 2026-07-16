@@ -70,6 +70,38 @@ final class SharedAlbumDetailViewModelTests: XCTestCase {
     }
 
     @MainActor
+    func testSavePassesAllSelectedPhotosIncludingLocalCopies() async {
+        let albumID = UUID()
+        let localPhoto = makePhoto(localIdentifier: "asset-1")
+        let remotePhoto = makePhoto()
+        let savedIDs = ReferenceBox<[UUID]>([])
+        let repository = makeRepository(
+            cachedPhotos: { _ in [localPhoto, remotePhoto] },
+            synchronizePhotos: { _ in [localPhoto, remotePhoto] },
+            savePhotos: { ids, _ in
+                savedIDs.value = ids
+                return .init(succeededCount: ids.count)
+            }
+        )
+        let viewModel = SharedAlbumDetailViewModel(
+            groupID: UUID(),
+            albumID: albumID,
+            repository: repository
+        )
+        await viewModel.load()
+        viewModel.enterSelectionMode()
+        viewModel.togglePhotoSelection(localPhoto.id)
+        viewModel.togglePhotoSelection(remotePhoto.id)
+
+        XCTAssertTrue(viewModel.hasSelectedPhotos)
+
+        await viewModel.saveSelectedPhotos()
+
+        XCTAssertEqual(savedIDs.value, [localPhoto.id, remotePhoto.id])
+        XCTAssertFalse(viewModel.isSelectionMode)
+    }
+
+    @MainActor
     func testCopyPassesMultipleSameGroupDestinationsWithoutDetachingSource() async {
         let groupID = UUID()
         let sourceAlbumID = UUID()

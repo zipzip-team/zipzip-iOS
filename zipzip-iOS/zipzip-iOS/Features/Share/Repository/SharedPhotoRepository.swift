@@ -422,11 +422,7 @@ final class DefaultSharedPhotoRepository: SharedPhotoRepository {
                 guard var photo = try await store.fetchPhoto(id: photoID) else {
                     throw SharedPhotoRepositoryError.photoNotFound
                 }
-                if let localIdentifier = photo.localIdentifier,
-                   photoLibrary.containsPhoto(localIdentifier: localIdentifier) {
-                    succeededCount += 1
-                    continue
-                }
+                // 이미 로컬 사본이 있어도 사용자가 저장을 요청할 때마다 새 사본을 만든다.
 
                 if photo.originalURLExpiresAt <= .now {
                     if !refreshedExpiredURLs {

@@ -13,11 +13,6 @@ nonisolated enum SharedPhotoLibraryError: Error {
 }
 
 nonisolated struct SharedPhotoLibraryService {
-    func containsPhoto(localIdentifier: String) -> Bool {
-        guard !localIdentifier.isEmpty else { return false }
-        return PHAsset.fetchAssets(withLocalIdentifiers: [localIdentifier], options: nil).firstObject != nil
-    }
-
     func savePhoto(
         from fileURL: URL,
         creationDate: Date?,

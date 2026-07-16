@@ -198,7 +198,7 @@ struct SharedAlbumDetailView: View {
             .init(
                 icon: .moveToAlbum,
                 title: "저장",
-                isDisabled: !viewModel.canSaveSelectedPhotos || viewModel.isBusy
+                isDisabled: !viewModel.hasSelectedPhotos
             ) {
                 Task { await viewModel.saveSelectedPhotos() }
             },
