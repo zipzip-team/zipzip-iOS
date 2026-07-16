@@ -90,6 +90,7 @@ nonisolated struct SharedGroupStore {
             name: record.name,
             date: record.joinedAt ?? record.createdAt ?? record.updatedAt,
             memberCount: record.memberCount,
+            memberNames: Self.decodeMemberNames(record.memberNames),
             role: record.myRole,
             albums: albums,
             sharedAlbumCount: record.sharedAlbumCount,
@@ -125,6 +126,7 @@ nonisolated struct SharedGroupStore {
                         joinedAt: Self.date(summary.joinedAt),
                         updatedAt: updatedAt,
                         memberCount: summary.memberCount,
+                        memberNames: Self.encodeMemberNames(summary.memberNames ?? []),
                         sharedAlbumCount: summary.sharedAlbumCount,
                         photoCount: summary.photoCount,
                         myRole: summary.myRole.rawValue
@@ -171,6 +173,7 @@ nonisolated struct SharedGroupStore {
                     joinedAt: existing?.joinedAt,
                     updatedAt: Self.date(detail.updatedAt),
                     memberCount: detail.memberCount,
+                    memberNames: existing?.memberNames,
                     sharedAlbumCount: detail.sharedAlbumCount,
                     photoCount: detail.photoCount,
                     myRole: detail.myRole.rawValue
@@ -266,6 +269,9 @@ nonisolated struct SharedGroupStore {
                     joinedAt: createdAt,
                     updatedAt: createdAt,
                     memberCount: 1,
+                    memberNames: Self.encodeMemberNames(
+                        [response.createdBy.displayName].compactMap { $0 }
+                    ),
                     sharedAlbumCount: 0,
                     photoCount: 0,
                     myRole: response.myRole.rawValue
@@ -297,6 +303,7 @@ nonisolated struct SharedGroupStore {
                     joinedAt: joinedAt,
                     updatedAt: joinedAt,
                     memberCount: max(existing?.memberCount ?? 0, 1),
+                    memberNames: existing?.memberNames,
                     sharedAlbumCount: existing?.sharedAlbumCount ?? 0,
                     photoCount: existing?.photoCount ?? 0,
                     myRole: response.myRole.rawValue
@@ -397,6 +404,21 @@ nonisolated struct SharedGroupStore {
         }
     }
 
+    private static func encodeMemberNames(_ names: [String]) -> String? {
+        guard !names.isEmpty,
+              let data = try? JSONEncoder().encode(names)
+        else { return nil }
+        return String(data: data, encoding: .utf8)
+    }
+
+    private static func decodeMemberNames(_ raw: String?) -> [String] {
+        guard let raw,
+              let data = raw.data(using: .utf8),
+              let names = try? JSONDecoder().decode([String].self, from: data)
+        else { return [] }
+        return names
+    }
+
     private static func requireCacheOwner(_ cacheOwnerID: UUID, in db: Database) throws {
         let owner = try SharedCacheOwnerRecord
             .where { $0.id.eq(1) }
@@ -422,6 +444,7 @@ nonisolated struct StoredSharedGroup {
     let name: String
     let date: Date
     let memberCount: Int
+    let memberNames: [String]
     let role: String
     let albums: [StoredSharedAlbum]
     let sharedAlbumCount: Int

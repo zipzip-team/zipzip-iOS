@@ -689,6 +689,7 @@ final class DefaultShareGroupRepository: ShareGroupRepository {
             name: stored.name,
             date: stored.date,
             memberCount: stored.memberCount,
+            memberNames: stored.memberNames,
             currentUserRole: ShareGroupRole(rawValue: stored.role) ?? .participant,
             albums: stored.albums.map {
                 makeSharedAlbum(

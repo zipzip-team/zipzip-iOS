@@ -19,6 +19,7 @@ struct SharedGroupRecord {
     @Column("joined_at", as: Date.UnixTimeRepresentation?.self) var joinedAt: Date?
     @Column("updated_at", as: Date.UnixTimeRepresentation.self) var updatedAt: Date
     @Column("member_count") var memberCount: Int
+    @Column("member_names") var memberNames: String?
     @Column("shared_album_count") var sharedAlbumCount: Int
     @Column("photo_count") var photoCount: Int
     @Column("my_role") var myRole: String
