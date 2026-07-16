@@ -41,15 +41,18 @@ struct TextInput: View {
 
     private let placeholder: String
     private let style: Style
+    private let maxLength: Int?
 
     init(
         _ placeholder: String = "입력",
         text: Binding<String>,
-        style: Style = .text
+        style: Style = .text,
+        maxLength: Int? = nil
     ) {
         _text = text
         self.placeholder = placeholder
         self.style = style
+        self.maxLength = maxLength
     }
 
     var body: some View {
@@ -96,6 +99,10 @@ struct TextInput: View {
         .tint(.orange500)
         .focused($isFocused)
         .padding(.horizontal, 4)
+        .onChange(of: text) { _, newValue in
+            guard let maxLength, newValue.count > maxLength else { return }
+            text = String(newValue.prefix(maxLength))
+        }
     }
 
     private var clearButton: some View {

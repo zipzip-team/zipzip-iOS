@@ -330,7 +330,7 @@ private struct AlbumCreateSheetContent: View {
                         .font(.t3_md)
                         .foregroundStyle(.grey300)
 
-                    TextInput("이름 입력", text: $albumName)
+                    TextInput("이름 입력", text: $albumName, maxLength: 20)
                 }
 
                 HStack(spacing: 16) {
