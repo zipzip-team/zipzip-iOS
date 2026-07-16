@@ -1,8 +1,19 @@
 {
   "images" : [
     {
-      "filename" : "ServiceIntroArtwork1.png",
-      "idiom" : "universal"
+      "filename" : "Frame 2147227909.svg",
+      "idiom" : "universal",
+      "scale" : "1x"
+    },
+    {
+      "filename" : "Frame 2147227910.svg",
+      "idiom" : "universal",
+      "scale" : "2x"
+    },
+    {
+      "filename" : "Frame 2147227911.svg",
+      "idiom" : "universal",
+      "scale" : "3x"
     }
   ],
   "info" : {
