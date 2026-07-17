@@ -362,6 +362,9 @@ struct RootView: View {
         localIdentifiers: [String],
         destinations: [ShareDestination]
     ) {
+        if destinations.containsSharedAlbum {
+            router.popToRoot()
+        }
         photoSync.track {
             guard await albumViewModel.addPhotos(
                 localIdentifiers: localIdentifiers,
@@ -390,6 +393,9 @@ struct RootView: View {
         from sourceAlbumID: Album.ID,
         destinations: [ShareDestination]
     ) {
+        if destinations.containsSharedAlbum {
+            router.popToRoot()
+        }
         photoSync.track {
             guard await albumViewModel.moveAlbumPhotos(
                 ids: ids,

@@ -169,12 +169,13 @@ final class AlbumDetailViewModel {
     }
 
     func completePhotoMove(to destinations: [ShareDestination]) async {
-        guard await actions.onMovePhotos(selectedPhotoIDs, destinations) else {
+        let photoIDs = selectedPhotoIDs
+        isMoveSheetPresented = false
+        exitSelectionMode()
+        guard await actions.onMovePhotos(photoIDs, destinations) else {
             logError("failed to move photos")
             return
         }
-        isMoveSheetPresented = false
-        exitSelectionMode()
     }
 
     func editSelectedPhotoInfo() {
