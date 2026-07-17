@@ -73,6 +73,7 @@ struct AlbumView: View {
         .overlay(alignment: .topLeading) {
             FloatingHeader(.trailing) {
                 AlbumHeaderActionButton(
+                    showsSelection: !viewModel.albums.isEmpty,
                     onSelectionTap: viewModel.enterSelectionMode,
                     onAddTap: viewModel.presentCreateAlbumSheet
                 )
@@ -383,24 +384,43 @@ private struct AlbumTitleHeader: View {
 }
 
 struct AlbumHeaderActionButton: View {
+    let showsSelection: Bool
     let onSelectionTap: () -> Void
     let onAddTap: () -> Void
 
+    init(
+        showsSelection: Bool = true,
+        onSelectionTap: @escaping () -> Void,
+        onAddTap: @escaping () -> Void
+    ) {
+        self.showsSelection = showsSelection
+        self.onSelectionTap = onSelectionTap
+        self.onAddTap = onAddTap
+    }
+
     var body: some View {
-        RoundedIconButton(items: [
-            .init(
+        RoundedIconButton(items: items)
+    }
+
+    private var items: [RoundedIconButtonItem] {
+        var items: [RoundedIconButtonItem] = []
+
+        if showsSelection {
+            items.append(.init(
                 id: "selection",
                 icon: .iconSelection,
                 accessibilityLabel: "사진집 선택",
                 action: onSelectionTap
-            ),
-            .init(
-                id: "add",
-                icon: .createStroke,
-                accessibilityLabel: "사진집 추가",
-                action: onAddTap
-            )
-        ])
+            ))
+        }
+
+        items.append(.init(
+            id: "add",
+            icon: .createStroke,
+            accessibilityLabel: "사진집 추가",
+            action: onAddTap
+        ))
+        return items
     }
 }
 

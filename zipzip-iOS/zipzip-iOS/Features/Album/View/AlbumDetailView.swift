@@ -80,6 +80,7 @@ struct AlbumDetailView<Content: View>: View {
         .overlay(alignment: .topLeading) {
             FloatingHeader(.trailing) {
                 AlbumHeaderActionButton(
+                    showsSelection: album.photoCount > 0,
                     onSelectionTap: { viewModel.enterSelectionMode(photoCount: album.photoCount) },
                     onAddTap: viewModel.presentPhotoPicker
                 )
