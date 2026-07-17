@@ -215,14 +215,17 @@ struct FilteredPictureView: View {
     }
 
     private var filterChipBar: some View {
-        HStack(spacing: 10) {
-            ForEach(viewModel.appliedFilters, id: \.self) { filter in
-                AppliedFilterChip(filter: filter) { viewModel.editFilter(filter) }
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 10) {
+                ForEach(viewModel.appliedFilters, id: \.self) { filter in
+                    AppliedFilterChip(filter: filter) { viewModel.editFilter(filter) }
+                }
+                AddFilterChip { router.pop() }
             }
-            AddFilterChip { router.pop() }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 8)
         }
-        .padding(.horizontal, 16)
-        .padding(.bottom, 8)
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private var dateSheetHeight: CGFloat {
