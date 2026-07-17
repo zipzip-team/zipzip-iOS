@@ -206,7 +206,7 @@ struct SharedAlbumDetailView: View {
                 viewModel.presentAlbumManagement(albumTitle: album.name)
             },
             .init(
-                icon: .moveToAlbum,
+                icon: .save,
                 title: "저장",
                 isDisabled: !viewModel.hasSelectedPhotos
             ) {
