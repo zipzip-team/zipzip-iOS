@@ -162,20 +162,12 @@ struct FilteredPictureView: View {
     }
 
     private var emptyResultView: some View {
-        VStack(spacing: 8) {
-            Image(.albumDetailEmptyArtwork)
-                .resizable()
-                .scaledToFit()
-                .frame(width: 80, height: 80)
-                .accessibilityHidden(true)
-
-            Image(.albumEmptyDescription)
-                .resizable()
-                .scaledToFit()
-                .frame(width: 246, height: 20)
-                .accessibilityLabel("사진집에 사진을 넣어볼까요?")
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+        Image(.emptyFilter)
+            .resizable()
+            .scaledToFit()
+            .frame(width: 246)
+            .accessibilityLabel("필터에 맞는 사진이 없어요.")
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
     }
 
     private var topBar: some View {
