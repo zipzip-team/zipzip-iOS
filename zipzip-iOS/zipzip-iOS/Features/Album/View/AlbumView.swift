@@ -94,7 +94,6 @@ struct AlbumView: View {
             ZStack {
                 if viewModel.isSelectionMode, !viewModel.selectedAlbumIDs.isEmpty {
                     ActionBar(items: selectionActionItems)
-                        .padding(.bottom, 49)
                         .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
             }

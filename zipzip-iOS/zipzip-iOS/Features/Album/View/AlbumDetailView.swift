@@ -92,7 +92,6 @@ struct AlbumDetailView<Content: View>: View {
         .overlay(alignment: .bottom) {
             if viewModel.isSelectionMode {
                 ActionBar(items: selectionActionItems)
-                    .padding(.bottom, 49)
             }
         }
         .navigationDestination(isPresented: $viewModel.isPhotoPickerPresented) {
