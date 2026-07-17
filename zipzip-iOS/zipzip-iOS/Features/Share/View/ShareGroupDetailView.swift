@@ -156,7 +156,7 @@ struct ShareGroupDetailView: View {
                 action: presentShareManagement
             ),
             .init(
-                icon: .moveToAlbum,
+                icon: .move,
                 title: "사진집으로",
                 isDisabled: selectedAlbumIDs.isEmpty || isCopyingAlbumsToPersonal,
                 action: { isMoveAlertPresented = true }
