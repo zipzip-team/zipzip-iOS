@@ -21,6 +21,15 @@ extension Array where Element == ShareDestination {
         }
         return nil
     }
+
+    var containsSharedAlbum: Bool {
+        contains { destination in
+            if case .sharedAlbum = destination {
+                return true
+            }
+            return false
+        }
+    }
 }
 
 struct ShareSheet: View {

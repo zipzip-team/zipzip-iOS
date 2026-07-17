@@ -19,7 +19,7 @@ struct SplashView: View {
     private let continuesOnboarding: Bool
     private let onAnimationFinished: (() -> Void)?
     private let finalLogoFrame: AnimationFrameTime = 57
-    private let animationSpeed = 0.95
+    private let animationSpeed = 1.5
 
     init(continuesOnboarding: Bool = true, onAnimationFinished: (() -> Void)? = nil) {
         self.continuesOnboarding = continuesOnboarding
@@ -60,12 +60,12 @@ struct SplashView: View {
         .task(id: lottieFinished) {
             guard lottieFinished else { return }
             do {
-                try await Task.sleep(for: .seconds(1))
+                try await Task.sleep(for: .milliseconds(300))
             } catch {
                 return
             }
 
-            withAnimation(.easeInOut(duration: 0.4)) {
+            withAnimation(.easeInOut(duration: 0.7)) {
                 splashContentOpacity = 0
             }
 
