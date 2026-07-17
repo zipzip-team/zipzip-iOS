@@ -406,7 +406,7 @@ struct AlbumHeaderActionButton: View {
         if showsSelection {
             items.append(.init(
                 id: "selection",
-                icon: .iconSelection,
+                icon: .select,
                 accessibilityLabel: "사진집 선택",
                 action: onSelectionTap
             ))

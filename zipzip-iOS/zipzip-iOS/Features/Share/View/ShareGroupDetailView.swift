@@ -140,7 +140,7 @@ struct ShareGroupDetailView: View {
                 .disabled(isCopyingAlbumsToPersonal)
         } else {
             RoundedIconButton(items: [
-                .init(id: "share-group-back", icon: .iconChevronLeft, accessibilityLabel: "뒤로가기") {
+                .init(id: "share-group-back", icon: .chevronLeft, accessibilityLabel: "뒤로가기") {
                     router.pop()
                 }
             ])

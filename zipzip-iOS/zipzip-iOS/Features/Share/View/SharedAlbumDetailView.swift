@@ -233,7 +233,7 @@ struct SharedAlbumDetailView: View {
             RoundedIconButton(items: [
                 .init(
                     id: "shared-album-back",
-                    icon: .iconChevronLeft,
+                    icon: .chevronLeft,
                     accessibilityLabel: "뒤로가기"
                 ) {
                     dismiss()

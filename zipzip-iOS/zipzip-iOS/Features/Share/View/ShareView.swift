@@ -199,7 +199,7 @@ struct ShareAlbumDetailDestinationView: View {
                 .overlay(alignment: .topLeading) {
                     FloatingHeader(.leading) {
                         RoundedIconButton(items: [
-                            .init(id: "missing-share-album-back", icon: .iconChevronLeft, accessibilityLabel: "뒤로가기") {
+                            .init(id: "missing-share-album-back", icon: .chevronLeft, accessibilityLabel: "뒤로가기") {
                                 router.pop()
                             }
                         ])

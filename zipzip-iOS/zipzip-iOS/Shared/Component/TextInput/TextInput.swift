@@ -78,7 +78,7 @@ struct TextInput: View {
     }
 
     private var searchIcon: some View {
-        Image(.textInputSearch)
+        Image(.search)
             .renderingMode(.template)
             .resizable()
             .scaledToFit()
@@ -109,7 +109,7 @@ struct TextInput: View {
         Button {
             text = ""
         } label: {
-            Image(.textInputClose)
+            Image(.cancelSm)
                 .renderingMode(.template)
                 .resizable()
                 .scaledToFit()
