@@ -163,6 +163,14 @@ struct RootView: View {
                     ShareAlbumDetailDestinationView(
                         groupID: groupID,
                         albumID: albumID,
+                        personalAlbums: albumViewModel.shareDestinations,
+                        copyPhotosToPersonalAlbums: { photoIDs, sharedAlbumID, personalAlbumIDs in
+                            try await albumViewModel.copySharedPhotos(
+                                photoIDs: photoIDs,
+                                from: sharedAlbumID,
+                                to: personalAlbumIDs
+                            )
+                        },
                         viewModel: shareViewModel
                     )
                 case let .sharePhotoDetail(groupID, albumID, photoID):

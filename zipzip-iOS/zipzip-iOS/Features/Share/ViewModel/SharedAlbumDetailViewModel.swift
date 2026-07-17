@@ -33,6 +33,11 @@ protocol SharedAlbumDetailRepository {
         from sourceAlbumID: SharedAlbum.ID,
         to destinationAlbumIDs: [SharedAlbum.ID]
     ) async throws -> SharedAlbumPhotoMutationResult
+    func copyPhotosToPersonalAlbums(
+        photoIDs: [SharedAlbumPhoto.ID],
+        from sourceAlbumID: SharedAlbum.ID,
+        to personalAlbumIDs: [Album.ID]
+    ) async throws -> SharedAlbumPhotoMutationResult
     func deleteLocalCopies(
         photoIDs: [SharedAlbumPhoto.ID]
     ) async throws -> SharedAlbumPhotoMutationResult
@@ -55,6 +60,11 @@ struct SharedAlbumDetailRepositoryAdapter: SharedAlbumDetailRepository {
         [SharedAlbumPhoto.ID],
         SharedAlbum.ID,
         [SharedAlbum.ID]
+    ) async throws -> SharedAlbumPhotoMutationResult
+    let onCopyPhotosToPersonalAlbums: (
+        [SharedAlbumPhoto.ID],
+        SharedAlbum.ID,
+        [Album.ID]
     ) async throws -> SharedAlbumPhotoMutationResult
     let onDeleteLocalCopies: ([SharedAlbumPhoto.ID]) async throws -> SharedAlbumPhotoMutationResult
     let onDetachPhotos: (
@@ -107,6 +117,14 @@ struct SharedAlbumDetailRepositoryAdapter: SharedAlbumDetailRepository {
         try await onCopyPhotos(photoIDs, sourceAlbumID, destinationAlbumIDs)
     }
 
+    func copyPhotosToPersonalAlbums(
+        photoIDs: [SharedAlbumPhoto.ID],
+        from sourceAlbumID: SharedAlbum.ID,
+        to personalAlbumIDs: [Album.ID]
+    ) async throws -> SharedAlbumPhotoMutationResult {
+        try await onCopyPhotosToPersonalAlbums(photoIDs, sourceAlbumID, personalAlbumIDs)
+    }
+
     func deleteLocalCopies(
         photoIDs: [SharedAlbumPhoto.ID]
     ) async throws -> SharedAlbumPhotoMutationResult {
@@ -136,6 +154,7 @@ final class SharedAlbumDetailViewModel {
     private(set) var sections: [SharedAlbumPhotoSection] = []
     private(set) var selectedPhotoIDs: [SharedAlbumPhoto.ID] = []
     private(set) var selectedDestinationAlbumIDs: [SharedAlbum.ID] = []
+    private(set) var selectedPersonalAlbumIDs: [Album.ID] = []
 
     var isSelectionMode = false
     var isPhotoPickerPresented = false
@@ -231,6 +250,7 @@ final class SharedAlbumDetailViewModel {
         isSelectionMode = false
         selectedPhotoIDs.removeAll()
         selectedDestinationAlbumIDs.removeAll()
+        selectedPersonalAlbumIDs.removeAll()
         isCopySheetPresented = false
         isDeleteSheetPresented = false
     }
@@ -333,6 +353,7 @@ final class SharedAlbumDetailViewModel {
     func presentCopySheet() {
         guard hasSelectedPhotos, !isBusy else { return }
         selectedDestinationAlbumIDs.removeAll()
+        selectedPersonalAlbumIDs.removeAll()
         isCopySheetPresented = true
     }
 
@@ -340,6 +361,7 @@ final class SharedAlbumDetailViewModel {
         guard !isPerformingPhotoMutation else { return }
         isCopySheetPresented = false
         selectedDestinationAlbumIDs.removeAll()
+        selectedPersonalAlbumIDs.removeAll()
     }
 
     func toggleDestinationAlbum(_ albumID: SharedAlbum.ID) {
@@ -351,11 +373,38 @@ final class SharedAlbumDetailViewModel {
         }
     }
 
+    func togglePersonalDestinationAlbum(_ albumID: Album.ID) {
+        guard !isPerformingPhotoMutation else { return }
+        if let index = selectedPersonalAlbumIDs.firstIndex(of: albumID) {
+            selectedPersonalAlbumIDs.remove(at: index)
+        } else {
+            selectedPersonalAlbumIDs.append(albumID)
+        }
+    }
+
+    func clearCopySelections() {
+        guard !isPerformingPhotoMutation else { return }
+        selectedDestinationAlbumIDs.removeAll()
+        selectedPersonalAlbumIDs.removeAll()
+    }
+
     func copySelectedPhotos() async {
         guard !selectedDestinationAlbumIDs.isEmpty else { return }
         let destinations = selectedDestinationAlbumIDs
         _ = await performPhotoMutation(fallbackError: "사진을 다른 공유집에 복사하지 못했어요.") {
             try await repository.copyPhotos(
+                photoIDs: selectedPhotoIDs,
+                from: albumID,
+                to: destinations
+            )
+        }
+    }
+
+    func copySelectedPhotosToPersonalAlbums() async {
+        guard !selectedPersonalAlbumIDs.isEmpty else { return }
+        let destinations = selectedPersonalAlbumIDs
+        _ = await performPhotoMutation(fallbackError: "사진을 사진집에 복사하지 못했어요.") {
+            try await repository.copyPhotosToPersonalAlbums(
                 photoIDs: selectedPhotoIDs,
                 from: albumID,
                 to: destinations

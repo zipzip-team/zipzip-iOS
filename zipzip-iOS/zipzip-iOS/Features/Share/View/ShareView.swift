@@ -172,6 +172,12 @@ struct ShareAlbumDetailDestinationView: View {
     @Environment(Router.self) private var router
     let groupID: ShareAlbum.ID
     let albumID: SharedAlbum.ID
+    let personalAlbums: [Album]
+    let copyPhotosToPersonalAlbums: (
+        [SharedAlbumPhoto.ID],
+        SharedAlbum.ID,
+        [Album.ID]
+    ) async throws -> SharedAlbumPhotoMutationResult
     let viewModel: ShareViewModel
 
     var body: some View {
@@ -179,9 +185,11 @@ struct ShareAlbumDetailDestinationView: View {
             SharedAlbumDetailView(
                 album: album,
                 destinationAlbums: viewModel.group(withID: groupID)?.albums ?? [],
+                personalAlbums: personalAlbums,
                 viewModel: viewModel.makeSharedAlbumDetailViewModel(
                     groupID: groupID,
                     albumID: albumID,
+                    copyPhotosToPersonalAlbums: copyPhotosToPersonalAlbums,
                     onDelete: router.pop
                 ),
                 onOpenPhoto: { photoID in
