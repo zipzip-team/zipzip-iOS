@@ -309,7 +309,7 @@ private struct SharedPhotoRemoteImage: View {
     let isLoading: Bool
 
     var body: some View {
-        Color.grey100
+        Color.clear
             .overlay {
                 if let url {
                     AsyncImage(url: url) { phase in
@@ -320,22 +320,33 @@ private struct SharedPhotoRemoteImage: View {
                                 .scaledToFit()
                                 .accessibilityHidden(true)
                         case .empty:
-                            ProgressView()
-                                .tint(.grey500)
+                            placeholder {
+                                ProgressView()
+                                    .tint(.grey500)
+                            }
                         case .failure:
-                            Image(systemName: "photo")
-                                .font(.title)
-                                .foregroundStyle(.grey500)
-                                .accessibilityHidden(true)
+                            placeholder {
+                                Image(systemName: "photo")
+                                    .font(.title)
+                                    .foregroundStyle(.grey500)
+                                    .accessibilityHidden(true)
+                            }
                         @unknown default:
                             EmptyView()
                         }
                     }
                 } else if isLoading {
-                    ProgressView()
-                        .tint(.grey500)
+                    placeholder {
+                        ProgressView()
+                            .tint(.grey500)
+                    }
                 }
             }
+    }
+
+    private func placeholder(@ViewBuilder content: () -> some View) -> some View {
+        Color.grey100
+            .overlay(content())
     }
 }
 
