@@ -13,7 +13,9 @@ struct SplashView: View {
     @Environment(Router.self) private var router
     @Environment(PhotoSyncCoordinator.self) private var photoSync
     @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
+    @State private var animationStarted = false
     @State private var lottieFinished = false
+    @State private var splashContentOpacity = 1.0
     private let continuesOnboarding: Bool
     private let onAnimationFinished: (() -> Void)?
     private let finalLogoFrame: AnimationFrameTime = 57
@@ -33,11 +35,7 @@ struct SplashView: View {
         ) {
             VStack {
                 LottieView(animation: .named("logo_motion"))
-                    .playbackMode(
-                        lottieFinished
-                            ? .paused(at: .frame(finalLogoFrame))
-                            : .playing(.fromFrame(nil, toFrame: finalLogoFrame, loopMode: .playOnce))
-                    )
+                    .playbackMode(logoPlaybackMode)
                     .animationSpeed(animationSpeed)
                     .animationDidFinish { completed in
                         guard completed, !lottieFinished else { return }
@@ -48,11 +46,31 @@ struct SplashView: View {
 
                 Image(.splashText)
             }
+            .opacity(splashContentOpacity)
+        }
+        .task {
+            do {
+                try await Task.sleep(for: .milliseconds(300))
+            } catch {
+                return
+            }
+
+            animationStarted = true
         }
         .task(id: lottieFinished) {
             guard lottieFinished else { return }
             do {
                 try await Task.sleep(for: .seconds(1))
+            } catch {
+                return
+            }
+
+            withAnimation(.easeInOut(duration: 0.4)) {
+                splashContentOpacity = 0
+            }
+
+            do {
+                try await Task.sleep(for: .milliseconds(400))
             } catch {
                 return
             }
@@ -70,6 +88,16 @@ struct SplashView: View {
                 router.push(.photoPermission)
             }
         }
+    }
+
+    private var logoPlaybackMode: LottiePlaybackMode {
+        if !animationStarted {
+            return .paused(at: .frame(0))
+        }
+        if lottieFinished {
+            return .paused(at: .frame(finalLogoFrame))
+        }
+        return .playing(.fromFrame(nil, toFrame: finalLogoFrame, loopMode: .playOnce))
     }
 }
 
