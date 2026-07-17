@@ -15,32 +15,20 @@ struct AlbumPhotoPickerView: View {
         _viewModel = State(initialValue: viewModel)
     }
 
+    private let albumColumns = [
+        GridItem(.flexible(), spacing: 17),
+        GridItem(.flexible(), spacing: 17)
+    ]
+
     var body: some View {
         ZStack {
             Color.orange30
                 .ignoresSafeArea()
 
-            ScrollView(showsIndicators: false) {
-                PhotoGallery(
-                    sections: viewModel.sections,
-                    isSelectionMode: true,
-                    selectedPhotoIDs: viewModel.selectedPhotoIDs,
-                    onTapPhoto: viewModel.toggleSelection
-                )
-                .padding(.horizontal, 16)
-                .padding(.top, 79)
-                .padding(.bottom, 40)
+            VStack(spacing: 8) {
+                header
+                content
             }
-        }
-        .overlay(alignment: .topLeading) {
-            cancelButton
-                .padding(.top, 14)
-                .padding(.leading, 16)
-        }
-        .overlay(alignment: .topTrailing) {
-            completionButton
-                .padding(.top, 14)
-                .padding(.trailing, 16)
         }
         .navigationBarBackButtonHidden(true)
         .toolbarVisibility(.hidden, for: .navigationBar)
@@ -49,9 +37,96 @@ struct AlbumPhotoPickerView: View {
         }
     }
 
-    private var cancelButton: some View {
-        RoundedTextButton(title: "취소", style: .cancel) {
-            dismiss()
+    private var header: some View {
+        HStack(spacing: 0) {
+            RoundedTextButton(title: "취소", style: .cancel) {
+                dismiss()
+            }
+
+            Spacer()
+
+            if viewModel.showsAlbumTab {
+                HStack(spacing: 12) {
+                    SelectableButton(
+                        title: "사진",
+                        isSelected: viewModel.importTab == .left,
+                        selectedColor: .orange500
+                    ) {
+                        viewModel.selectImportTab(.left)
+                    }
+                    SelectableButton(
+                        title: "사진집",
+                        isSelected: viewModel.importTab == .right,
+                        selectedColor: .orange500
+                    ) {
+                        viewModel.selectImportTab(.right)
+                    }
+                }
+
+                Spacer()
+            }
+
+            completionButton
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 4)
+    }
+
+    @ViewBuilder private var content: some View {
+        if viewModel.showsAlbumTab, viewModel.importTab == .right {
+            if viewModel.selectedAlbum != nil {
+                photoGrid(sections: viewModel.albumSections)
+            } else {
+                albumList
+            }
+        } else {
+            photoGrid(sections: viewModel.sections)
+        }
+    }
+
+    private func photoGrid(sections: [PhotoSection]) -> some View {
+        ScrollView(showsIndicators: false) {
+            PhotoGallery(
+                sections: sections,
+                isSelectionMode: true,
+                selectedPhotoIDs: viewModel.selectedPhotoIDs(in: sections),
+                onTapPhoto: { viewModel.toggleSelection($0, in: sections) }
+            )
+            .padding(.horizontal, 16)
+            .padding(.top, 8)
+            .padding(.bottom, 40)
+        }
+    }
+
+    private var albumList: some View {
+        ScrollView(showsIndicators: false) {
+            if viewModel.albums.isEmpty {
+                ContentUnavailableView(
+                    "불러올 사진집이 없어요",
+                    systemImage: "photo.on.rectangle.angled"
+                )
+                .foregroundStyle(.grey500)
+                .frame(maxWidth: .infinity)
+                .padding(.top, 120)
+            } else {
+                LazyVGrid(columns: albumColumns, spacing: 20) {
+                    ForEach(viewModel.albums) { album in
+                        Button {
+                            Task { await viewModel.selectImportAlbum(album) }
+                        } label: {
+                            AlbumCard(
+                                name: album.name,
+                                count: album.count,
+                                thumbnailLocalIdentifiers: album.thumbnailLocalIdentifiers
+                            )
+                        }
+                        .buttonStyle(StaticButtonStyle())
+                    }
+                }
+                .padding(.horizontal, 16)
+                .padding(.top, 20)
+                .padding(.bottom, 40)
+            }
         }
     }
 

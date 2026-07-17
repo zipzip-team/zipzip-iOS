@@ -66,6 +66,8 @@ struct SharedAlbumDetailView: View {
         .navigationDestination(isPresented: $viewModel.isPhotoPickerPresented) {
             AlbumPhotoPickerView(
                 viewModel: AlbumPhotoPickerViewModel(
+                    albums: personalAlbums,
+                    showsAlbumTab: true,
                     onComplete: viewModel.addPhotos
                 )
             )
