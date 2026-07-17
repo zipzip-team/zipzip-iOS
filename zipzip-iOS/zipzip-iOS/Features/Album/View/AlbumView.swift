@@ -125,7 +125,6 @@ struct AlbumView: View {
                 isCreateDisabled: viewModel.isCreateAlbumDisabled,
                 isBusy: viewModel.isCreatingAlbum,
                 onClose: viewModel.dismissCreateAlbumSheet,
-                onDeleteTap: viewModel.resetCreateAlbumDraft,
                 onCreateTap: {
                     Task {
                         if let album = await viewModel.createAlbum() {

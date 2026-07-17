@@ -85,7 +85,6 @@ struct ShareView: View {
                 isCreateDisabled: viewModel.isCreateSharedAlbumDisabled,
                 isBusy: viewModel.isCreatingSharedAlbum,
                 onClose: viewModel.dismissCreateSharedAlbumSheet,
-                onDeleteTap: viewModel.resetSharedAlbumCreationDraft,
                 onCreateTap: {
                     Task {
                         if let album = await viewModel.createSharedAlbum() {
