@@ -8,6 +8,7 @@ import SwiftUI
 protocol CommentSheetMessage: Identifiable {
     var content: String { get }
     var isAuthor: Bool { get }
+    var authorDisplayName: String? { get }
 }
 
 struct CommentsBottomSheet<Message: CommentSheetMessage>: View {
@@ -71,7 +72,11 @@ struct CommentsBottomSheet<Message: CommentSheetMessage>: View {
             ScrollView(showsIndicators: false) {
                 LazyVStack(spacing: 16) {
                     ForEach(messages) { message in
-                        CommentBubble(text: message.content, isMine: message.isAuthor)
+                        CommentBubble(
+                            text: message.content,
+                            authorDisplayName: message.authorDisplayName,
+                            isMine: message.isAuthor
+                        )
                     }
 
                     Color.clear
@@ -105,6 +110,7 @@ struct CommentsBottomSheet<Message: CommentSheetMessage>: View {
 
 private struct CommentBubble: View {
     let text: String
+    let authorDisplayName: String?
     let isMine: Bool
 
     var body: some View {
@@ -112,7 +118,7 @@ private struct CommentBubble: View {
             if isMine {
                 Spacer(minLength: 44)
             } else {
-                ProfileImage(size: 32, isStroke: false)
+                ProfileImage(name: authorDisplayName, size: 32, isStroke: false)
                     .accessibilityHidden(true)
             }
 
@@ -124,7 +130,7 @@ private struct CommentBubble: View {
                 .background(isMine ? .grey600 : .grey800, in: .rect(cornerRadius: 8))
 
             if isMine {
-                ProfileImage(size: 32, isStroke: false)
+                ProfileImage(name: authorDisplayName, size: 32, isStroke: false)
                     .accessibilityHidden(true)
             } else {
                 Spacer(minLength: 44)

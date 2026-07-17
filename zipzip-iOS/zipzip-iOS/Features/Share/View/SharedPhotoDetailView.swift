@@ -344,9 +344,7 @@ private struct SharedPhotoLatestCommentToast: View {
 
     var body: some View {
         HStack(spacing: 8) {
-            Circle()
-                .fill(.grey100)
-                .frame(width: 24, height: 24)
+            ProfileImage(name: comment.author.displayName, size: 24, isStroke: false)
                 .accessibilityHidden(true)
 
             Text(comment.content)
