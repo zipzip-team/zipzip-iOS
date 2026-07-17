@@ -195,8 +195,8 @@ final class SharedAlbumDetailViewModel {
         !selectedPhotoIDs.isEmpty
     }
 
-    var canDeleteSelectedLocalCopies: Bool {
-        selectedPhotos.contains { $0.hasLocalCopy }
+    var selectedPhotoCount: Int {
+        selectedPhotoIDs.count
     }
 
     var isBusy: Bool {
@@ -422,24 +422,11 @@ final class SharedAlbumDetailViewModel {
         isDeleteSheetPresented = false
     }
 
-    func deleteSelectedLocalCopies() async {
-        let photoIDs = selectedPhotos.filter(\.hasLocalCopy).map(\.id)
-        guard !photoIDs.isEmpty else { return }
-        _ = await performPhotoMutation(fallbackError: "로컬 사진을 삭제하지 못했어요.") {
-            try await repository.deleteLocalCopies(photoIDs: photoIDs)
-        }
-    }
-
     func detachSelectedPhotos() async {
         guard hasSelectedPhotos else { return }
         _ = await performPhotoMutation(fallbackError: "공유집에서 사진을 제거하지 못했어요.") {
             try await repository.detachPhotos(photoIDs: selectedPhotoIDs, from: albumID)
         }
-    }
-
-    private var selectedPhotos: [SharedAlbumPhoto] {
-        let photosByID = Dictionary(uniqueKeysWithValues: photos.map { ($0.id, $0) })
-        return selectedPhotoIDs.compactMap { photosByID[$0] }
     }
 
     private func performPhotoMutation(

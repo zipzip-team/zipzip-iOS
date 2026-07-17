@@ -123,25 +123,17 @@ struct SharedAlbumDetailView: View {
                 }
             )
         }
-        .bottomSheet(
+        .bottomSheetAlert(
             isPresented: $viewModel.isDeleteSheetPresented,
-            detents: [.height(324)],
-            initialDetent: .height(324),
-            showsDragIndicator: .hidden,
-            expandsToLargestDetentOnScroll: false,
-            isInteractiveDismissDisabled: viewModel.isPerformingPhotoMutation
-        ) { _ in
-            SharedAlbumPhotoDeleteSheet(
-                canDeleteLocalCopies: viewModel.canDeleteSelectedLocalCopies,
-                isBusy: viewModel.isPerformingPhotoMutation,
-                onDeleteLocalCopies: {
-                    Task { await viewModel.deleteSelectedLocalCopies() }
-                },
-                onDetach: {
-                    Task { await viewModel.detachSelectedPhotos() }
-                }
-            )
-        }
+            title: "\(viewModel.selectedPhotoCount)장의 사진을 삭제하시겠어요?",
+            message: "공유집에서 제거된 사진이 마지막 사진이면\n이 공유그룹에서 완전히 삭제됩니다.",
+            secondaryTitle: "취소",
+            primaryTitle: "삭제",
+            onSecondaryTap: viewModel.dismissDeleteSheet,
+            onPrimaryTap: {
+                Task { await viewModel.detachSelectedPhotos() }
+            }
+        )
         .navigationBarBackButtonHidden(true)
         .toolbarVisibility(.hidden, for: .navigationBar)
         .task(id: album.id) {
@@ -441,48 +433,6 @@ private struct SharedAlbumCopyDestinationSheet: View {
         ContentUnavailableView(title, systemImage: "photo.on.rectangle.angled")
             .foregroundStyle(.grey300)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-    }
-}
-
-private struct SharedAlbumPhotoDeleteSheet: View {
-    let canDeleteLocalCopies: Bool
-    let isBusy: Bool
-    let onDeleteLocalCopies: () -> Void
-    let onDetach: () -> Void
-
-    var body: some View {
-        BottomSheet {
-            VStack(spacing: 0) {
-                Text("사진을 어디에서 삭제할까요?")
-                    .font(.t2_sb)
-                    .foregroundStyle(.white00)
-                    .multilineTextAlignment(.center)
-                    .padding(.top, 38)
-
-                Text("공유집에서 제거해도 로컬 갤러리의 사진은 남아있어요.")
-                    .font(.b2_md)
-                    .foregroundStyle(.grey400)
-                    .multilineTextAlignment(.center)
-                    .padding(.top, 12)
-
-                HStack(spacing: 16) {
-                    CommonButton(
-                        title: "삭제",
-                        property1: canDeleteLocalCopies && !isBusy ? .secondary : .disabled,
-                        action: onDeleteLocalCopies
-                    )
-                    CommonButton(
-                        title: "공유집에서 제거",
-                        property1: isBusy ? .disabled : .cta,
-                        action: onDetach
-                    )
-                }
-                .padding(.horizontal, 16)
-                .padding(.top, 44)
-                .padding(.bottom, 31.5)
-            }
-            .frame(maxWidth: .infinity)
-        }
     }
 }
 
