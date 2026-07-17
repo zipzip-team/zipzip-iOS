@@ -217,7 +217,7 @@ private struct GroupChatMessageRow: View {
 
     @ViewBuilder private var profile: some View {
         if row.showsProfile {
-            ProfileImage(size: 32, isStroke: false)
+            ProfileImage(name: message.authorDisplayName, size: 32, isStroke: false)
                 .accessibilityHidden(true)
         } else {
             Color.clear

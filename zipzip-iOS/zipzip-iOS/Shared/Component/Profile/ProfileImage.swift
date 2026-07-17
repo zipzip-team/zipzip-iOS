@@ -23,24 +23,24 @@ struct ProfileImage: View {
     }
 
     var body: some View {
-        Circle()
-            .fill(.grey100)
-            .frame(width: size, height: size)
-            .overlay {
-                if let image {
-                    image
-                        .resizable()
-                        .scaledToFill()
-                        .frame(width: size, height: size)
-                        .clipShape(Circle())
-                }
+        Group {
+            if let image {
+                image
+                    .resizable()
+                    .scaledToFill()
+            } else {
+                Circle()
+                    .fill(.grey100)
             }
-            .overlay {
-                if isStroke {
-                    Circle()
-                        .stroke(.grey50, lineWidth: 1)
-                }
+        }
+        .frame(width: size, height: size)
+        .clipShape(Circle())
+        .overlay {
+            if isStroke {
+                Circle()
+                    .stroke(.grey50, lineWidth: 1)
             }
+        }
     }
 }
 

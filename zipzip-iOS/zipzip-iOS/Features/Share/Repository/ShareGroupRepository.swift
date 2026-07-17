@@ -47,6 +47,10 @@ struct ShareGroupChatItem: Identifiable, Equatable, CommentSheetMessage {
     let isAuthor: Bool
     let createdAt: Date
     let updatedAt: Date
+
+    var authorDisplayName: String? {
+        author?.displayName
+    }
 }
 
 struct ShareGroupChatPage {

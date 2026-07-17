@@ -61,7 +61,9 @@ struct RootView: View {
                         selection: selection
                     )
                 } else {
-                    SplashView()
+                    SplashView {
+                        splashAnimationFinished = true
+                    }
                 }
             }
             .task {
