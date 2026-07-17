@@ -209,7 +209,7 @@ private struct ShareGroupMemberCard: View {
 
     var body: some View {
         HStack(spacing: 10) {
-            ProfileImage(size: 32, isStroke: false)
+            ProfileImage(name: member.displayName, size: 32, isStroke: false)
                 .accessibilityHidden(true)
 
             HStack(spacing: 4) {
@@ -265,6 +265,8 @@ private struct ShareGroupNameField: View {
                 .foregroundStyle(.grey1000)
                 .tint(.orange500)
                 .focused($isFocused)
+                .submitLabel(.done)
+                .onSubmit { isFocused = false }
 
             Button {
                 isFocused = true

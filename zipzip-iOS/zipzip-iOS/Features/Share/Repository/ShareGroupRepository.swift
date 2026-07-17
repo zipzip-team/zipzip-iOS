@@ -47,6 +47,10 @@ struct ShareGroupChatItem: Identifiable, Equatable, CommentSheetMessage {
     let isAuthor: Bool
     let createdAt: Date
     let updatedAt: Date
+
+    var authorDisplayName: String? {
+        author?.displayName
+    }
 }
 
 struct ShareGroupChatPage {
@@ -689,6 +693,7 @@ final class DefaultShareGroupRepository: ShareGroupRepository {
             name: stored.name,
             date: stored.date,
             memberCount: stored.memberCount,
+            memberNames: stored.memberNames,
             currentUserRole: ShareGroupRole(rawValue: stored.role) ?? .participant,
             albums: stored.albums.map {
                 makeSharedAlbum(

@@ -27,11 +27,20 @@ final class ServiceIntroViewModel {
         pages.count
     }
 
+    var isFirstPage: Bool {
+        currentPage == 0
+    }
+
     func handleNextButtonTap() {
         if currentPage < pageCount - 1 {
             currentPage += 1
         } else {
             didReachEnd = true
         }
+    }
+
+    func handlePreviousButtonTap() {
+        guard currentPage > 0 else { return }
+        currentPage -= 1
     }
 }

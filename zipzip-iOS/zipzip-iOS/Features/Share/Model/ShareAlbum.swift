@@ -23,6 +23,7 @@ struct ShareAlbum: Identifiable, Hashable {
     var name: String
     var date: Date
     var memberCount: Int
+    var memberNames: [String]
     var currentUserRole: ShareGroupRole
     var albums: [SharedAlbum]
     var sharedAlbumCount: Int
@@ -37,6 +38,7 @@ struct ShareAlbum: Identifiable, Hashable {
         name: String,
         date: Date,
         memberCount: Int,
+        memberNames: [String] = [],
         currentUserRole: ShareGroupRole = .admin,
         albums: [SharedAlbum] = [],
         sharedAlbumCount: Int = 0,
@@ -50,6 +52,7 @@ struct ShareAlbum: Identifiable, Hashable {
         self.name = name
         self.date = date
         self.memberCount = memberCount
+        self.memberNames = memberNames
         self.currentUserRole = currentUserRole
         self.albums = albums
         self.sharedAlbumCount = sharedAlbumCount

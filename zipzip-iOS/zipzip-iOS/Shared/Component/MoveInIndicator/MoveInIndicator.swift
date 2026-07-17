@@ -102,12 +102,12 @@ struct MoveInIndicator: View {
 
     private var label: String {
         guard let remainingMinutes else { return baseText }
-        return "\(baseText) · 약 \(Self.durationText(remainingMinutes))"
+        return "약 \(Self.durationText(remainingMinutes))"
     }
 
     private var accessibilityText: String {
         guard let remainingMinutes else { return baseText }
-        return "\(baseText), 약 \(Self.durationText(remainingMinutes))"
+        return "약 \(Self.durationText(remainingMinutes))"
     }
 
     static func durationText(_ minutes: Int) -> String {

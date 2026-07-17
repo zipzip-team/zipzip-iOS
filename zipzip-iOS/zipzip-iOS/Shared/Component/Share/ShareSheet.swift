@@ -31,7 +31,6 @@ struct ShareSheet: View {
     let onDismiss: () -> Void
     var excludedAlbumIDs: Set<Album.ID> = []
     var onOpenShareAlbum: (ShareAlbum.ID) async -> Void = { _ in }
-    /// 완료 시 선택 순서대로 전달한다. 호출 화면은 사진 추가, 이동 등 필요한 동작을 결정한다.
     var onComplete: ([ShareDestination]) -> Void = { _ in }
 
     @State private var selection: BottomSheetTabSelection = .left
@@ -82,11 +81,19 @@ struct ShareSheet: View {
     @ViewBuilder private var content: some View {
         switch selection {
         case .left:
-            AlbumSelectionGrid(
-                albums: personalAlbums,
-                selectedAlbumIDs: selectedAlbumIDs,
-                onSelect: selectAlbum
-            )
+            if personalAlbums.isEmpty {
+                ShareSheetEmptyState(
+                    image: .emptyPhotoAlbum,
+                    size: CGSize(width: 265, height: 172),
+                    accessibilityLabel: ""
+                )
+            } else {
+                AlbumSelectionGrid(
+                    albums: personalAlbums,
+                    selectedAlbumIDs: selectedAlbumIDs,
+                    onSelect: selectAlbum
+                )
+            }
         case .right:
             if !authenticationState.isLoggedIn {
                 ShareLoginPrompt {
@@ -94,10 +101,24 @@ struct ShareSheet: View {
                     onDismiss()
                 }
             } else if let targetShareAlbum {
-                SharedAlbumSelectionGrid(
-                    albums: targetShareAlbum.albums,
-                    selectedAlbumIDs: selectedSharedAlbumIDs,
-                    onSelect: selectSharedAlbum
+                if targetShareAlbum.albums.isEmpty {
+                    ShareSheetEmptyState(
+                        image: .emptyShareAlbum,
+                        size: CGSize(width: 267, height: 172),
+                        accessibilityLabel: ""
+                    )
+                } else {
+                    SharedAlbumSelectionGrid(
+                        albums: targetShareAlbum.albums,
+                        selectedAlbumIDs: selectedSharedAlbumIDs,
+                        onSelect: selectSharedAlbum
+                    )
+                }
+            } else if shareAlbums.isEmpty {
+                ShareSheetEmptyState(
+                    image: .emptyShareGroup,
+                    size: CGSize(width: 304, height: 172),
+                    accessibilityLabel: ""
                 )
             } else {
                 ShareAlbumList(albums: shareAlbums) { album in
@@ -185,6 +206,21 @@ struct ShareSheet: View {
 
     private var targetShareAlbum: ShareAlbum? {
         shareAlbums.first { $0.id == targetShareAlbumID }
+    }
+}
+
+private struct ShareSheetEmptyState: View {
+    let image: ImageResource
+    let size: CGSize
+    let accessibilityLabel: String
+
+    var body: some View {
+        Image(image)
+            .resizable()
+            .scaledToFit()
+            .frame(width: size.width, height: size.height)
+            .accessibilityLabel(accessibilityLabel)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
     }
 }
 

@@ -47,8 +47,17 @@ struct ServiceIntroView: View {
 
                 Spacer()
 
-                CommonButton(title: "다음", property1: .default) {
-                    viewModel.handleNextButtonTap()
+                HStack(spacing: 12) {
+                    CommonButton(
+                        title: "이전",
+                        property1: viewModel.isFirstPage ? .disabled : .secondary
+                    ) {
+                        viewModel.handlePreviousButtonTap()
+                    }
+
+                    CommonButton(title: "다음", property1: .default) {
+                        viewModel.handleNextButtonTap()
+                    }
                 }
             }
         }

@@ -396,6 +396,10 @@ func appDatabase() throws -> any DatabaseWriter {
         .execute(db)
     }
 
+    migrator.registerMigration("Cache shared group member names") { db in
+        try #sql(#"ALTER TABLE "shared_group" ADD COLUMN "member_names" TEXT"#).execute(db)
+    }
+
     do {
         try migrator.migrate(database)
         return database

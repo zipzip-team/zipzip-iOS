@@ -44,32 +44,16 @@ struct PhotoInfoEditContent: View {
             }
 
             VStack(alignment: .leading, spacing: 16) {
-                metadataSection(title: "기기", showsTopDivider: showsHeader, onEdit: {
-                    pickerDevice = metadata.deviceName
-                    deviceBeforeEditing = pickerDevice
-                    showDeviceSheet = true
-                }) {
-                    DeviceMetadataChip(
-                        name: metadata.deviceName,
-                        type: metadata.deviceType,
-                        isSelected: false
-                    ) {}
+                metadataSection(title: "기기", showsTopDivider: showsHeader, onEdit: editDevice) {
+                    deviceChip
                 }
 
-                metadataSection(title: "장소", showsTopDivider: true, onEdit: {
-                    pickerLocation = metadata.location
-                    locationBeforeEditing = pickerLocation
-                    showLocationSheet = true
-                }) {
-                    TextMetadataChip(title: metadata.location, isSelected: false) {}
+                metadataSection(title: "장소", showsTopDivider: true, onEdit: editLocation) {
+                    locationChip
                 }
 
-                metadataSection(title: "날짜", showsTopDivider: true, onEdit: {
-                    pickerDate = AppliedFilter.date(from: metadata.dateText) ?? Date()
-                    dateBeforeEditing = pickerDate
-                    showDateSheet = true
-                }) {
-                    DateMetadataChip(dateText: metadata.dateText)
+                metadataSection(title: "날짜", showsTopDivider: true, onEdit: editDate) {
+                    dateChip
                 }
             }
             .padding(.top, showsHeader ? 40 : 0)
@@ -149,6 +133,73 @@ struct PhotoInfoEditContent: View {
                     .frame(height: 1)
             }
         }
+    }
+
+    @ViewBuilder private var deviceChip: some View {
+        if isDeviceMissing {
+            emptyInfoLabel("기기 정보 없음", action: editDevice)
+        } else {
+            DeviceMetadataChip(
+                name: metadata.deviceName,
+                type: metadata.deviceType,
+                isSelected: false,
+                action: editDevice
+            )
+        }
+    }
+
+    @ViewBuilder private var locationChip: some View {
+        if metadata.location.isEmpty {
+            emptyInfoLabel("장소 정보 없음", action: editLocation)
+        } else {
+            TextMetadataChip(title: metadata.location, isSelected: false, action: editLocation)
+        }
+    }
+
+    @ViewBuilder private var dateChip: some View {
+        if metadata.dateText.isEmpty {
+            emptyInfoLabel("시간 정보 없음", action: editDate)
+        } else {
+            Button(action: editDate) {
+                DateMetadataChip(dateText: metadata.dateText)
+            }
+            .buttonStyle(.plain)
+        }
+    }
+
+    private var isDeviceMissing: Bool {
+        metadata.deviceName.isEmpty || metadata.deviceName == DeviceCategory.unknown.typeLabel
+    }
+
+    private func emptyInfoLabel(_ text: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(text)
+                .font(.b2_md)
+                .foregroundStyle(.grey400)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 8)
+                .background(.grey70, in: .rect(cornerRadius: 8))
+                .contentShape(.rect(cornerRadius: 8))
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func editDevice() {
+        pickerDevice = metadata.deviceName
+        deviceBeforeEditing = pickerDevice
+        showDeviceSheet = true
+    }
+
+    private func editLocation() {
+        pickerLocation = metadata.location
+        locationBeforeEditing = pickerLocation
+        showLocationSheet = true
+    }
+
+    private func editDate() {
+        pickerDate = AppliedFilter.date(from: metadata.dateText) ?? Date()
+        dateBeforeEditing = pickerDate
+        showDateSheet = true
     }
 
     private func applyDevice(_ name: String) {

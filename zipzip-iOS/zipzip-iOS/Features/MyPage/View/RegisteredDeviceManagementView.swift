@@ -119,6 +119,7 @@ struct RegisteredDeviceManagementView: View {
                         }
                     }
                     .padding(.horizontal, 16)
+                    .padding(.top, 5)
                 } else {
                     VStack(spacing: 0) {
                         ForEach(viewModel.registeredDevices) { device in
@@ -126,6 +127,7 @@ struct RegisteredDeviceManagementView: View {
                         }
                     }
                     .padding(.horizontal, 16)
+                    .padding(.top, 5)
                 }
             }
             .frame(maxHeight: .infinity)

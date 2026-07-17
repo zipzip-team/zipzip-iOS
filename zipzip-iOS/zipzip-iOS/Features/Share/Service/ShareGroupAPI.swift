@@ -200,6 +200,7 @@ nonisolated struct ShareGroupSummaryResponse: Decodable {
     let name: String
     let myRole: ShareGroupRoleResponse
     let memberCount: Int
+    let memberNames: [String]?
     let sharedAlbumCount: Int
     let photoCount: Int
     let joinedAt: String

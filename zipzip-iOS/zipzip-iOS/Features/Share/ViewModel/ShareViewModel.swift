@@ -1365,14 +1365,16 @@ final class ShareViewModel {
     func importPhotos(
         localIdentifiers: [String],
         into albumID: SharedAlbum.ID,
-        groupID: ShareAlbum.ID
+        groupID: ShareAlbum.ID,
+        onProgress: (@Sendable (Int) -> Void)? = nil
     ) async -> SharedAlbumPhotoMutationResult? {
         guard let sharedPhotoRepository, !localIdentifiers.isEmpty else { return nil }
         do {
             let result = try await sharedPhotoRepository.addLocalPhotos(
                 localIdentifiers: localIdentifiers,
                 to: [albumID],
-                in: groupID
+                in: groupID,
+                onProgress: onProgress
             )
             await refreshSharedAlbumsAfterPhotoMutation(groupID: groupID)
             if result.failedCount > 0 {
@@ -1391,7 +1393,8 @@ final class ShareViewModel {
 
     func importPersonalAlbums(
         _ personalAlbums: [Album],
-        into groupID: ShareAlbum.ID
+        into groupID: ShareAlbum.ID,
+        onProgress: (@Sendable (Int) -> Void)? = nil
     ) async -> ShareImportOutcome? {
         guard let sharedPhotoRepository, !personalAlbums.isEmpty else { return nil }
 
@@ -1438,7 +1441,8 @@ final class ShareViewModel {
                 let result = try await sharedPhotoRepository.addLocalPhotos(
                     localIdentifiers: identifiers,
                     to: [createdAlbum.id],
-                    in: groupID
+                    in: groupID,
+                    onProgress: onProgress
                 )
                 uploadedPhotoCount += result.succeededCount
                 failedPhotoCount += result.failedCount

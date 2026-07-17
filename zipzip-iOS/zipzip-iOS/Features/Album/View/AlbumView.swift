@@ -62,12 +62,12 @@ struct AlbumView: View {
                     }
                     .padding(.horizontal, 16)
                     .padding(.top, 17)
-                    .padding(.bottom, viewModel.isSelectionMode && !viewModel.selectedAlbumIDs.isEmpty ? 140 : 20)
                     .transaction { transaction in
                         transaction.animation = nil
                     }
                 }
             }
+            .contentMargins(.bottom, NavbarLayout.contentBottomPadding, for: .scrollContent)
             .ignoresSafeArea(edges: .top)
         }
         .overlay(alignment: .topLeading) {

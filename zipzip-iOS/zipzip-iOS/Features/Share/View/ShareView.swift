@@ -245,7 +245,9 @@ private struct ShareGroupListView: View {
                                         thumbnailURL: group.validRepresentativeImageURL(),
                                         title: group.name,
                                         date: group.date,
-                                        profileImages: Array(repeating: nil, count: min(group.memberCount, 4)),
+                                        profileImages: group.memberNames.isEmpty
+                                            ? Array(repeating: nil, count: min(group.memberCount, 4))
+                                            : group.memberNames.prefix(4).map { ProfileImage.avatar(for: $0) },
                                         memberCount: group.memberCount
                                     )
                                 }
@@ -267,10 +269,10 @@ private struct ShareGroupListView: View {
                                 ? FloatingHeaderLayout.roundedIconButtonTop + FloatingHeaderLayout.buttonHeight + 16
                                 : FloatingHeaderLayout.scrollableTitleContentSpacing
                         )
-                        .padding(.bottom, viewModel.isAddMode ? 130 : 24)
                     }
                 }
             }
+            .contentMargins(.bottom, NavbarLayout.contentBottomPadding, for: .scrollContent)
             .ignoresSafeArea(edges: .top)
             .refreshable {
                 guard let userID = authenticationState.currentUser?.id else { return }
@@ -380,6 +382,7 @@ private struct ShareRootStateContainer<Content: View>: View {
                         }
                 }
             }
+            .contentMargins(.bottom, NavbarLayout.contentBottomPadding, for: .scrollContent)
             .ignoresSafeArea(edges: .top)
         }
     }

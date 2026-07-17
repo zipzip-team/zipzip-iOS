@@ -46,6 +46,10 @@ struct SharedPhotoComment: Identifiable, Equatable, CommentSheetMessage {
     let isAuthor: Bool
     let createdAt: Date
     let updatedAt: Date
+
+    var authorDisplayName: String? {
+        author.displayName
+    }
 }
 
 struct SharedPhotoCommentPage {
@@ -79,7 +83,8 @@ protocol SharedPhotoRepository {
     func addLocalPhotos(
         localIdentifiers: [String],
         to albumIDs: [SharedAlbum.ID],
-        in groupID: ShareAlbum.ID
+        in groupID: ShareAlbum.ID,
+        onProgress: (@Sendable (Int) -> Void)?
     ) async throws -> SharedAlbumPhotoMutationResult
     func copyPhotos(
         photoIDs: [SharedAlbumPhoto.ID],
@@ -105,6 +110,22 @@ protocol SharedPhotoRepository {
         idempotencyKey: UUID
     ) async throws -> SharedPhotoComment
     func setLike(photoID: UUID, isLiked: Bool) async throws -> SharedPhotoLikeState
+}
+
+extension SharedPhotoRepository {
+    /// 진행률 보고가 필요 없는 호출을 위한 편의 오버로드.
+    func addLocalPhotos(
+        localIdentifiers: [String],
+        to albumIDs: [SharedAlbum.ID],
+        in groupID: ShareAlbum.ID
+    ) async throws -> SharedAlbumPhotoMutationResult {
+        try await addLocalPhotos(
+            localIdentifiers: localIdentifiers,
+            to: albumIDs,
+            in: groupID,
+            onProgress: nil
+        )
+    }
 }
 
 @MainActor
@@ -237,7 +258,8 @@ final class DefaultSharedPhotoRepository: SharedPhotoRepository {
     func addLocalPhotos(
         localIdentifiers: [String],
         to albumIDs: [SharedAlbum.ID],
-        in groupID: ShareAlbum.ID
+        in groupID: ShareAlbum.ID,
+        onProgress: (@Sendable (Int) -> Void)? = nil
     ) async throws -> SharedAlbumPhotoMutationResult {
         let context = try requiredCacheContext()
         let identifiers = Self.unique(localIdentifiers.filter { !$0.isEmpty })
@@ -261,7 +283,8 @@ final class DefaultSharedPhotoRepository: SharedPhotoRepository {
             localIdentifiers: identifiersToUpload,
             groupID: groupID,
             albumID: primaryAlbumID,
-            context: context
+            context: context,
+            onProgress: onProgress
         )
 
         var succeededCount = uploadOutcome.succeededCount
@@ -275,21 +298,49 @@ final class DefaultSharedPhotoRepository: SharedPhotoRepository {
         ) { current, _ in current }
 
         if !existingMappings.isEmpty {
-            let outcome = try await attach(
-                photoIDs: existingMappings.map(\.photoID),
-                to: primaryAlbumID,
-                context: context
-            )
-            candidatePhotoIDs.append(contentsOf: outcome.succeededPhotoIDs)
-            succeededCount += outcome.succeededPhotoIDs.count
-            failedCount += outcome.failedPhotoIDs.count
+            do {
+                let outcome = try await attach(
+                    photoIDs: existingMappings.map(\.photoID),
+                    to: primaryAlbumID,
+                    context: context,
+                    throwsWhenAlbumMissing: true,
+                    throwsWhenPhotoMissing: true
+                )
+                candidatePhotoIDs.append(contentsOf: outcome.succeededPhotoIDs)
+                succeededCount += outcome.succeededPhotoIDs.count
+                failedCount += outcome.failedPhotoIDs.count
+                if !outcome.succeededPhotoIDs.isEmpty {
+                    onProgress?(outcome.succeededPhotoIDs.count)
+                }
+            } catch let error as NetworkError where error.serverCode == "PHOTO_NOT_FOUND" {
+                // 로컬 캐시가 서버에서 이미 삭제된 사진을 가리킨다. 캐시를 비우고 원본을 다시 업로드한다.
+                try validate(context)
+                try await store.deletePhotos(
+                    ids: existingMappings.map(\.photoID),
+                    cacheOwnerID: context.ownerID
+                )
+                let reupload = try await uploadBatches(
+                    localIdentifiers: existingMappings.map(\.localIdentifier),
+                    groupID: groupID,
+                    albumID: primaryAlbumID,
+                    context: context,
+                    onProgress: onProgress
+                )
+                candidatePhotoIDs.append(contentsOf: reupload.photoIDs)
+                succeededCount += reupload.succeededCount
+                failedCount += reupload.failedCount
+                for (photoID, localIdentifier) in zip(reupload.photoIDs, reupload.localIdentifiers) {
+                    identifierByPhotoID[photoID] = localIdentifier
+                }
+            }
         }
 
         for destinationAlbumID in destinations.dropFirst() {
             let outcome = try await attach(
                 photoIDs: candidatePhotoIDs,
                 to: destinationAlbumID,
-                context: context
+                context: context,
+                throwsWhenAlbumMissing: true
             )
             let succeededIDs = Set(outcome.succeededPhotoIDs)
             candidatePhotoIDs.removeAll { !succeededIDs.contains($0) }
@@ -635,7 +686,8 @@ final class DefaultSharedPhotoRepository: SharedPhotoRepository {
         localIdentifiers: [String],
         groupID: ShareAlbum.ID,
         albumID: SharedAlbum.ID,
-        context: CacheContext
+        context: CacheContext,
+        onProgress: (@Sendable (Int) -> Void)? = nil
     ) async throws -> UploadBatchOutcome {
         let batches = localIdentifiers.chunked(maxCount: 20)
         var outcomes: [UploadBatchOutcome] = []
@@ -648,13 +700,15 @@ final class DefaultSharedPhotoRepository: SharedPhotoRepository {
                     localIdentifiers: firstBatch,
                     groupID: groupID,
                     albumID: albumID,
-                    context: context
+                    context: context,
+                    onProgress: onProgress
                 )
                 async let second = uploadBatchResult(
                     localIdentifiers: secondBatch,
                     groupID: groupID,
                     albumID: albumID,
-                    context: context
+                    context: context,
+                    onProgress: onProgress
                 )
                 let pair = try await(first, second)
                 outcomes.append(contentsOf: [pair.0, pair.1])
@@ -664,7 +718,8 @@ final class DefaultSharedPhotoRepository: SharedPhotoRepository {
                     localIdentifiers: batches[index],
                     groupID: groupID,
                     albumID: albumID,
-                    context: context
+                    context: context,
+                    onProgress: onProgress
                 ))
                 index += 1
             }
@@ -682,17 +737,21 @@ final class DefaultSharedPhotoRepository: SharedPhotoRepository {
         localIdentifiers: [String],
         groupID: ShareAlbum.ID,
         albumID: SharedAlbum.ID,
-        context: CacheContext
+        context: CacheContext,
+        onProgress: (@Sendable (Int) -> Void)? = nil
     ) async throws -> UploadBatchOutcome {
         do {
             return try await uploadBatch(
                 localIdentifiers: localIdentifiers,
                 groupID: groupID,
                 albumID: albumID,
-                context: context
+                context: context,
+                onProgress: onProgress
             )
         } catch is CancellationError {
             throw CancellationError()
+        } catch let error as NetworkError where error.serverCode == "SHARED_ALBUM_NOT_FOUND" {
+            throw error
         } catch {
             return UploadBatchOutcome(
                 photoIDs: [],
@@ -707,7 +766,8 @@ final class DefaultSharedPhotoRepository: SharedPhotoRepository {
         localIdentifiers: [String],
         groupID: ShareAlbum.ID,
         albumID: SharedAlbum.ID,
-        context: CacheContext
+        context: CacheContext,
+        onProgress: (@Sendable (Int) -> Void)? = nil
     ) async throws -> UploadBatchOutcome {
         var preparedAssets: [PreparedSharedPhotoAsset] = []
         var preparationFailureCount = 0
@@ -767,6 +827,10 @@ final class DefaultSharedPhotoRepository: SharedPhotoRepository {
                 batchID: batchID,
                 context: context
             )
+        }
+
+        if !uploadedPhotoIDs.isEmpty {
+            onProgress?(uploadedPhotoIDs.count)
         }
 
         return UploadBatchOutcome(
@@ -988,7 +1052,9 @@ final class DefaultSharedPhotoRepository: SharedPhotoRepository {
     private func attach(
         photoIDs: [UUID],
         to albumID: UUID,
-        context: CacheContext
+        context: CacheContext,
+        throwsWhenAlbumMissing: Bool = false,
+        throwsWhenPhotoMissing: Bool = false
     ) async throws -> AttachmentOutcome {
         var succeededPhotoIDs: [UUID] = []
         var failedPhotoIDs: [UUID] = []
@@ -1011,6 +1077,12 @@ final class DefaultSharedPhotoRepository: SharedPhotoRepository {
                 succeededPhotoIDs.append(contentsOf: chunk)
             } catch is CancellationError {
                 throw CancellationError()
+            } catch let error as NetworkError where throwsWhenAlbumMissing
+                && error.serverCode == "SHARED_ALBUM_NOT_FOUND" {
+                throw error
+            } catch let error as NetworkError where throwsWhenPhotoMissing
+                && error.serverCode == "PHOTO_NOT_FOUND" {
+                throw error
             } catch {
                 failedPhotoIDs.append(contentsOf: chunk)
             }

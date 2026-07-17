@@ -5,22 +5,19 @@
 //  Created by 성환 on 7/5/26.
 //
 
+import SQLiteData
 import SwiftUI
 
 struct MainView: View {
     @Environment(Router.self) private var router
 
-    private let organizedPhotoCount: Int
+    @Fetch(RegisteredPhotoCountRequest()) private var registeredPhotoCount = 0
 
     private enum Layout {
         static let heroHeight: CGFloat = 420
         static let sectionSpacing: CGFloat = 28
         static let horizontalPadding: CGFloat = 16
         static let organizedPhotoCountTopPadding: CGFloat = 134
-    }
-
-    init(organizedPhotoCount: Int = 0) {
-        self.organizedPhotoCount = organizedPhotoCount
     }
 
     var body: some View {
@@ -70,7 +67,7 @@ struct MainView: View {
                 .font(.t3_md)
 
             HStack(alignment: .bottom, spacing: 2) {
-                Text(organizedPhotoCount, format: .number)
+                Text(registeredPhotoCount, format: .number)
                     .font(.h1_sb)
 
                 Text("장")
@@ -80,7 +77,7 @@ struct MainView: View {
         }
         .foregroundStyle(.grey1000)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("집집에 모인 사진 \(organizedPhotoCount.formatted(.number))장")
+        .accessibilityLabel("집집에 모인 사진 \(registeredPhotoCount.formatted(.number))장")
     }
 
     private var unresolvedPhotosSection: some View {
@@ -158,6 +155,6 @@ struct MainView: View {
 }
 
 #Preview {
-    MainView(organizedPhotoCount: 7018)
+    MainView()
         .environment(Router())
 }

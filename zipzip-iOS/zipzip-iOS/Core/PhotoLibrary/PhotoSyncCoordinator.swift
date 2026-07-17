@@ -62,6 +62,18 @@ final class PhotoSyncCoordinator {
     private var etaStartProcessed = 0
 
     @ObservationIgnored
+    private var uploadTotalUnits = 0
+
+    @ObservationIgnored
+    private var uploadCompletedUnits = 0
+
+    @ObservationIgnored
+    private var uploadEtaStartedAt: Date?
+
+    @ObservationIgnored
+    private var uploadEtaStartUnits = 0
+
+    @ObservationIgnored
     private var pipelineGeneration = 0
 
     @ObservationIgnored
@@ -114,13 +126,62 @@ final class PhotoSyncCoordinator {
 
     func beginUpload() {
         if activeUploadCount == 0 {
-            estimatedSecondsRemaining = nil
+            resetUploadEstimate()
         }
         activeUploadCount += 1
     }
 
     func endUpload() {
         activeUploadCount = max(0, activeUploadCount - 1)
+        if activeUploadCount == 0 {
+            resetUploadEstimate()
+        }
+    }
+
+    /// 업로드할 전체 사진 수를 누적 등록한다(여러 업로드가 동시에 진행될 수 있어 누적).
+    func registerUploadUnits(_ count: Int) {
+        guard count > 0 else { return }
+        uploadTotalUnits += count
+    }
+
+    /// 업로드가 완료된 사진 수를 보고하고 남은 시간을 갱신한다.
+    func reportUploadCompleted(_ count: Int) {
+        guard count > 0 else { return }
+        uploadCompletedUnits += count
+        updateUploadEstimate()
+    }
+
+    private func resetUploadEstimate() {
+        estimatedSecondsRemaining = nil
+        uploadTotalUnits = 0
+        uploadCompletedUnits = 0
+        uploadEtaStartedAt = nil
+        uploadEtaStartUnits = 0
+    }
+
+    private func updateUploadEstimate() {
+        guard uploadTotalUnits > 0 else { return }
+        let processed = min(uploadCompletedUnits, uploadTotalUnits)
+        guard uploadTotalUnits > processed else {
+            estimatedSecondsRemaining = nil
+            return
+        }
+
+        // 첫 완료 보고에서 시각·처리량 기준을 시드해, 이후 rate를 동일 구간으로 계산한다.
+        guard let uploadEtaStartedAt else {
+            uploadEtaStartedAt = Date()
+            uploadEtaStartUnits = processed
+            return
+        }
+
+        let elapsed = Date().timeIntervalSince(uploadEtaStartedAt)
+        let processedSinceStart = processed - uploadEtaStartUnits
+        guard elapsed >= 0.75, processedSinceStart > 0 else { return }
+
+        let rate = Double(processedSinceStart) / elapsed
+        guard rate > 0 else { return }
+
+        estimatedSecondsRemaining = Double(uploadTotalUnits - processed) / rate
     }
 
     /// 인디케이터 상태를 스스로 관리하지 않는 업로드를 실행하며 인디케이터를 켜고, 취소 가능하도록 추적한다.

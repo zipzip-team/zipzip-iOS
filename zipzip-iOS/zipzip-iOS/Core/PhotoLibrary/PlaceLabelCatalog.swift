@@ -43,7 +43,12 @@ enum PlaceLabelCatalog {
             } else if token.hasSuffix("시") {
                 si = si ?? token
             } else if token.hasSuffix("구") {
-                gu = gu ?? token
+                if let siRange = token.range(of: "시"), siRange.upperBound < token.endIndex {
+                    si = si ?? String(token[..<siRange.upperBound])
+                    gu = gu ?? String(token[siRange.upperBound...])
+                } else {
+                    gu = gu ?? token
+                }
             } else if token.hasSuffix("군") {
                 gun = gun ?? token
             } else if token.hasSuffix("동") {
