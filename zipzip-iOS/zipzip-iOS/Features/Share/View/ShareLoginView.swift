@@ -39,7 +39,7 @@ struct ShareLoginView: View {
             if !authenticationState.isAuthenticating {
                 FloatingHeader(.leading) {
                     RoundedIconButton(items: [
-                        .init(id: "share-login-back", icon: .iconChevronLeft, accessibilityLabel: "뒤로가기") {
+                        .init(id: "share-login-back", icon: .chevronLeft, accessibilityLabel: "뒤로가기") {
                             authenticationState.cancelLogin()
                         }
                     ])

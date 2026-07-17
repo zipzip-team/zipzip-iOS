@@ -80,8 +80,11 @@ struct AlbumDetailView<Content: View>: View {
         .overlay(alignment: .topLeading) {
             FloatingHeader(.trailing) {
                 AlbumHeaderActionButton(
+                    showsSelection: album.photoCount > 0,
                     onSelectionTap: { viewModel.enterSelectionMode(photoCount: album.photoCount) },
-                    onAddTap: viewModel.presentPhotoPicker
+                    onAddTap: viewModel.presentPhotoPicker,
+                    addIcon: .plus,
+                    addAccessibilityLabel: "사진 추가"
                 )
                 .opacity(viewModel.isSelectionMode ? 0 : 1)
                 .allowsHitTesting(!viewModel.isSelectionMode)
@@ -91,7 +94,6 @@ struct AlbumDetailView<Content: View>: View {
         .overlay(alignment: .bottom) {
             if viewModel.isSelectionMode {
                 ActionBar(items: selectionActionItems)
-                    .padding(.bottom, 49)
             }
         }
         .navigationDestination(isPresented: $viewModel.isPhotoPickerPresented) {
@@ -247,7 +249,7 @@ struct AlbumDetailView<Content: View>: View {
             RoundedTextButton(title: "취소", style: .cancel, action: viewModel.exitSelectionMode)
         } else {
             RoundedIconButton(items: [
-                .init(id: "back", icon: .iconChevronLeft, accessibilityLabel: "뒤로가기") {
+                .init(id: "back", icon: .chevronLeft, accessibilityLabel: "뒤로가기") {
                     dismiss()
                 }
             ])

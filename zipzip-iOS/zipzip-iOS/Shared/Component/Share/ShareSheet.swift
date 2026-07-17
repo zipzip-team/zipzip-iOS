@@ -285,7 +285,7 @@ struct AlbumSelectionGrid: View {
     }
 }
 
-private struct SharedAlbumSelectionGrid: View {
+struct SharedAlbumSelectionGrid: View {
     let albums: [SharedAlbum]
     let selectedAlbumIDs: [SharedAlbum.ID]
     let onSelect: (SharedAlbum) -> Void

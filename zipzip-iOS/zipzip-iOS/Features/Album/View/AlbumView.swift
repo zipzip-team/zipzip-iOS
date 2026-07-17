@@ -73,6 +73,7 @@ struct AlbumView: View {
         .overlay(alignment: .topLeading) {
             FloatingHeader(.trailing) {
                 AlbumHeaderActionButton(
+                    showsSelection: !viewModel.albums.isEmpty,
                     onSelectionTap: viewModel.enterSelectionMode,
                     onAddTap: viewModel.presentCreateAlbumSheet
                 )
@@ -93,7 +94,6 @@ struct AlbumView: View {
             ZStack {
                 if viewModel.isSelectionMode, !viewModel.selectedAlbumIDs.isEmpty {
                     ActionBar(items: selectionActionItems)
-                        .padding(.bottom, 49)
                         .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
             }
@@ -124,7 +124,6 @@ struct AlbumView: View {
                 isCreateDisabled: viewModel.isCreateAlbumDisabled,
                 isBusy: viewModel.isCreatingAlbum,
                 onClose: viewModel.dismissCreateAlbumSheet,
-                onDeleteTap: viewModel.resetCreateAlbumDraft,
                 onCreateTap: {
                     Task {
                         if let album = await viewModel.createAlbum() {
@@ -383,24 +382,49 @@ private struct AlbumTitleHeader: View {
 }
 
 struct AlbumHeaderActionButton: View {
+    let showsSelection: Bool
     let onSelectionTap: () -> Void
     let onAddTap: () -> Void
+    var addIcon: ImageResource = .createStroke
+    var addAccessibilityLabel = "사진집 추가"
+
+    init(
+        showsSelection: Bool = true,
+        onSelectionTap: @escaping () -> Void,
+        onAddTap: @escaping () -> Void,
+        addIcon: ImageResource = .createStroke,
+        addAccessibilityLabel: String = "사진집 추가"
+    ) {
+        self.showsSelection = showsSelection
+        self.onSelectionTap = onSelectionTap
+        self.onAddTap = onAddTap
+        self.addIcon = addIcon
+        self.addAccessibilityLabel = addAccessibilityLabel
+    }
 
     var body: some View {
-        RoundedIconButton(items: [
-            .init(
+        RoundedIconButton(items: items)
+    }
+
+    private var items: [RoundedIconButtonItem] {
+        var items: [RoundedIconButtonItem] = []
+
+        if showsSelection {
+            items.append(.init(
                 id: "selection",
-                icon: .iconSelection,
+                icon: .select,
                 accessibilityLabel: "사진집 선택",
                 action: onSelectionTap
-            ),
-            .init(
-                id: "add",
-                icon: .createStroke,
-                accessibilityLabel: "사진집 추가",
-                action: onAddTap
-            )
-        ])
+            ))
+        }
+
+        items.append(.init(
+            id: "add",
+            icon: addIcon,
+            accessibilityLabel: addAccessibilityLabel,
+            action: onAddTap
+        ))
+        return items
     }
 }
 

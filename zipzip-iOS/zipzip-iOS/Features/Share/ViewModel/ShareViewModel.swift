@@ -241,6 +241,11 @@ final class ShareViewModel {
     func makeSharedAlbumDetailViewModel(
         groupID: ShareAlbum.ID,
         albumID: SharedAlbum.ID,
+        copyPhotosToPersonalAlbums: @escaping (
+            [SharedAlbumPhoto.ID],
+            SharedAlbum.ID,
+            [Album.ID]
+        ) async throws -> SharedAlbumPhotoMutationResult,
         onDelete: @escaping () -> Void
     ) -> SharedAlbumDetailViewModel {
         let adapter = SharedAlbumDetailRepositoryAdapter(
@@ -293,6 +298,9 @@ final class ShareViewModel {
                 )
                 await self.refreshSharedAlbumsAfterPhotoMutation(groupID: groupID)
                 return result
+            },
+            onCopyPhotosToPersonalAlbums: { photoIDs, sourceAlbumID, personalAlbumIDs in
+                try await copyPhotosToPersonalAlbums(photoIDs, sourceAlbumID, personalAlbumIDs)
             },
             onDeleteLocalCopies: { [weak self] photoIDs in
                 guard let repository = self?.sharedPhotoRepository else {

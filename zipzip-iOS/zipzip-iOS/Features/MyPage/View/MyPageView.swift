@@ -31,7 +31,7 @@ struct MyPageView: View {
         @Bindable var userProfileState = userProfileState
         MyPageContainerView {
             RoundedIconButton(items: [
-                .init(id: "back", icon: .iconChevronLeft, accessibilityLabel: "") { router.pop() }
+                .init(id: "back", icon: .chevronLeft, accessibilityLabel: "") { router.pop() }
             ])
         } content: {
             VStack(alignment: .leading, spacing: 32) {

@@ -11,16 +11,19 @@ struct SharedAlbumDetailView: View {
 
     let album: SharedAlbum
     let destinationAlbums: [SharedAlbum]
+    let personalAlbums: [Album]
     let onOpenPhoto: (SharedAlbumPhoto.ID) -> Void
 
     init(
         album: SharedAlbum,
         destinationAlbums: [SharedAlbum],
+        personalAlbums: [Album],
         viewModel: SharedAlbumDetailViewModel,
         onOpenPhoto: @escaping (SharedAlbumPhoto.ID) -> Void = { _ in }
     ) {
         self.album = album
         self.destinationAlbums = destinationAlbums.filter { $0.id != album.id }
+        self.personalAlbums = personalAlbums
         self.onOpenPhoto = onOpenPhoto
         _viewModel = State(initialValue: viewModel)
     }
@@ -44,7 +47,9 @@ struct SharedAlbumDetailView: View {
             FloatingHeader(.trailing) {
                 AlbumHeaderActionButton(
                     onSelectionTap: viewModel.enterSelectionMode,
-                    onAddTap: viewModel.presentPhotoPicker
+                    onAddTap: viewModel.presentPhotoPicker,
+                    addIcon: .plus,
+                    addAccessibilityLabel: "사진 추가"
                 )
                 .disabled(viewModel.isBusy)
                 .opacity(viewModel.isSelectionMode ? 0 : 1)
@@ -61,6 +66,8 @@ struct SharedAlbumDetailView: View {
         .navigationDestination(isPresented: $viewModel.isPhotoPickerPresented) {
             AlbumPhotoPickerView(
                 viewModel: AlbumPhotoPickerViewModel(
+                    albums: personalAlbums,
+                    showsAlbumTab: true,
                     onComplete: viewModel.addPhotos
                 )
             )
@@ -101,35 +108,34 @@ struct SharedAlbumDetailView: View {
             isInteractiveDismissDisabled: viewModel.isPerformingPhotoMutation
         ) { _ in
             SharedAlbumCopyDestinationSheet(
-                albums: destinationAlbums,
-                selectedAlbumIDs: viewModel.selectedDestinationAlbumIDs,
+                personalAlbums: personalAlbums,
+                sharedAlbums: destinationAlbums,
+                selectedPersonalAlbumIDs: viewModel.selectedPersonalAlbumIDs,
+                selectedSharedAlbumIDs: viewModel.selectedDestinationAlbumIDs,
                 isBusy: viewModel.isPerformingPhotoMutation,
                 onClose: viewModel.dismissCopySheet,
-                onSelect: viewModel.toggleDestinationAlbum,
-                onComplete: {
+                onSelectPersonal: { viewModel.togglePersonalDestinationAlbum($0.id) },
+                onSelectShared: viewModel.toggleDestinationAlbum,
+                onTabChange: viewModel.clearCopySelections,
+                onCompletePersonal: {
+                    Task { await viewModel.copySelectedPhotosToPersonalAlbums() }
+                },
+                onCompleteShared: {
                     Task { await viewModel.copySelectedPhotos() }
                 }
             )
         }
-        .bottomSheet(
+        .bottomSheetAlert(
             isPresented: $viewModel.isDeleteSheetPresented,
-            detents: [.height(324)],
-            initialDetent: .height(324),
-            showsDragIndicator: .hidden,
-            expandsToLargestDetentOnScroll: false,
-            isInteractiveDismissDisabled: viewModel.isPerformingPhotoMutation
-        ) { _ in
-            SharedAlbumPhotoDeleteSheet(
-                canDeleteLocalCopies: viewModel.canDeleteSelectedLocalCopies,
-                isBusy: viewModel.isPerformingPhotoMutation,
-                onDeleteLocalCopies: {
-                    Task { await viewModel.deleteSelectedLocalCopies() }
-                },
-                onDetach: {
-                    Task { await viewModel.detachSelectedPhotos() }
-                }
-            )
-        }
+            title: "\(viewModel.selectedPhotoCount)장의 사진을 삭제하시겠어요?",
+            message: "공유집에서 제거된 사진이 마지막 사진이면\n이 공유그룹에서 완전히 삭제됩니다.",
+            secondaryTitle: "취소",
+            primaryTitle: "삭제",
+            onSecondaryTap: viewModel.dismissDeleteSheet,
+            onPrimaryTap: {
+                Task { await viewModel.detachSelectedPhotos() }
+            }
+        )
         .navigationBarBackButtonHidden(true)
         .toolbarVisibility(.hidden, for: .navigationBar)
         .task(id: album.id) {
@@ -207,7 +213,7 @@ struct SharedAlbumDetailView: View {
                 Task { await viewModel.saveSelectedPhotos() }
             },
             .init(
-                icon: .moveToShare,
+                icon: .move,
                 title: "집으로",
                 isDisabled: !viewModel.hasSelectedPhotos || destinationAlbums.isEmpty || viewModel.isBusy,
                 action: viewModel.presentCopySheet
@@ -233,7 +239,7 @@ struct SharedAlbumDetailView: View {
             RoundedIconButton(items: [
                 .init(
                     id: "shared-album-back",
-                    icon: .iconChevronLeft,
+                    icon: .chevronLeft,
                     accessibilityLabel: "뒤로가기"
                 ) {
                     dismiss()
@@ -355,20 +361,30 @@ private struct SharedAlbumManagementSheet: View {
 }
 
 private struct SharedAlbumCopyDestinationSheet: View {
-    let albums: [SharedAlbum]
-    let selectedAlbumIDs: [SharedAlbum.ID]
+    let personalAlbums: [Album]
+    let sharedAlbums: [SharedAlbum]
+    let selectedPersonalAlbumIDs: [Album.ID]
+    let selectedSharedAlbumIDs: [SharedAlbum.ID]
     let isBusy: Bool
     let onClose: () -> Void
-    let onSelect: (SharedAlbum.ID) -> Void
-    let onComplete: () -> Void
+    let onSelectPersonal: (Album) -> Void
+    let onSelectShared: (SharedAlbum.ID) -> Void
+    let onTabChange: () -> Void
+    let onCompletePersonal: () -> Void
+    let onCompleteShared: () -> Void
 
-    private let columns = [
-        GridItem(.flexible(), spacing: 17),
-        GridItem(.flexible(), spacing: 17)
-    ]
+    @State private var selection: BottomSheetTabSelection = .left
+
+    private var isCompletionDisabled: Bool {
+        switch selection {
+        case .left: selectedPersonalAlbumIDs.isEmpty || isBusy
+        case .right: selectedSharedAlbumIDs.isEmpty || isBusy
+        }
+    }
 
     var body: some View {
         BottomSheet(
+            middleItem: .init(leftField: "사진집", rightField: "공유", selection: $selection),
             leftItem: {
                 BottomSheetCloseButton(action: onClose)
                     .disabled(isBusy)
@@ -376,92 +392,49 @@ private struct SharedAlbumCopyDestinationSheet: View {
             rightItem: {
                 SharedAlbumSheetHeaderButton(
                     title: "완료",
-                    isDisabled: selectedAlbumIDs.isEmpty || isBusy,
-                    action: onComplete
+                    isDisabled: isCompletionDisabled,
+                    action: { selection == .left ? onCompletePersonal() : onCompleteShared() }
                 )
             },
             content: {
-                VStack(alignment: .leading, spacing: 12) {
-                    Text("사진을 복사할 공유집")
-                        .font(.t3_sb)
-                        .foregroundStyle(.white00)
-                        .padding(.horizontal, 16)
-
-                    if albums.isEmpty {
-                        ContentUnavailableView(
-                            "복사할 다른 공유집이 없어요",
-                            systemImage: "photo.on.rectangle.angled"
-                        )
-                        .foregroundStyle(.grey300)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    } else {
-                        ScrollView(showsIndicators: false) {
-                            LazyVGrid(columns: columns, spacing: 20) {
-                                ForEach(albums) { album in
-                                    Button {
-                                        onSelect(album.id)
-                                    } label: {
-                                        AlbumCard(
-                                            name: album.name,
-                                            count: album.count,
-                                            state: selectedAlbumIDs.contains(album.id) ? .highlighted : .plain,
-                                            nameColorOverride: .white00,
-                                            thumbnailRemoteURLs: album.validThumbnailURLs()
-                                        )
-                                    }
-                                    .buttonStyle(StaticButtonStyle())
-                                    .disabled(isBusy)
-                                }
-                            }
-                            .padding(.horizontal, 16)
-                            .padding(.vertical, 16)
-                        }
-                    }
-                }
+                content
+                    .scrollIndicators(.hidden)
             }
         )
+        .onChange(of: selection) { _, _ in onTabChange() }
     }
-}
 
-private struct SharedAlbumPhotoDeleteSheet: View {
-    let canDeleteLocalCopies: Bool
-    let isBusy: Bool
-    let onDeleteLocalCopies: () -> Void
-    let onDetach: () -> Void
-
-    var body: some View {
-        BottomSheet {
-            VStack(spacing: 0) {
-                Text("사진을 어디에서 삭제할까요?")
-                    .font(.t2_sb)
-                    .foregroundStyle(.white00)
-                    .multilineTextAlignment(.center)
-                    .padding(.top, 38)
-
-                Text("공유집에서 제거해도 로컬 갤러리의 사진은 남아있어요.")
-                    .font(.b2_md)
-                    .foregroundStyle(.grey400)
-                    .multilineTextAlignment(.center)
-                    .padding(.top, 12)
-
-                HStack(spacing: 16) {
-                    CommonButton(
-                        title: "삭제",
-                        property1: canDeleteLocalCopies && !isBusy ? .secondary : .disabled,
-                        action: onDeleteLocalCopies
-                    )
-                    CommonButton(
-                        title: "공유집에서 제거",
-                        property1: isBusy ? .disabled : .cta,
-                        action: onDetach
-                    )
-                }
-                .padding(.horizontal, 16)
-                .padding(.top, 44)
-                .padding(.bottom, 31.5)
+    @ViewBuilder private var content: some View {
+        switch selection {
+        case .left:
+            if personalAlbums.isEmpty {
+                emptyState("복사할 사진집이 없어요")
+            } else {
+                AlbumSelectionGrid(
+                    albums: personalAlbums,
+                    selectedAlbumIDs: selectedPersonalAlbumIDs,
+                    onSelect: onSelectPersonal
+                )
+                .disabled(isBusy)
             }
-            .frame(maxWidth: .infinity)
+        case .right:
+            if sharedAlbums.isEmpty {
+                emptyState("복사할 다른 공유집이 없어요")
+            } else {
+                SharedAlbumSelectionGrid(
+                    albums: sharedAlbums,
+                    selectedAlbumIDs: selectedSharedAlbumIDs,
+                    onSelect: { onSelectShared($0.id) }
+                )
+                .disabled(isBusy)
+            }
         }
+    }
+
+    private func emptyState(_ title: String) -> some View {
+        ContentUnavailableView(title, systemImage: "photo.on.rectangle.angled")
+            .foregroundStyle(.grey300)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
 
@@ -588,6 +561,7 @@ private struct SharedAlbumDetailFolderShape: Shape {
             onUploadPhotos: { identifiers, _ in .init(succeededCount: identifiers.count) },
             onSavePhotosToLibrary: { ids, _ in .init(succeededCount: ids.count) },
             onCopyPhotos: { ids, _, _ in .init(succeededCount: ids.count) },
+            onCopyPhotosToPersonalAlbums: { ids, _, _ in .init(succeededCount: ids.count) },
             onDeleteLocalCopies: { ids in .init(succeededCount: ids.count) },
             onDetachPhotos: { ids, _ in .init(succeededCount: ids.count) }
         )
@@ -605,6 +579,7 @@ private struct SharedAlbumDetailFolderShape: Shape {
                     updatedAt: .now
                 ),
                 destinationAlbums: [],
+                personalAlbums: [],
                 viewModel: SharedAlbumDetailViewModel(
                     groupID: groupID,
                     albumID: albumID,

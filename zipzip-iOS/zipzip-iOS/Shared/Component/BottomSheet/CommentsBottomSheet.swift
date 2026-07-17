@@ -67,7 +67,22 @@ struct CommentsBottomSheet<Message: CommentSheetMessage>: View {
         }
     }
 
-    private var comments: some View {
+    @ViewBuilder private var comments: some View {
+        if messages.isEmpty {
+            if isLoading {
+                ProgressView()
+                    .tint(.grey100)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .accessibilityLabel("댓글 불러오는 중")
+            } else {
+                CommentsEmptyState()
+            }
+        } else {
+            commentsList
+        }
+    }
+
+    private var commentsList: some View {
         ScrollViewReader { proxy in
             ScrollView(showsIndicators: false) {
                 LazyVStack(spacing: 16) {
@@ -105,6 +120,28 @@ struct CommentsBottomSheet<Message: CommentSheetMessage>: View {
 
     private var isSendDisabled: Bool {
         isLoading || isSending || comment.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+}
+
+private struct CommentsEmptyState: View {
+    var body: some View {
+        VStack(spacing: 4) {
+            Image(.shareChatEmptyIcon)
+                .resizable()
+                .scaledToFit()
+                .frame(width: 92, height: 80)
+                .frame(width: 100, height: 100)
+                .accessibilityHidden(true)
+
+            Image(.shareChatEmptyText)
+                .resizable()
+                .scaledToFit()
+                .frame(width: 199, height: 54)
+                .accessibilityHidden(true)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("아직 댓글이 없어요. 첫 댓글을 남겨보세요.")
     }
 }
 

@@ -67,7 +67,7 @@ struct RegisteredDeviceManagementView: View {
         } else {
             HStack {
                 RoundedIconButton(items: [
-                    .init(id: "back", icon: .iconChevronLeft, accessibilityLabel: "") { router.pop() }
+                    .init(id: "back", icon: .chevronLeft, accessibilityLabel: "") { router.pop() }
                 ])
 
                 Spacer(minLength: 0)

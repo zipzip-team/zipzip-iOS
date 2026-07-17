@@ -85,7 +85,6 @@ struct ShareView: View {
                 isCreateDisabled: viewModel.isCreateSharedAlbumDisabled,
                 isBusy: viewModel.isCreatingSharedAlbum,
                 onClose: viewModel.dismissCreateSharedAlbumSheet,
-                onDeleteTap: viewModel.resetSharedAlbumCreationDraft,
                 onCreateTap: {
                     Task {
                         if let album = await viewModel.createSharedAlbum() {
@@ -173,6 +172,12 @@ struct ShareAlbumDetailDestinationView: View {
     @Environment(Router.self) private var router
     let groupID: ShareAlbum.ID
     let albumID: SharedAlbum.ID
+    let personalAlbums: [Album]
+    let copyPhotosToPersonalAlbums: (
+        [SharedAlbumPhoto.ID],
+        SharedAlbum.ID,
+        [Album.ID]
+    ) async throws -> SharedAlbumPhotoMutationResult
     let viewModel: ShareViewModel
 
     var body: some View {
@@ -180,9 +185,11 @@ struct ShareAlbumDetailDestinationView: View {
             SharedAlbumDetailView(
                 album: album,
                 destinationAlbums: viewModel.group(withID: groupID)?.albums ?? [],
+                personalAlbums: personalAlbums,
                 viewModel: viewModel.makeSharedAlbumDetailViewModel(
                     groupID: groupID,
                     albumID: albumID,
+                    copyPhotosToPersonalAlbums: copyPhotosToPersonalAlbums,
                     onDelete: router.pop
                 ),
                 onOpenPhoto: { photoID in
@@ -200,7 +207,7 @@ struct ShareAlbumDetailDestinationView: View {
                 .overlay(alignment: .topLeading) {
                     FloatingHeader(.leading) {
                         RoundedIconButton(items: [
-                            .init(id: "missing-share-album-back", icon: .iconChevronLeft, accessibilityLabel: "뒤로가기") {
+                            .init(id: "missing-share-album-back", icon: .chevronLeft, accessibilityLabel: "뒤로가기") {
                                 router.pop()
                             }
                         ])

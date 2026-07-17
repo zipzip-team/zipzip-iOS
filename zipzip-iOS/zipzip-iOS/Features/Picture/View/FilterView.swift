@@ -52,7 +52,6 @@ struct FilterView: View {
             HStack(spacing: 16) {
                 CommonButton(title: "초기화", property1: .secondary) {
                     viewModel.reset()
-                    router.pop()
                 }
                 CommonButton(title: "다음", property1: .cta) {
                     router.push(.filterResult(viewModel.appliedFilters))

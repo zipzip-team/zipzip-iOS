@@ -14,7 +14,6 @@ struct AlbumCreationSheet: View {
     let isCreateDisabled: Bool
     var isBusy = false
     let onClose: () -> Void
-    let onDeleteTap: () -> Void
     let onCreateTap: () -> Void
 
     var body: some View {
@@ -40,19 +39,11 @@ struct AlbumCreationSheet: View {
                             .disabled(isBusy)
                     }
 
-                    HStack(spacing: 16) {
-                        CommonButton(
-                            title: "삭제",
-                            property1: .secondary,
-                            action: onDeleteTap
-                        )
-
-                        CommonButton(
-                            title: "생성",
-                            property1: isCreateDisabled ? .disabled : .cta,
-                            action: onCreateTap
-                        )
-                    }
+                    CommonButton(
+                        title: "생성",
+                        property1: isCreateDisabled ? .disabled : .cta,
+                        action: onCreateTap
+                    )
                     .disabled(isBusy)
                 }
                 .frame(maxWidth: 358)

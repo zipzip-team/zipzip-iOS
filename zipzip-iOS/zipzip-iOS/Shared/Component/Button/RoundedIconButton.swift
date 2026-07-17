@@ -180,6 +180,7 @@ struct RoundedIconButton: View {
                 .resizable()
                 .scaledToFit()
                 .foregroundStyle(.grey1000)
+                .frame(width: 24, height: 24)
                 .frame(width: 28, height: 28)
                 .padding(.horizontal, items.count == 1 ? 8 : 12)
                 .frame(height: FloatingHeaderLayout.buttonHeight)
@@ -194,20 +195,20 @@ struct RoundedIconButton: View {
 #Preview("Rounded Icon Button") {
     VStack(spacing: 16) {
         RoundedIconButton(items: [
-            .init(id: "back", icon: .iconChevronLeft, accessibilityLabel: "뒤로가기") {
+            .init(id: "back", icon: .chevronLeft, accessibilityLabel: "뒤로가기") {
                 print("뒤로가기 버튼 선택")
             }
         ])
 
         RoundedIconButton(items: [
-            .init(id: "filter", icon: .iconFilter, accessibilityLabel: "필터") {},
-            .init(id: "selection", icon: .iconSelection, accessibilityLabel: "사진 선택") {}
+            .init(id: "filter", icon: .filter, accessibilityLabel: "필터") {},
+            .init(id: "selection", icon: .select, accessibilityLabel: "사진 선택") {}
         ])
 
         RoundedIconButton(items: [
-            .init(id: "filter", icon: .iconFilter, accessibilityLabel: "필터") {},
-            .init(id: "selection", icon: .iconSelection, accessibilityLabel: "사진 선택") {},
-            .init(id: "filter-secondary", icon: .iconFilter, accessibilityLabel: "추가 필터") {}
+            .init(id: "filter", icon: .filter, accessibilityLabel: "필터") {},
+            .init(id: "selection", icon: .select, accessibilityLabel: "사진 선택") {},
+            .init(id: "filter-secondary", icon: .filter, accessibilityLabel: "추가 필터") {}
         ])
     }
     .padding()

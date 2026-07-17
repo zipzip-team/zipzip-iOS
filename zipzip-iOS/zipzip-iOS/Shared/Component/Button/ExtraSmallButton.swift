@@ -66,7 +66,7 @@ struct ExtraSmallButton: View {
 
 #Preview("Extra Small Button") {
     HStack(spacing: 16) {
-        ExtraSmallButton(icon: .iconSend) {
+        ExtraSmallButton(icon: .send) {
             print("action은 이곳에 !!")
         }
 

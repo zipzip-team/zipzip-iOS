@@ -656,6 +656,33 @@ final class AlbumViewModel {
         return createdAlbumIDs
     }
 
+    /// 선택한 공유집 사진을 기존 개인 사진집에 복사한다.
+    func copySharedPhotos(
+        photoIDs: [SharedAlbumPhoto.ID],
+        from sharedAlbumID: SharedAlbum.ID,
+        to personalAlbumIDs: [Album.ID]
+    ) async throws -> SharedAlbumPhotoMutationResult {
+        guard let sharedPhotoRepository else {
+            throw SharedPhotoRepositoryError.cacheNotPrepared
+        }
+        guard !photoIDs.isEmpty, !personalAlbumIDs.isEmpty else {
+            return SharedAlbumPhotoMutationResult(succeededCount: 0)
+        }
+
+        let result = try await sharedPhotoRepository.savePhotosToLibrary(
+            photoIDs: photoIDs,
+            in: sharedAlbumID
+        )
+        if !result.succeededLocalIdentifiers.isEmpty {
+            try await albumStore.addPhotos(
+                localIdentifiers: result.succeededLocalIdentifiers,
+                to: personalAlbumIDs
+            )
+        }
+        await loadAlbums()
+        return result
+    }
+
     func moveAlbumPhotos(
         ids: [Int],
         from sourceAlbumID: AlbumViewItem.ID,
