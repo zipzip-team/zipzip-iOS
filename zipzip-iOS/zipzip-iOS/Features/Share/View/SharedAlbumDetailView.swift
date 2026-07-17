@@ -47,7 +47,9 @@ struct SharedAlbumDetailView: View {
             FloatingHeader(.trailing) {
                 AlbumHeaderActionButton(
                     onSelectionTap: viewModel.enterSelectionMode,
-                    onAddTap: viewModel.presentPhotoPicker
+                    onAddTap: viewModel.presentPhotoPicker,
+                    addIcon: .plus,
+                    addAccessibilityLabel: "사진 추가"
                 )
                 .disabled(viewModel.isBusy)
                 .opacity(viewModel.isSelectionMode ? 0 : 1)

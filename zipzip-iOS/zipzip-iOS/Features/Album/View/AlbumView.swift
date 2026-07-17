@@ -385,15 +385,21 @@ struct AlbumHeaderActionButton: View {
     let showsSelection: Bool
     let onSelectionTap: () -> Void
     let onAddTap: () -> Void
+    var addIcon: ImageResource = .createStroke
+    var addAccessibilityLabel = "사진집 추가"
 
     init(
         showsSelection: Bool = true,
         onSelectionTap: @escaping () -> Void,
-        onAddTap: @escaping () -> Void
+        onAddTap: @escaping () -> Void,
+        addIcon: ImageResource = .createStroke,
+        addAccessibilityLabel: String = "사진집 추가"
     ) {
         self.showsSelection = showsSelection
         self.onSelectionTap = onSelectionTap
         self.onAddTap = onAddTap
+        self.addIcon = addIcon
+        self.addAccessibilityLabel = addAccessibilityLabel
     }
 
     var body: some View {
@@ -414,8 +420,8 @@ struct AlbumHeaderActionButton: View {
 
         items.append(.init(
             id: "add",
-            icon: .createStroke,
-            accessibilityLabel: "사진집 추가",
+            icon: addIcon,
+            accessibilityLabel: addAccessibilityLabel,
             action: onAddTap
         ))
         return items

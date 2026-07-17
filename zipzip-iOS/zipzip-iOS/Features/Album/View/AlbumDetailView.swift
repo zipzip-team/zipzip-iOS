@@ -82,7 +82,9 @@ struct AlbumDetailView<Content: View>: View {
                 AlbumHeaderActionButton(
                     showsSelection: album.photoCount > 0,
                     onSelectionTap: { viewModel.enterSelectionMode(photoCount: album.photoCount) },
-                    onAddTap: viewModel.presentPhotoPicker
+                    onAddTap: viewModel.presentPhotoPicker,
+                    addIcon: .plus,
+                    addAccessibilityLabel: "사진 추가"
                 )
                 .opacity(viewModel.isSelectionMode ? 0 : 1)
                 .allowsHitTesting(!viewModel.isSelectionMode)
