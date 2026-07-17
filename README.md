@@ -1,7 +1,22 @@
-# zipzip
+<img width="5760" height="3240" alt="Slide 16_9 - 47" src="https://github.com/user-attachments/assets/b8e734f4-8268-4b1d-8d11-568662003fca" />
+
+<h1>
+  <img src="https://github.com/user-attachments/assets/6964efd1-7db8-463d-b713-96a9b7afd392" width="36" align="center"/> zipzip
+</h1>
+
 > 메인폰 밖에서 촬영된 사진을 더 쉽게 찾고, 분류하고, 다시 볼 수 있도록 돕는 사진 정리 보조 서비스
 
 서브폰·카메라 등 여러 기기로 촬영한 사진이 한 라이브러리에 섞여 있으면 원하는 사진을 다시 찾기 어렵습니다. **zipzip**은 사용자의 사진 라이브러리를 분석해 **촬영 기기·날짜·장소 기준으로 사진을 자동 인덱싱**하고, 이를 바탕으로 필터링·앨범 정리·그룹 공유까지 이어지는 정리 경험을 제공하는 iOS 앱입니다.
+
+## 📱 미리보기
+
+| 메타데이터 수정 | 필터링 | 앨범 |
+| :---: | :---: | :---: |
+| <img src="https://github.com/user-attachments/assets/4e652633-4194-4f2e-8466-2c7369d447f3" width="200"/> | <img src="https://github.com/user-attachments/assets/c45ba81a-93f4-466e-a234-5354dc4aa5c8" width="200"/> | <img src="https://github.com/user-attachments/assets/d2d4a51c-e8fc-4f06-bb73-7e875a3df089" width="200"/> |
+
+| 공유 | 공유 채팅 |
+| :---: | :---: |
+| <img src="https://github.com/user-attachments/assets/ff943f61-263b-4a2d-b637-aefd27266ebd" width="200"/> | <img src="https://github.com/user-attachments/assets/11cbe0ae-d52e-445d-b84a-6be762cc1b2a" width="200"/> |
 
 ## ✨ 주요 기능
 
@@ -82,18 +97,7 @@ flowchart TD
     NP --> API["zipzip 서버 API"]
 ```
 
-- **View**: SwiftUI 뷰. 상태를 소유하지 않고 ViewModel을 관찰합니다.
-- **ViewModel**: `@Observable` 클래스. 화면 상태와 사용자 액션 처리를 담당하고 Service를 호출합니다.
-- **Service / Repository / Store**: 비즈니스 로직과 데이터 접근. 프로토콜로 추상화하고 `Default*` 구현체를 DI로 주입해 테스트 가능성을 확보합니다.
-
-### 앱 구동 흐름
-1. `zipzip_iOSApp`이 시작 시 `prepareAppDependencies()`로 SQLite DB를 열고 마이그레이션을 수행합니다.
-2. `DIContainer`가 인증 상태·네트워크 프로바이더·리포지토리를 조립해 `.environment`로 주입합니다.
-3. `RootView`가 온보딩 완료 여부(`hasCompletedOnboarding`)에 따라 스플래시/온보딩/메인 탭을 분기하고, `Router`의 path를 `NavigationStack`에 바인딩해 `Route` enum 기반으로 화면을 전환합니다.
-4. 온보딩이 완료된 상태라면 `PhotoSyncCoordinator`가 사진 동기화 파이프라인을 시작하고, 앱이 포그라운드로 돌아올 때마다 증분 갱신합니다.
-
 ### 사진 동기화 파이프라인
-개인 사진 기능의 핵심 백그라운드 파이프라인입니다.
 
 ```mermaid
 flowchart LR
@@ -209,23 +213,6 @@ erDiagram
     }
 ```
 
-### 테이블 설명
-
-| 테이블 | 성격 | 설명 |
-| --- | --- | --- |
-| `photo` | 로컬 원본 | 사진 라이브러리 인덱스. PhotoKit `local_identifier`로 실제 자산과 연결하고 촬영일·좌표·크기·즐겨찾기 등 메타데이터 보관 |
-| `device` | 로컬 원본 | EXIF에서 감지된 촬영 기기. `is_registered`로 사용자가 관리 대상으로 선택한 기기 구분 |
-| `place` | 로컬 원본 | 역지오코딩으로 얻은 장소. 동일 장소 사진들이 하나의 레코드를 공유 |
-| `album` / `album_photo` | 로컬 원본 | 개인 앨범과 사진의 N:M 연결. 즐겨찾기 앨범은 마이그레이션에서 시드로 생성 |
-| `sync_state` | 로컬 상태 | PhotoKit change token 저장 (증분 동기화 기준점) |
-| `shared_group` / `shared_album` / `shared_photo` | 서버 미러 | 공유 기능의 서버 데이터 캐시. PK가 서버 UUID(TEXT)이며 서버 응답으로 갱신 |
-
-### 설계 포인트
-- **로컬 원본 vs 서버 미러 분리**: 개인 데이터(정수 AUTOINCREMENT PK)와 서버 데이터(UUID TEXT PK)를 명확히 구분했습니다. 초기에 정수 PK로 만들었던 공유 테이블은 서버 UUID와 호환되지 않아, 마이그레이션에서 캐시를 비우고 UUID 기반으로 재생성했습니다.
-- **조회 패턴 기반 인덱스**: 사진 그리드 정렬(`taken_at`, `added_at`), 필터(`device_id`, `place_id`, `is_favorite`), 중복 판정(`content_hash`), 앨범 상세(`album_id, added_at` 복합) 등 실제 쿼리 패턴에 맞춰 인덱스를 구성했습니다.
-- **삭제 무결성**: 연결 테이블(`album_photo`, `shared_album`, `shared_photo`)은 `ON DELETE CASCADE`로 부모 삭제 시 자동 정리됩니다.
-- **마이그레이션 안전장치**: DEBUG 빌드는 스키마 변경 시 DB를 재생성하고, 프로덕션에서는 마이그레이션 실패 시 손상된 스토어를 백업한 뒤 새로 생성해 앱이 열리지 않는 상황을 방지합니다.
-
 ## 🌐 네트워크 설계
 
 ### 레이어 구조
@@ -246,30 +233,6 @@ flowchart TD
 | `DefaultNetworkProvider` | Alamofire 기반 구현. 상태코드 검증, 응답 디코딩, `NetworkError` 매핑 담당 |
 | `AuthenticatedNetworkProvider` | 데코레이터 패턴. 요청에 Bearer 토큰을 부착하고 401 응답 시 토큰 갱신 후 1회 재시도. 갱신 불가 시 로그아웃 처리 콜백 호출 |
 | `NetworkLogger` | EventMonitor로 요청/응답 전 구간 로깅. `NetworkSecretRedactor`가 토큰 등 민감정보를 마스킹 |
-
-### 환경 설정 및 에러 처리
-- **BASE_URL 분리**: 서버 주소는 gitignore된 `Config.xcconfig` → Info.plist를 거쳐 `APIConfig`가 읽습니다. 저장소에 서버 정보가 커밋되지 않습니다.
-- **에러 모델링**: `NetworkError`가 일시적 연결 장애(`noResponse`), 디코딩 실패, 서버 에러(상태코드 + 서버 에러코드 + 메시지)를 구분합니다. 서버 응답 body의 에러 envelope을 파싱해 사용자에게 서버 정의 메시지를 그대로 노출할 수 있습니다.
-- **응답 포맷**: 모든 응답은 `APIEnvelope<T>`(공통 래퍼)로 감싸져 오며, 각 API 구현이 `data` 필드만 추출해 반환합니다.
-
-### 인증 흐름
-1. Apple 로그인 결과(authorizationCode, identityToken, nonce)를 서버에 전달해 액세스/리프레시 토큰을 발급받습니다.
-2. 토큰은 `KeychainCredentialStore`를 통해 Keychain에 저장됩니다.
-3. `SessionCredentialController`가 요청 시점의 유효 토큰을 제공하고, 401 발생 시 리프레시 토큰으로 갱신합니다. 갱신 요청에는 `Idempotency-Key` 헤더를 붙여 중복 갱신을 방지합니다.
-4. 갱신까지 실패해 자격증명이 사라지면 `AuthenticationState`가 로그인 화면을 다시 띄웁니다.
-
-### API 엔드포인트
-
-| 도메인 | Method | Path | 설명 |
-| --- | --- | --- | --- |
-| 인증 | POST | `/api/v1/auth/apple` | Apple 로그인 |
-| 인증 | POST | `/api/v1/auth/refresh` | 토큰 갱신 (Idempotency-Key) |
-| 인증 | POST | `/api/v1/auth/logout` | 로그아웃 |
-| 회원 | DELETE | `/api/v1/users/me` | 회원 탈퇴 |
-| 공유 | GET / POST | `/api/v1/shared-groups` | 공유 그룹 목록 조회 / 생성 |
-| 공유 | GET | `/api/v1/shared-groups/{id}` | 공유 그룹 상세 |
-| 공유 | GET | `/api/v1/shared-groups/{id}/invite-code` | 초대 코드 조회 |
-| 공유 | GET | `/api/v1/shared-groups/{id}/shared-albums` | 그룹 내 공유 앨범 목록 |
 
 ## 📣 Convention
 
@@ -305,8 +268,3 @@ hotfix/#2 ──── 긴급 버그 수정 (main에서 분기)
 
 feat: 업장 상세페이지 컴포넌트 사용하도록 수정 및 관리자 조회 API 추가
 ```
-
-## 📚 Docs
-
-- [Navigation 운영 정책](docs/navigation-policy.md)
-- [zipzip iOS 프로젝트 설계서 (Notion)](https://app.notion.com/p/39ef0d47452d814181cdda8dac9d7c45)
