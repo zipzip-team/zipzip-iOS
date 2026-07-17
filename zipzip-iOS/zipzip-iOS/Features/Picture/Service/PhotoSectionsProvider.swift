@@ -114,7 +114,7 @@ nonisolated struct PhotoSectionsProvider {
 
         let sorted: [FilterablePhoto]
         if sortsByAddedDate {
-            sorted = filtered.sorted { $0.addedAt > $1.addedAt }
+            sorted = filtered.sorted { $0.addedDate > $1.addedDate }
         } else {
             sorted = filtered.sorted { lhs, rhs in
                 switch (lhs.takenAt, rhs.takenAt) {
@@ -126,7 +126,7 @@ nonisolated struct PhotoSectionsProvider {
             }
         }
 
-        let items = sorted.map { (date: sortsByAddedDate ? $0.addedAt : $0.takenAt, photo: $0.photo) }
+        let items = sorted.map { (date: sortsByAddedDate ? $0.addedDate : $0.takenAt, photo: $0.photo) }
         return PhotoSectionGrouping.sections(from: items)
     }
 
