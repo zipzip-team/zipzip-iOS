@@ -207,6 +207,7 @@ struct RootView: View {
         .animation(.easeInOut(duration: 0.4), value: showsRestoreSplash)
         .safeAreaInset(edge: .bottom, spacing: 0) {
             bottomBar
+                .animation(.easeInOut(duration: 0.4), value: showsRootTab)
         }
         .bottomSheet(isPresented: $showShareSheet, detents: [.full]) { dismiss in
             ShareSheet(
@@ -275,44 +276,47 @@ struct RootView: View {
 
     @ViewBuilder private var bottomBar: some View {
         if showsRootTab, router.path.isEmpty {
-            if selection == .picture, pictureViewModel.isSelectionMode {
-                ActionBar(items: [
-                    .init(
-                        icon: .moveToAlbum,
-                        title: "집으로",
-                        isDisabled: pictureViewModel.selectedPhotoIDs.isEmpty
-                    ) { showShareSheet = true },
-                    .init(
-                        icon: .metadata,
-                        title: "정보 수정",
-                        isDisabled: pictureViewModel.selectedPhotoIDs.isEmpty
-                    ) {
-                        if let metadata = pictureViewModel.firstSelectedMetadata {
-                            router.push(.photoInfoEdit(PhotoInfoEditDestination(
-                                metadata: metadata,
-                                localIdentifiers: pictureViewModel.selectedPhotoLocalIdentifiers,
-                                onSuccessfulDismiss: pictureViewModel.cancelSelection
-                            )))
-                        }
-                    },
-                    .init(
-                        icon: .delete,
-                        title: "삭제",
-                        isDisabled: pictureViewModel.selectedPhotoIDs.isEmpty
-                    ) { pictureViewModel.requestDelete() }
-                ])
-                .padding(.bottom, 26.5)
-                .ignoresSafeArea(.container, edges: .bottom)
-            } else if showsNavbar {
-                Navbar(selection: selection, onSelect: { selectTab($0) })
-                    .padding(.bottom, 28)
+            Group {
+                if selection == .picture, pictureViewModel.isSelectionMode {
+                    ActionBar(items: [
+                        .init(
+                            icon: .moveToAlbum,
+                            title: "집으로",
+                            isDisabled: pictureViewModel.selectedPhotoIDs.isEmpty
+                        ) { showShareSheet = true },
+                        .init(
+                            icon: .metadata,
+                            title: "정보 수정",
+                            isDisabled: pictureViewModel.selectedPhotoIDs.isEmpty
+                        ) {
+                            if let metadata = pictureViewModel.firstSelectedMetadata {
+                                router.push(.photoInfoEdit(PhotoInfoEditDestination(
+                                    metadata: metadata,
+                                    localIdentifiers: pictureViewModel.selectedPhotoLocalIdentifiers,
+                                    onSuccessfulDismiss: pictureViewModel.cancelSelection
+                                )))
+                            }
+                        },
+                        .init(
+                            icon: .delete,
+                            title: "삭제",
+                            isDisabled: pictureViewModel.selectedPhotoIDs.isEmpty
+                        ) { pictureViewModel.requestDelete() }
+                    ])
+                    .padding(.bottom, 26.5)
                     .ignoresSafeArea(.container, edges: .bottom)
+                } else if showsNavbar {
+                    Navbar(selection: selection, onSelect: { selectTab($0) })
+                        .padding(.bottom, 28)
+                        .ignoresSafeArea(.container, edges: .bottom)
+                }
             }
+            .transition(.opacity)
         }
     }
 
     private var showsRootTab: Bool {
-        hasCompletedOnboarding && !authenticationState.isRestoring
+        hasCompletedOnboarding && !authenticationState.isRestoring && splashAnimationFinished
     }
 
     private var showsRestoreSplash: Bool {
